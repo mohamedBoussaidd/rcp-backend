@@ -9,5 +9,6 @@ import java.util.UUID;
 @Repository
 public interface JoueurRepository extends JpaRepository<Joueur, UUID> {
     List<Joueur> findByStatut(String statut);
+    List<Joueur> findByStatutNot(String statut);
     java.util.Optional<Joueur> findByPrenomIgnoreCase(String prenom);
 }

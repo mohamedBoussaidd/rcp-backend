@@ -45,6 +45,9 @@ public class Seance {
     @Column(name = "conditions_meteo")
     private String conditionsMeteo;
 
+    @Column(name = "temperature")
+    private Short temperature;
+
     @Column(name = "raison_ecart_duree")
     private String raisonEcartDuree;
 

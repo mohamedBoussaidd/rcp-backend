@@ -19,5 +19,7 @@ public record GpsHistoriqueDto(
         BigDecimal vitesseMaxKmh,
         Short nbAccelerations,
         Short nbFreinages,
-        BigDecimal ratioDistanceMin
+        BigDecimal ratioDistanceMin,
+        String conditionsMeteo,
+        Short temperature
 ) {}

@@ -18,7 +18,7 @@ public class JoueurService {
     private final DonneeGpsRepository donneeGpsRepository;
 
     public List<Joueur> findAll() {
-        return joueurRepository.findByStatut("actif");
+        return joueurRepository.findByStatutNot("inactif");
     }
 
     public Optional<Joueur> findById(UUID id) {
@@ -55,7 +55,9 @@ public class JoueurService {
                         d.getVitesseMaxKmh(),
                         d.getNbAccelerations(),
                         d.getNbFreinages(),
-                        d.getRatioDistanceMin()
+                        d.getRatioDistanceMin(),
+                        d.getSeance().getConditionsMeteo(),
+                        d.getSeance().getTemperature()
                 ))
                 .toList();
     }
