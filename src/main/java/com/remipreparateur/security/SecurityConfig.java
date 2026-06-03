@@ -95,6 +95,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/blessures/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/blessures/**").hasAnyRole("MEDICAL", "SUPER_ADMIN")
 
+                        // Espace personnel du joueur : reserve au role JOUEUR (donnees scopees par token)
+                        .requestMatchers("/api/moi/**").hasRole("JOUEUR")
+
                         // Configuration : lecture = staff ; ecriture = president
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/configuration/**").hasAnyRole("PRESIDENT", "SUPER_ADMIN")
