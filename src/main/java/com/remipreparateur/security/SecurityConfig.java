@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -26,6 +27,10 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    /** Roles autorises a LIRE les modules existants (lecture seule par defaut). */
+    private static final String[] STAFF =
+            { "ENTRAINEUR", "PREPARATEUR", "MEDICAL", "PRESIDENT", "SUPER_ADMIN" };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService userDetailsService;
@@ -66,8 +71,32 @@ public class SecurityConfig {
                         // /error : sinon le forward interne ERROR (filtre JWT non rejoue)
                         // ecrase les 400/403 par un 401. Permettre /error preserve le vrai statut.
                         .requestMatchers("/api/auth/**", "/error").permitAll()
-                        // Phase 1 : tout le reste exige un token valide.
-                        // Le cloisonnement fin par role (lecture/ecriture) arrive en Phase 3.
+
+                        // ── Phase 3 : cloisonnement lecture (staff) vs ecriture (role proprietaire) ──
+                        // Seances : lecture = staff ; ecriture = entraineur / preparateur
+                        .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/seances/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "SUPER_ADMIN")
+
+                        // Catalogue types de seance + predictions IA : lecture seule (staff)
+                        .requestMatchers(HttpMethod.GET, "/api/type-seances/**", "/api/predictions/**").hasAnyRole(STAFF)
+
+                        // Joueurs : lecture = staff ; ecriture = entraineur / preparateur
+                        .requestMatchers(HttpMethod.GET, "/api/joueurs/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/joueurs/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "SUPER_ADMIN")
+
+                        // Pesees : lecture = staff ; ecriture = preparateur
+                        .requestMatchers(HttpMethod.GET, "/api/pesees/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/pesees/**").hasAnyRole("PREPARATEUR", "SUPER_ADMIN")
+
+                        // Import Excel / donnees GPS : preparateur uniquement
+                        .requestMatchers("/api/import/**").hasAnyRole("PREPARATEUR", "SUPER_ADMIN")
+
+                        // Configuration : lecture = staff ; ecriture = president
+                        .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/configuration/**").hasAnyRole("PRESIDENT", "SUPER_ADMIN")
+
+                        // Clubs / mon-club / equipes / membres : deja proteges par @PreAuthorize.
+                        // Tout le reste exige juste un token valide.
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
