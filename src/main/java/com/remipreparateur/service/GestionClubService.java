@@ -1,9 +1,11 @@
 package com.remipreparateur.service;
 
 import com.remipreparateur.dto.GestionDtos.*;
+import com.remipreparateur.entity.Club;
 import com.remipreparateur.entity.Equipe;
 import com.remipreparateur.entity.Role;
 import com.remipreparateur.entity.Utilisateur;
+import com.remipreparateur.repository.ClubRepository;
 import com.remipreparateur.repository.EquipeRepository;
 import com.remipreparateur.repository.UtilisateurRepository;
 import org.springframework.http.HttpStatus;
@@ -27,21 +29,27 @@ public class GestionClubService {
 
     private final EquipeRepository equipeRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final ClubRepository clubRepository;
     private final PasswordEncoder passwordEncoder;
 
     public GestionClubService(EquipeRepository equipeRepository,
                               UtilisateurRepository utilisateurRepository,
+                              ClubRepository clubRepository,
                               PasswordEncoder passwordEncoder) {
         this.equipeRepository = equipeRepository;
         this.utilisateurRepository = utilisateurRepository;
+        this.clubRepository = clubRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     // ── Vue agregee ──
     public MonClubResponse monClub(Utilisateur president) {
         UUID clubId = exigeClub(president);
+        Club club = clubRepository.findById(clubId).orElse(null);
         return new MonClubResponse(
-                clubId, null, null,
+                clubId,
+                club != null ? club.getNom() : null,
+                club != null ? club.getLogo() : null,
                 listerEquipes(clubId),
                 listerMembres(clubId));
     }
