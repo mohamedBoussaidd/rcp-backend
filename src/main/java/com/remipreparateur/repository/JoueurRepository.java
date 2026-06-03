@@ -11,4 +11,8 @@ public interface JoueurRepository extends JpaRepository<Joueur, UUID> {
     List<Joueur> findByStatut(String statut);
     List<Joueur> findByStatutNot(String statut);
     java.util.Optional<Joueur> findByPrenomIgnoreCase(String prenom);
+
+    // ── Scoping par equipe ──
+    List<Joueur> findByStatutNotAndEquipeIdIn(String statut, java.util.Collection<UUID> equipeIds);
+    List<Joueur> findByEquipeIdIn(java.util.Collection<UUID> equipeIds);
 }

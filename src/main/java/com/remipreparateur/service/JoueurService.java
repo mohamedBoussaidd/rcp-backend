@@ -4,6 +4,8 @@ import com.remipreparateur.dto.GpsHistoriqueDto;
 import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.repository.DonneeGpsRepository;
 import com.remipreparateur.repository.JoueurRepository;
+import com.remipreparateur.security.Scope;
+import com.remipreparateur.security.ScopeResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -16,9 +18,14 @@ public class JoueurService {
 
     private final JoueurRepository joueurRepository;
     private final DonneeGpsRepository donneeGpsRepository;
+    private final ScopeResolver scopeResolver;
 
+    /** Liste des joueurs actifs, limitee a la portee de l'utilisateur (equipe). */
     public List<Joueur> findAll() {
-        return joueurRepository.findByStatutNot("inactif");
+        Scope s = scopeResolver.resolve();
+        if (s.all()) return joueurRepository.findByStatutNot("inactif");
+        if (s.none()) return List.of();
+        return joueurRepository.findByStatutNotAndEquipeIdIn("inactif", s.equipeIds());
     }
 
     public Optional<Joueur> findById(UUID id) {
@@ -29,8 +36,18 @@ public class JoueurService {
         return joueurRepository.save(joueur);
     }
 
+    /** Creation : rattache le joueur a l'equipe du staff connecte. */
+    public Joueur create(Joueur joueur) {
+        joueur.setEquipeId(scopeResolver.equipePourEcriture());
+        return joueurRepository.save(joueur);
+    }
+
+    /** Tous les joueurs (y compris inactifs), limites a la portee de l'utilisateur. */
     public List<Joueur> findAllPlayers() {
-        return joueurRepository.findAll();
+        Scope s = scopeResolver.resolve();
+        if (s.all()) return joueurRepository.findAll();
+        if (s.none()) return List.of();
+        return joueurRepository.findByEquipeIdIn(s.equipeIds());
     }
 
     public void deleteById(UUID id) {

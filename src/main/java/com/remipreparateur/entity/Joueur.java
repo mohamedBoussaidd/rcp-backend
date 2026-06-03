@@ -52,4 +52,7 @@ public class Joueur {
 
     @Column(name = "date_arrivee_club")
     private LocalDate dateArriveeClub;
+
+    @Column(name = "equipe_id")
+    private UUID equipeId;
 }

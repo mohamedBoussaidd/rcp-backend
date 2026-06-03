@@ -31,13 +31,14 @@ public class JoueurController {
 
     @PostMapping
     public Joueur create(@Valid @RequestBody Joueur joueur) {
-        return joueurService.save(joueur);
+        return joueurService.create(joueur);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Joueur> update(@PathVariable UUID id, @Valid @RequestBody Joueur joueur) {
         return joueurService.findById(id).map(existing -> {
             joueur.setId(id);
+            joueur.setEquipeId(existing.getEquipeId()); // on ne change pas l'equipe via update
             return ResponseEntity.ok(joueurService.save(joueur));
         }).orElse(ResponseEntity.notFound().build());
     }
