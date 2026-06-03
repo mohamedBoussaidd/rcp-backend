@@ -6,6 +6,8 @@ import com.remipreparateur.entity.Blessure;
 import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.repository.BlessureRepository;
 import com.remipreparateur.repository.JoueurRepository;
+import com.remipreparateur.security.Scope;
+import com.remipreparateur.security.ScopeResolver;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,16 +24,25 @@ public class BlessureService {
 
     private final BlessureRepository blessureRepository;
     private final JoueurRepository joueurRepository;
+    private final ScopeResolver scopeResolver;
 
-    public BlessureService(BlessureRepository blessureRepository, JoueurRepository joueurRepository) {
+    public BlessureService(BlessureRepository blessureRepository, JoueurRepository joueurRepository,
+                           ScopeResolver scopeResolver) {
         this.blessureRepository = blessureRepository;
         this.joueurRepository = joueurRepository;
+        this.scopeResolver = scopeResolver;
     }
 
     public List<BlessureResponse> lister(UUID joueurId) {
-        List<Blessure> blessures = (joueurId != null)
-                ? blessureRepository.findByJoueurIdOrderByDateBlessureDesc(joueurId)
-                : blessureRepository.findAllByOrderByDateBlessureDesc();
+        List<Blessure> blessures;
+        if (joueurId != null) {
+            blessures = blessureRepository.findByJoueurIdOrderByDateBlessureDesc(joueurId);
+        } else {
+            Scope s = scopeResolver.resolve();
+            if (s.all()) blessures = blessureRepository.findAllByOrderByDateBlessureDesc();
+            else if (s.none()) blessures = List.of();
+            else blessures = blessureRepository.findByEquipeIdInOrderByDateBlessureDesc(s.equipeIds());
+        }
 
         Map<UUID, Joueur> joueurs = joueurRepository.findAllById(
                         blessures.stream().map(Blessure::getJoueurId).distinct().toList())
@@ -45,7 +56,7 @@ public class BlessureService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Joueur introuvable"));
         Blessure b = new Blessure();
         appliquer(b, req);
-        // equipe_id laisse null tant que le scoping par equipe n'est pas active (cf. plan)
+        b.setEquipeId(joueur.getEquipeId()); // rattache la blessure a l'equipe du joueur
         return toResponse(blessureRepository.save(b), joueur);
     }
 

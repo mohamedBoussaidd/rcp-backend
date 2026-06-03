@@ -10,4 +10,5 @@ import java.util.UUID;
 public interface BlessureRepository extends JpaRepository<Blessure, UUID> {
     List<Blessure> findByJoueurIdOrderByDateBlessureDesc(UUID joueurId);
     List<Blessure> findAllByOrderByDateBlessureDesc();
+    List<Blessure> findByEquipeIdInOrderByDateBlessureDesc(java.util.Collection<UUID> equipeIds);
 }

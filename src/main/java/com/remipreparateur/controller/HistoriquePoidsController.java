@@ -6,6 +6,7 @@ import com.remipreparateur.entity.HistoriquePoids;
 import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.repository.HistoriquePoidsRepository;
 import com.remipreparateur.repository.JoueurRepository;
+import com.remipreparateur.service.JoueurService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ public class HistoriquePoidsController {
 
     private final HistoriquePoidsRepository poidsRepo;
     private final JoueurRepository joueurRepo;
+    private final JoueurService joueurService;
 
     /** Historique de pesées d'un joueur (du plus récent au plus ancien) */
     @GetMapping
@@ -37,8 +39,7 @@ public class HistoriquePoidsController {
     /** Vue équipe : tous les joueurs actifs avec leur dernière pesée et l'écart poids de forme */
     @GetMapping("/equipe")
     public List<PoidsFicheJoueurDto> getEquipe() {
-        return joueurRepo.findAll().stream()
-                .filter(j -> !"inactif".equalsIgnoreCase(j.getStatut()))
+        return joueurService.findAll().stream()  // deja filtre par equipe + actifs
                 .map(j -> {
                     Optional<HistoriquePoids> derniere = poidsRepo
                             .findByJoueurIdOrderByDateDesc(j.getId())

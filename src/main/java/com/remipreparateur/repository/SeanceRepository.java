@@ -19,4 +19,12 @@ public interface SeanceRepository extends JpaRepository<Seance, UUID> {
     List<Seance> findByDateBetweenOrderByDateAscHeureDebutAsc(LocalDate debut, LocalDate fin);
 
     Optional<Seance> findByDateAndTypeSeanceId(LocalDate date, UUID typeSeanceId);
+
+    // ── Scoping par equipe ──
+    @EntityGraph(attributePaths = "typeSeance")
+    List<Seance> findByEquipeIdIn(java.util.Collection<UUID> equipeIds);
+
+    @EntityGraph(attributePaths = "typeSeance")
+    List<Seance> findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(
+            LocalDate debut, LocalDate fin, java.util.Collection<UUID> equipeIds);
 }

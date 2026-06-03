@@ -65,4 +65,7 @@ public class Seance {
 
     @Column(name = "description")
     private String description;
+
+    @Column(name = "equipe_id")
+    private UUID equipeId;
 }

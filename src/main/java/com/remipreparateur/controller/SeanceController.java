@@ -31,7 +31,7 @@ public class SeanceController {
     @PostMapping
     public Seance create(@RequestBody Seance seance) {
         if (seance.getStatut() == null) seance.setStatut("PLANIFIEE");
-        return seanceService.save(seance);
+        return seanceService.create(seance);
     }
 
     @PutMapping("/{id}")

@@ -4,6 +4,8 @@ import com.remipreparateur.entity.DonneeGps;
 import com.remipreparateur.entity.Seance;
 import com.remipreparateur.repository.DonneeGpsRepository;
 import com.remipreparateur.repository.SeanceRepository;
+import com.remipreparateur.security.Scope;
+import com.remipreparateur.security.ScopeResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,13 +20,20 @@ public class SeanceService {
 
     private final SeanceRepository seanceRepository;
     private final DonneeGpsRepository donneeGpsRepository;
+    private final ScopeResolver scopeResolver;
 
     public List<Seance> findAll() {
-        return seanceRepository.findAll();
+        Scope s = scopeResolver.resolve();
+        if (s.all()) return seanceRepository.findAll();
+        if (s.none()) return List.of();
+        return seanceRepository.findByEquipeIdIn(s.equipeIds());
     }
 
     public List<Seance> findByPeriode(LocalDate debut, LocalDate fin) {
-        return seanceRepository.findByDateBetweenOrderByDateAscHeureDebutAsc(debut, fin);
+        Scope s = scopeResolver.resolve();
+        if (s.all()) return seanceRepository.findByDateBetweenOrderByDateAscHeureDebutAsc(debut, fin);
+        if (s.none()) return List.of();
+        return seanceRepository.findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(debut, fin, s.equipeIds());
     }
 
     public Optional<Seance> findById(UUID id) {
@@ -32,6 +41,12 @@ public class SeanceService {
     }
 
     public Seance save(Seance seance) {
+        return seanceRepository.save(seance);
+    }
+
+    /** Creation : rattache la seance a l'equipe du staff connecte. */
+    public Seance create(Seance seance) {
+        seance.setEquipeId(scopeResolver.equipePourEcriture());
         return seanceRepository.save(seance);
     }
 
