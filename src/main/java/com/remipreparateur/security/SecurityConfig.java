@@ -91,6 +91,10 @@ public class SecurityConfig {
                         // Import Excel / donnees GPS : preparateur uniquement
                         .requestMatchers("/api/import/**").hasAnyRole("PREPARATEUR", "SUPER_ADMIN")
 
+                        // Blessures (module medical) : lecture = staff ; ecriture = medical
+                        .requestMatchers(HttpMethod.GET, "/api/blessures/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/blessures/**").hasAnyRole("MEDICAL", "SUPER_ADMIN")
+
                         // Configuration : lecture = staff ; ecriture = president
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/configuration/**").hasAnyRole("PRESIDENT", "SUPER_ADMIN")
