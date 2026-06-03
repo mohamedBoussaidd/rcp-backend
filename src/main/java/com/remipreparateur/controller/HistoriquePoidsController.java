@@ -6,6 +6,7 @@ import com.remipreparateur.entity.HistoriquePoids;
 import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.repository.HistoriquePoidsRepository;
 import com.remipreparateur.repository.JoueurRepository;
+import com.remipreparateur.security.ScopeResolver;
 import com.remipreparateur.service.JoueurService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,10 +27,12 @@ public class HistoriquePoidsController {
     private final HistoriquePoidsRepository poidsRepo;
     private final JoueurRepository joueurRepo;
     private final JoueurService joueurService;
+    private final ScopeResolver scopeResolver;
 
     /** Historique de pesées d'un joueur (du plus récent au plus ancien) */
     @GetMapping
     public List<HistoriquePoidsDto> getByJoueur(@RequestParam UUID joueurId) {
+        joueurRepo.findById(joueurId).ifPresent(j -> scopeResolver.verifieAcces(j.getEquipeId()));
         return poidsRepo.findByJoueurIdOrderByDateDesc(joueurId)
                 .stream()
                 .map(this::toDto)
@@ -74,6 +77,7 @@ public class HistoriquePoidsController {
     public ResponseEntity<HistoriquePoidsDto> upsert(@RequestBody PeseeRequest req) {
         Optional<Joueur> joueurOpt = joueurRepo.findById(req.joueurId());
         if (joueurOpt.isEmpty()) return ResponseEntity.notFound().build();
+        scopeResolver.verifieAcces(joueurOpt.get().getEquipeId());
 
         HistoriquePoids pesee = poidsRepo
                 .findByJoueurIdOrderByDateDesc(req.joueurId())
@@ -102,7 +106,9 @@ public class HistoriquePoidsController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        if (!poidsRepo.existsById(id)) return ResponseEntity.notFound().build();
+        Optional<HistoriquePoids> peseeOpt = poidsRepo.findById(id);
+        if (peseeOpt.isEmpty()) return ResponseEntity.notFound().build();
+        scopeResolver.verifieAcces(peseeOpt.get().getJoueur().getEquipeId());
         poidsRepo.deleteById(id);
         return ResponseEntity.noContent().build();
     }

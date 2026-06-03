@@ -63,15 +63,16 @@ public class BlessureService {
     public BlessureResponse modifier(UUID id, BlessureRequest req) {
         Blessure b = blessureRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable"));
+        scopeResolver.verifieAcces(b.getEquipeId());
         appliquer(b, req);
         Joueur joueur = joueurRepository.findById(b.getJoueurId()).orElse(null);
         return toResponse(blessureRepository.save(b), joueur);
     }
 
     public void supprimer(UUID id) {
-        if (!blessureRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable");
-        }
+        Blessure b = blessureRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable"));
+        scopeResolver.verifieAcces(b.getEquipeId());
         blessureRepository.deleteById(id);
     }
 

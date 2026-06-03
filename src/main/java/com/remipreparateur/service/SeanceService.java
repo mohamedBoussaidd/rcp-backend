@@ -53,6 +53,7 @@ public class SeanceService {
     public Seance update(UUID id, Seance patch) {
         Seance existing = seanceRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Séance introuvable : " + id));
+        scopeResolver.verifieAcces(existing.getEquipeId());
         if (patch.getTitre()             != null) existing.setTitre(patch.getTitre());
         if (patch.getStatut()            != null) existing.setStatut(patch.getStatut());
         if (patch.getDate()              != null) existing.setDate(patch.getDate());
@@ -71,13 +72,17 @@ public class SeanceService {
 
     @Transactional
     public void delete(UUID id) {
-        donneeGpsRepository.deleteBySeanceId(id);
-        seanceRepository.deleteById(id);
+        seanceRepository.findById(id).ifPresent(s -> {
+            scopeResolver.verifieAcces(s.getEquipeId());
+            donneeGpsRepository.deleteBySeanceId(id);
+            seanceRepository.deleteById(id);
+        });
     }
 
     public Seance marquerRealisee(UUID id) {
         Seance s = seanceRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Séance introuvable : " + id));
+        scopeResolver.verifieAcces(s.getEquipeId());
         s.setStatut("REALISEE");
         return seanceRepository.save(s);
     }

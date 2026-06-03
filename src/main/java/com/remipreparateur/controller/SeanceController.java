@@ -2,6 +2,7 @@ package com.remipreparateur.controller;
 
 import com.remipreparateur.entity.DonneeGps;
 import com.remipreparateur.entity.Seance;
+import com.remipreparateur.security.ScopeResolver;
 import com.remipreparateur.service.SeanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -17,6 +18,7 @@ import java.util.UUID;
 public class SeanceController {
 
     private final SeanceService seanceService;
+    private final ScopeResolver scopeResolver;
 
     @GetMapping
     public List<Seance> getAll(
@@ -61,7 +63,10 @@ public class SeanceController {
     @GetMapping("/{id}/donnees")
     public ResponseEntity<List<DonneeGps>> getDonneesGps(@PathVariable UUID id) {
         return seanceService.findById(id)
-                .map(s -> ResponseEntity.ok(seanceService.findDonneesGpsBySeance(id)))
+                .map(s -> {
+                    scopeResolver.verifieAcces(s.getEquipeId());
+                    return ResponseEntity.ok(seanceService.findDonneesGpsBySeance(id));
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 }

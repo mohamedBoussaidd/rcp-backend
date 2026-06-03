@@ -2,6 +2,7 @@ package com.remipreparateur.controller;
 
 import com.remipreparateur.dto.GpsHistoriqueDto;
 import com.remipreparateur.entity.Joueur;
+import com.remipreparateur.security.ScopeResolver;
 import com.remipreparateur.service.JoueurService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.UUID;
 public class JoueurController {
 
     private final JoueurService joueurService;
+    private final ScopeResolver scopeResolver;
 
     @GetMapping
     public List<Joueur> getAll() {
@@ -25,7 +27,7 @@ public class JoueurController {
     @GetMapping("/{id}")
     public ResponseEntity<Joueur> getById(@PathVariable UUID id) {
         return joueurService.findById(id)
-                .map(ResponseEntity::ok)
+                .map(j -> { scopeResolver.verifieAcces(j.getEquipeId()); return ResponseEntity.ok(j); })
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -37,6 +39,7 @@ public class JoueurController {
     @PutMapping("/{id}")
     public ResponseEntity<Joueur> update(@PathVariable UUID id, @Valid @RequestBody Joueur joueur) {
         return joueurService.findById(id).map(existing -> {
+            scopeResolver.verifieAcces(existing.getEquipeId());
             joueur.setId(id);
             joueur.setEquipeId(existing.getEquipeId()); // on ne change pas l'equipe via update
             return ResponseEntity.ok(joueurService.save(joueur));
@@ -50,18 +53,18 @@ public class JoueurController {
 
     @GetMapping("/{id}/gps")
     public ResponseEntity<List<GpsHistoriqueDto>> getHistoriqueGps(@PathVariable UUID id) {
-        if (joueurService.findById(id).isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(joueurService.getHistoriqueGps(id));
+        return joueurService.findById(id).map(j -> {
+            scopeResolver.verifieAcces(j.getEquipeId());
+            return ResponseEntity.ok(joueurService.getHistoriqueGps(id));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        if (joueurService.findById(id).isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        joueurService.deleteById(id);
-        return ResponseEntity.noContent().build();
+        return joueurService.findById(id).map(j -> {
+            scopeResolver.verifieAcces(j.getEquipeId());
+            joueurService.deleteById(id);
+            return ResponseEntity.noContent().<Void>build();
+        }).orElse(ResponseEntity.notFound().build());
     }
 }
