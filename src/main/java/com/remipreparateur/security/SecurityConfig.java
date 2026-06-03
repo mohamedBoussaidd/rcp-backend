@@ -63,7 +63,9 @@ public class SecurityConfig {
                 .exceptionHandling(eh -> eh.authenticationEntryPoint(
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
+                        // /error : sinon le forward interne ERROR (filtre JWT non rejoue)
+                        // ecrase les 400/403 par un 401. Permettre /error preserve le vrai statut.
+                        .requestMatchers("/api/auth/**", "/error").permitAll()
                         // Phase 1 : tout le reste exige un token valide.
                         // Le cloisonnement fin par role (lecture/ecriture) arrive en Phase 3.
                         .anyRequest().authenticated())
