@@ -17,6 +17,7 @@ public final class SeanceTechniqueDtos {
             LocalTime heureDebut,
             String titre,
             String objectif,
+            String description,
             List<UUID> exerciceIds) {}   // ordre = ordre de la liste
 
     public record ExerciceLigne(
@@ -35,6 +36,7 @@ public final class SeanceTechniqueDtos {
             LocalTime heureDebut,
             String titre,
             String objectif,
+            String description,
             String statut,
             String creeParNom,
             int dureeTotaleMinutes,

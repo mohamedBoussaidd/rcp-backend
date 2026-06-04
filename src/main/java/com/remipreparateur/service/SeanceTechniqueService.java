@@ -78,6 +78,7 @@ public class SeanceTechniqueService {
         st.setHeureDebut(req.heureDebut());
         st.setTitre(req.titre());
         st.setObjectif(req.objectif());
+        st.setDescription(req.description());
         st.setStatut("PLANIFIEE");
         st = seanceRepo.save(st);
         remplacerExercices(st.getId(), req.exerciceIds());
@@ -95,6 +96,7 @@ public class SeanceTechniqueService {
         st.setHeureDebut(req.heureDebut());
         st.setTitre(req.titre());
         st.setObjectif(req.objectif());
+        st.setDescription(req.description());
         seanceRepo.save(st);
         remplacerExercices(st.getId(), req.exerciceIds());
         return toResponse(st);
@@ -162,7 +164,7 @@ public class SeanceTechniqueService {
 
         return new SeanceTechniqueResponse(
                 st.getId(), st.getEquipeId(), st.getDate(), st.getHeureDebut(),
-                st.getTitre(), st.getObjectif(), st.getStatut(), creeParNom,
+                st.getTitre(), st.getObjectif(), st.getDescription(), st.getStatut(), creeParNom,
                 dureeTotale, intensiteMoyenne, lignes);
     }
 }

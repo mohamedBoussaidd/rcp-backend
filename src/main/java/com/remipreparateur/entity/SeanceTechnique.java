@@ -33,6 +33,9 @@ public class SeanceTechnique {
     @Column(name = "objectif")
     private String objectif;
 
+    @Column(name = "description")
+    private String description;
+
     @Column(name = "statut", nullable = false, length = 20)
     private String statut = "PLANIFIEE";
 
