@@ -108,6 +108,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/seances-techniques/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/seances-techniques/**").hasAnyRole("ENTRAINEUR", "SUPER_ADMIN")
 
+                        // Formations tactiques personnalisees (club) : lecture staff ; ecriture entraineur/president
+                        .requestMatchers(HttpMethod.GET, "/api/formations/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/formations/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
+
                         // Configuration : lecture = staff ; ecriture = president
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/configuration/**").hasAnyRole("PRESIDENT", "SUPER_ADMIN")
