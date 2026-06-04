@@ -152,7 +152,8 @@ public class SeanceTechniqueService {
             dureeTotale += duree;
             if (e.getIntensite() != null) sommePonderee += (double) e.getIntensite() * duree;
             lignes.add(new ExerciceLigne(e.getId(), e.getNom(), e.getCategorie(),
-                    e.getDureeMinutes(), e.getIntensite(), e.getObjectif(), l.getOrdre()));
+                    e.getDureeMinutes(), e.getIntensite(), e.getObjectif(),
+                    e.getDescription(), e.getSchemaJson(), l.getOrdre()));
         }
         Double intensiteMoyenne = dureeTotale > 0 ? Math.round((sommePonderee / dureeTotale) * 10) / 10.0 : null;
 

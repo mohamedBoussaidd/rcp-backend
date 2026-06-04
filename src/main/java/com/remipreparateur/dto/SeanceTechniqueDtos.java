@@ -27,6 +27,8 @@ public final class SeanceTechniqueDtos {
             Short dureeMinutes,
             Short intensite,
             String objectif,
+            String description,
+            String schemaJson,
             int ordre) {}
 
     public record SeanceTechniqueResponse(
