@@ -99,6 +99,15 @@ public class SecurityConfig {
                         // Espace personnel du joueur : reserve au role JOUEUR (donnees scopees par token)
                         .requestMatchers("/api/moi/**").hasRole("JOUEUR")
 
+                        // Bibliotheque d'exercices (club) : lecture staff ; ecriture entraineur/president
+                        // (edition/suppression restreinte au createur/president dans le service)
+                        .requestMatchers(HttpMethod.GET, "/api/exercices/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/exercices/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
+
+                        // Seances techniques : lecture staff ; ecriture entraineur (module technique)
+                        .requestMatchers(HttpMethod.GET, "/api/seances-techniques/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/seances-techniques/**").hasAnyRole("ENTRAINEUR", "SUPER_ADMIN")
+
                         // Configuration : lecture = staff ; ecriture = president
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/configuration/**").hasAnyRole("PRESIDENT", "SUPER_ADMIN")
