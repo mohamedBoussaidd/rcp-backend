@@ -25,9 +25,13 @@ public final class ExerciceDtos {
             String objectif,
             Short intensite,
             String description,
+            String schemaJson,
             UUID creeParId,
             String creeParNom,
             UUID equipeOrigineId,
             String equipeOrigineNom,
             boolean modifiable) {}
+
+    /** Sauvegarde du schéma tactique (éditeur Konva). */
+    public record SchemaRequest(String schemaJson) {}
 }

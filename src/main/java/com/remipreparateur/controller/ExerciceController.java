@@ -2,6 +2,7 @@ package com.remipreparateur.controller;
 
 import com.remipreparateur.dto.ExerciceDtos.ExerciceRequest;
 import com.remipreparateur.dto.ExerciceDtos.ExerciceResponse;
+import com.remipreparateur.dto.ExerciceDtos.SchemaRequest;
 import com.remipreparateur.service.ExerciceService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,11 @@ public class ExerciceController {
     @PutMapping("/{id}")
     public ExerciceResponse modifier(@PathVariable UUID id, @Valid @RequestBody ExerciceRequest req) {
         return exerciceService.modifier(id, req);
+    }
+
+    @PutMapping("/{id}/schema")
+    public ExerciceResponse modifierSchema(@PathVariable UUID id, @RequestBody SchemaRequest req) {
+        return exerciceService.modifierSchema(id, req.schemaJson());
     }
 
     @DeleteMapping("/{id}")

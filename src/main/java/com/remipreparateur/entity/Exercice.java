@@ -37,6 +37,9 @@ public class Exercice {
     @Column(name = "description")
     private String description;
 
+    @Column(name = "schema_json", columnDefinition = "text")
+    private String schemaJson;
+
     @Column(name = "cree_par")
     private UUID creePar;
 

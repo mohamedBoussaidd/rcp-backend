@@ -74,6 +74,15 @@ public class ExerciceService {
         exerciceRepository.deleteById(id);
     }
 
+    /** Sauvegarde du schéma tactique (même droit que l'édition de l'exercice). */
+    public ExerciceResponse modifierSchema(UUID id, String schemaJson) {
+        Utilisateur u = currentUser.current();
+        Exercice e = charge(id);
+        exigeDroit(e, u);
+        e.setSchemaJson(schemaJson);
+        return toResponse(exerciceRepository.save(e), u);
+    }
+
     // ── Helpers ──
     private Exercice charge(UUID id) {
         return exerciceRepository.findById(id)
@@ -118,7 +127,7 @@ public class ExerciceService {
                 : null;
         return new ExerciceResponse(
                 e.getId(), e.getNom(), e.getCategorie(), e.getDureeMinutes(), e.getObjectif(),
-                e.getIntensite(), e.getDescription(),
+                e.getIntensite(), e.getDescription(), e.getSchemaJson(),
                 e.getCreePar(), creeParNom, e.getEquipeOrigineId(), equipeNom,
                 peutModifier(e, courant));
     }
