@@ -2,6 +2,7 @@ package com.remipreparateur.controller;
 
 import com.remipreparateur.dto.ClubDtos.ClubCreateRequest;
 import com.remipreparateur.dto.ClubDtos.ClubResponse;
+import com.remipreparateur.dto.ClubDtos.ClubUpdateRequest;
 import com.remipreparateur.service.ClubService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -32,6 +33,11 @@ public class ClubController {
     @PostMapping
     public ResponseEntity<ClubResponse> creer(@Valid @RequestBody ClubCreateRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(clubService.creerClubAvecPresident(req));
+    }
+
+    @PutMapping("/{id}")
+    public ClubResponse modifier(@PathVariable UUID id, @Valid @RequestBody ClubUpdateRequest req) {
+        return clubService.modifier(id, req);
     }
 
     @DeleteMapping("/{id}")

@@ -36,6 +36,11 @@ public class MonClubController {
         return ResponseEntity.status(HttpStatus.CREATED).body(gestion.creerEquipe(currentUser.current(), req));
     }
 
+    @PutMapping("/equipes/{id}")
+    public EquipeResponse modifierEquipe(@PathVariable UUID id, @Valid @RequestBody EquipeRequest req) {
+        return gestion.modifierEquipe(currentUser.current(), id, req);
+    }
+
     @DeleteMapping("/equipes/{id}")
     public ResponseEntity<Void> supprimerEquipe(@PathVariable UUID id) {
         gestion.supprimerEquipe(currentUser.current(), id);

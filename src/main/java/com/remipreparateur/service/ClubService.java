@@ -67,6 +67,15 @@ public class ClubService {
     }
 
     @Transactional
+    public ClubResponse modifier(UUID id, com.remipreparateur.dto.ClubDtos.ClubUpdateRequest req) {
+        Club club = clubRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Club introuvable"));
+        club.setNom(req.nom());
+        club.setLogo(req.logo());
+        return toResponse(clubRepository.save(club));
+    }
+
+    @Transactional
     public void supprimerClub(UUID id) {
         if (!clubRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Club introuvable");

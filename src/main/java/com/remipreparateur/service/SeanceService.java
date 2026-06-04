@@ -2,13 +2,17 @@ package com.remipreparateur.service;
 
 import com.remipreparateur.entity.DonneeGps;
 import com.remipreparateur.entity.Seance;
+import com.remipreparateur.entity.TypeSeance;
 import com.remipreparateur.repository.DonneeGpsRepository;
 import com.remipreparateur.repository.SeanceRepository;
 import com.remipreparateur.security.Scope;
 import com.remipreparateur.security.ScopeResolver;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -54,6 +58,9 @@ public class SeanceService {
         Seance existing = seanceRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Séance introuvable : " + id));
         scopeResolver.verifieAcces(existing.getEquipeId());
+        if ("REALISEE".equals(existing.getStatut())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Une seance realisee ne peut plus etre modifiee");
+        }
         if (patch.getTitre()             != null) existing.setTitre(patch.getTitre());
         if (patch.getStatut()            != null) existing.setStatut(patch.getStatut());
         if (patch.getDate()              != null) existing.setDate(patch.getDate());
@@ -67,6 +74,7 @@ public class SeanceService {
         if (patch.getDomicileExterieur() != null) existing.setDomicileExterieur(patch.getDomicileExterieur());
         if (patch.getScoreMatch()        != null) existing.setScoreMatch(patch.getScoreMatch());
         if (patch.getDescription()       != null) existing.setDescription(patch.getDescription());
+        existing.setTypeSeance((TypeSeance) Hibernate.unproxy(existing.getTypeSeance()));
         return seanceRepository.save(existing);
     }
 
@@ -84,6 +92,7 @@ public class SeanceService {
                 .orElseThrow(() -> new IllegalArgumentException("Séance introuvable : " + id));
         scopeResolver.verifieAcces(s.getEquipeId());
         s.setStatut("REALISEE");
+        s.setTypeSeance((TypeSeance) Hibernate.unproxy(s.getTypeSeance()));
         return seanceRepository.save(s);
     }
 

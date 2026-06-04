@@ -73,9 +73,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/error").permitAll()
 
                         // ── Phase 3 : cloisonnement lecture (staff) vs ecriture (role proprietaire) ──
-                        // Seances : lecture = staff ; ecriture = entraineur / preparateur
+                        // Seances physiques : lecture = staff ; ecriture = preparateur seul
+                        // (l'entraineur aura son propre module technique)
                         .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAnyRole(STAFF)
-                        .requestMatchers("/api/seances/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "SUPER_ADMIN")
+                        .requestMatchers("/api/seances/**").hasAnyRole("PREPARATEUR", "SUPER_ADMIN")
 
                         // Catalogue types de seance + predictions IA : lecture seule (staff)
                         .requestMatchers(HttpMethod.GET, "/api/type-seances/**", "/api/predictions/**").hasAnyRole(STAFF)

@@ -24,6 +24,10 @@ public final class ClubDtos {
             String logo,
             @NotNull @Valid PresidentInput president) {}
 
+    public record ClubUpdateRequest(
+            @NotBlank String nom,
+            String logo) {}
+
     public record ClubResponse(
             UUID id,
             String nom,

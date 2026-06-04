@@ -75,6 +75,16 @@ public class GestionClubService {
     }
 
     @Transactional
+    public EquipeResponse modifierEquipe(Utilisateur president, UUID equipeId, EquipeRequest req) {
+        Equipe e = equipeRepository.findById(equipeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Equipe introuvable"));
+        verifieMemeClub(president, e.getClubId());
+        e.setNom(req.nom());
+        e.setCategorie(req.categorie());
+        return toEquipeResponse(equipeRepository.save(e));
+    }
+
+    @Transactional
     public void supprimerEquipe(Utilisateur president, UUID equipeId) {
         Equipe e = equipeRepository.findById(equipeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Equipe introuvable"));
