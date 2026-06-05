@@ -1,6 +1,7 @@
 package com.remipreparateur.service;
 
 import com.remipreparateur.dto.GpsHistoriqueDto;
+import com.remipreparateur.dto.VitesseJoueurDto;
 import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.repository.DonneeGpsRepository;
 import com.remipreparateur.repository.JoueurRepository;
@@ -8,6 +9,8 @@ import com.remipreparateur.security.Scope;
 import com.remipreparateur.security.ScopeResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -52,6 +55,22 @@ public class JoueurService {
 
     public void deleteById(UUID id) {
         joueurRepository.deleteById(id);
+    }
+
+    /** Fiche vitesse (vmax record, vmoy = moyenne des vmax) par joueur, limitée à la portée. */
+    public List<VitesseJoueurDto> getVitesses() {
+        Scope s = scopeResolver.resolve();
+        if (s.none()) return List.of();
+        List<DonneeGpsRepository.VitesseAgg> aggs = s.all()
+                ? donneeGpsRepository.aggregerToutesVitesses()
+                : donneeGpsRepository.aggregerVitesses(s.equipeIds());
+        return aggs.stream()
+                .map(a -> new VitesseJoueurDto(
+                        a.getJoueurId(),
+                        a.getVmax(),
+                        a.getVmoy() == null ? null
+                                : BigDecimal.valueOf(a.getVmoy()).setScale(1, RoundingMode.HALF_UP)))
+                .toList();
     }
 
     public List<GpsHistoriqueDto> getHistoriqueGps(UUID joueurId) {

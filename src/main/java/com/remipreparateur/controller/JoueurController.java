@@ -1,6 +1,7 @@
 package com.remipreparateur.controller;
 
 import com.remipreparateur.dto.GpsHistoriqueDto;
+import com.remipreparateur.dto.VitesseJoueurDto;
 import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.security.ScopeResolver;
 import com.remipreparateur.service.JoueurService;
@@ -49,6 +50,12 @@ public class JoueurController {
     @GetMapping("/tous")
     public List<Joueur> getTous() {
         return joueurService.findAllPlayers();
+    }
+
+    /** Fiche vitesse (vmax/vmoy en km/h) des joueurs de l'équipe, pour animer les schémas. */
+    @GetMapping("/vitesses")
+    public List<VitesseJoueurDto> getVitesses() {
+        return joueurService.getVitesses();
     }
 
     @GetMapping("/{id}/gps")
