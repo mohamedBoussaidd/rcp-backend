@@ -1,6 +1,7 @@
 package com.remipreparateur.controller;
 
 import com.remipreparateur.dto.BlessureDtos.BlessureResponse;
+import com.remipreparateur.dto.BlessureSuiviDtos.EtapeResponse;
 import com.remipreparateur.dto.EspaceJoueurDtos.MaPeseeResponse;
 import com.remipreparateur.dto.GpsHistoriqueDto;
 import com.remipreparateur.dto.RpeDtos.RpeRequest;
@@ -13,6 +14,7 @@ import com.remipreparateur.entity.Seance;
 import com.remipreparateur.repository.HistoriquePoidsRepository;
 import com.remipreparateur.security.CurrentUserProvider;
 import com.remipreparateur.service.BlessureService;
+import com.remipreparateur.service.BlessureSuiviService;
 import com.remipreparateur.service.JoueurService;
 import com.remipreparateur.service.RpeService;
 import com.remipreparateur.service.SeanceService;
@@ -23,6 +25,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -51,6 +54,7 @@ public class EspaceJoueurController {
     private final SeanceTechniqueService seanceTechniqueService;
     private final WellnessService wellnessService;
     private final RpeService rpeService;
+    private final BlessureSuiviService blessureSuiviService;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
@@ -59,7 +63,8 @@ public class EspaceJoueurController {
                                   SeanceService seanceService,
                                   SeanceTechniqueService seanceTechniqueService,
                                   WellnessService wellnessService,
-                                  RpeService rpeService) {
+                                  RpeService rpeService,
+                                  BlessureSuiviService blessureSuiviService) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
         this.historiquePoidsRepository = historiquePoidsRepository;
@@ -68,6 +73,7 @@ public class EspaceJoueurController {
         this.seanceTechniqueService = seanceTechniqueService;
         this.wellnessService = wellnessService;
         this.rpeService = rpeService;
+        this.blessureSuiviService = blessureSuiviService;
     }
 
     @GetMapping("/profil")
@@ -92,6 +98,12 @@ public class EspaceJoueurController {
     @GetMapping("/blessures")
     public List<BlessureResponse> mesBlessures() {
         return blessureService.lister(monJoueurId());
+    }
+
+    /** Protocole de reprise (RTP) d'une de mes blessures — lecture seule. */
+    @GetMapping("/blessures/{blessureId}/rtp")
+    public List<EtapeResponse> mesEtapesRtp(@PathVariable UUID blessureId) {
+        return blessureSuiviService.listerRtpPourJoueur(monJoueurId(), blessureId);
     }
 
     /**

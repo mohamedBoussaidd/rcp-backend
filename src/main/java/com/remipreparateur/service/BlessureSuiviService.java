@@ -93,6 +93,17 @@ public class BlessureSuiviService {
                 .map(this::toEtape).toList();
     }
 
+    /** Lecture du protocole par le joueur : seulement si la blessure lui appartient. */
+    public List<EtapeResponse> listerRtpPourJoueur(UUID joueurId, UUID blessureId) {
+        Blessure b = blessureRepository.findById(blessureId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable"));
+        if (!b.getJoueurId().equals(joueurId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable");
+        }
+        return etapeRepository.findByBlessureIdOrderByOrdreAsc(blessureId).stream()
+                .map(this::toEtape).toList();
+    }
+
     /** Crée le protocole par défaut (refuse si déjà initialisé). */
     public List<EtapeResponse> initialiserRtp(UUID blessureId) {
         verifierAcces(blessureId);
