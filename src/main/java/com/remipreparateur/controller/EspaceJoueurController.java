@@ -3,18 +3,25 @@ package com.remipreparateur.controller;
 import com.remipreparateur.dto.BlessureDtos.BlessureResponse;
 import com.remipreparateur.dto.EspaceJoueurDtos.MaPeseeResponse;
 import com.remipreparateur.dto.GpsHistoriqueDto;
+import com.remipreparateur.dto.SeanceTechniqueDtos.SeanceTechniqueResponse;
 import com.remipreparateur.entity.Joueur;
+import com.remipreparateur.entity.Seance;
 import com.remipreparateur.repository.HistoriquePoidsRepository;
 import com.remipreparateur.security.CurrentUserProvider;
 import com.remipreparateur.service.BlessureService;
 import com.remipreparateur.service.JoueurService;
+import com.remipreparateur.service.SeanceService;
+import com.remipreparateur.service.SeanceTechniqueService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,15 +38,21 @@ public class EspaceJoueurController {
     private final JoueurService joueurService;
     private final HistoriquePoidsRepository historiquePoidsRepository;
     private final BlessureService blessureService;
+    private final SeanceService seanceService;
+    private final SeanceTechniqueService seanceTechniqueService;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
                                   HistoriquePoidsRepository historiquePoidsRepository,
-                                  BlessureService blessureService) {
+                                  BlessureService blessureService,
+                                  SeanceService seanceService,
+                                  SeanceTechniqueService seanceTechniqueService) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
         this.historiquePoidsRepository = historiquePoidsRepository;
         this.blessureService = blessureService;
+        this.seanceService = seanceService;
+        this.seanceTechniqueService = seanceTechniqueService;
     }
 
     @GetMapping("/profil")
@@ -64,6 +77,27 @@ public class EspaceJoueurController {
     @GetMapping("/blessures")
     public List<BlessureResponse> mesBlessures() {
         return blessureService.lister(monJoueurId());
+    }
+
+    /**
+     * Seances de l'equipe du joueur (lecture seule). Scoping automatique a son equipe via
+     * ScopeResolver (role JOUEUR). Avec debut+fin : vue calendrier sur une periode.
+     */
+    @GetMapping("/seances")
+    public List<Seance> mesSeances(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        return (debut != null && fin != null)
+                ? seanceService.findByPeriode(debut, fin)
+                : seanceService.findAll();
+    }
+
+    /** Séances techniques de l'équipe du joueur (lecture seule, scoping via ScopeResolver). */
+    @GetMapping("/seances-techniques")
+    public List<SeanceTechniqueResponse> mesSeancesTechniques(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        return seanceTechniqueService.lister(debut, fin);
     }
 
     /** joueurId du compte connecte, ou 409 si le compte n'est pas rattache a une fiche. */

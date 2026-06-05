@@ -74,7 +74,8 @@ public class SecurityConfig {
 
                         // ── Phase 3 : cloisonnement lecture (staff) vs ecriture (role proprietaire) ──
                         // Seances physiques : lecture = staff ; ecriture = preparateur seul
-                        // (l'entraineur aura son propre module technique)
+                        // (l'entraineur aura son propre module technique). Le joueur lit ses seances
+                        // d'equipe en lecture seule via /api/moi/seances (scoping par token).
                         .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/seances/**").hasAnyRole("PREPARATEUR", "SUPER_ADMIN")
 
