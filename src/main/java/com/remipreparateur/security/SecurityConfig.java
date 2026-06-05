@@ -103,6 +103,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/documents-medicaux/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/documents-medicaux/**").hasAnyRole("MEDICAL", "SUPER_ADMIN")
 
+                        // Wellness (ressenti) + RPE de seance : saisie par le joueur via /api/moi/**,
+                        // lecture staff via /api/wellness et /api/rpe (filtrage equipe en service).
+                        .requestMatchers(HttpMethod.GET, "/api/wellness/**", "/api/rpe/**").hasAnyRole(STAFF)
+
                         // Espace personnel du joueur : reserve au role JOUEUR (donnees scopees par token)
                         .requestMatchers("/api/moi/**").hasRole("JOUEUR")
 

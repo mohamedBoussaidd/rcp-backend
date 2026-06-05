@@ -3,19 +3,28 @@ package com.remipreparateur.controller;
 import com.remipreparateur.dto.BlessureDtos.BlessureResponse;
 import com.remipreparateur.dto.EspaceJoueurDtos.MaPeseeResponse;
 import com.remipreparateur.dto.GpsHistoriqueDto;
+import com.remipreparateur.dto.RpeDtos.RpeRequest;
+import com.remipreparateur.dto.RpeDtos.RpeResponse;
 import com.remipreparateur.dto.SeanceTechniqueDtos.SeanceTechniqueResponse;
+import com.remipreparateur.dto.WellnessDtos.WellnessRequest;
+import com.remipreparateur.dto.WellnessDtos.WellnessResponse;
 import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.entity.Seance;
 import com.remipreparateur.repository.HistoriquePoidsRepository;
 import com.remipreparateur.security.CurrentUserProvider;
 import com.remipreparateur.service.BlessureService;
 import com.remipreparateur.service.JoueurService;
+import com.remipreparateur.service.RpeService;
 import com.remipreparateur.service.SeanceService;
 import com.remipreparateur.service.SeanceTechniqueService;
+import com.remipreparateur.service.WellnessService;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,19 +49,25 @@ public class EspaceJoueurController {
     private final BlessureService blessureService;
     private final SeanceService seanceService;
     private final SeanceTechniqueService seanceTechniqueService;
+    private final WellnessService wellnessService;
+    private final RpeService rpeService;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
                                   HistoriquePoidsRepository historiquePoidsRepository,
                                   BlessureService blessureService,
                                   SeanceService seanceService,
-                                  SeanceTechniqueService seanceTechniqueService) {
+                                  SeanceTechniqueService seanceTechniqueService,
+                                  WellnessService wellnessService,
+                                  RpeService rpeService) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
         this.historiquePoidsRepository = historiquePoidsRepository;
         this.blessureService = blessureService;
         this.seanceService = seanceService;
         this.seanceTechniqueService = seanceTechniqueService;
+        this.wellnessService = wellnessService;
+        this.rpeService = rpeService;
     }
 
     @GetMapping("/profil")
@@ -98,6 +113,32 @@ public class EspaceJoueurController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
         return seanceTechniqueService.lister(debut, fin);
+    }
+
+    // ──────────────────────────── Wellness (ressenti quotidien) ────────────────────────────
+
+    @GetMapping("/wellness")
+    public List<WellnessResponse> mesWellness() {
+        return wellnessService.listerPourJoueur(monJoueurId());
+    }
+
+    /** Saisie/mise a jour du ressenti du jour (upsert sur joueur + date). */
+    @PostMapping("/wellness")
+    public WellnessResponse saisirWellness(@Valid @RequestBody WellnessRequest req) {
+        return wellnessService.enregistrer(monJoueurId(), req);
+    }
+
+    // ──────────────────────────── RPE de seance ────────────────────────────
+
+    @GetMapping("/rpe")
+    public List<RpeResponse> mesRpe() {
+        return rpeService.listerPourJoueur(monJoueurId());
+    }
+
+    /** Saisie/mise a jour du RPE d'une seance (upsert sur joueur + seance). */
+    @PostMapping("/rpe")
+    public RpeResponse saisirRpe(@Valid @RequestBody RpeRequest req) {
+        return rpeService.enregistrer(monJoueurId(), req);
     }
 
     /** joueurId du compte connecte, ou 409 si le compte n'est pas rattache a une fiche. */
