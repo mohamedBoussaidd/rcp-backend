@@ -44,5 +44,6 @@ public final class WellnessDtos {
             String geneZone,
             Short geneIntensite,
             String geneMoment,
+            boolean geneTraitee,
             LocalDateTime createdAt) {}
 }

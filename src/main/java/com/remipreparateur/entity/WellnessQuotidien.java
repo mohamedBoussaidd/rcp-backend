@@ -59,6 +59,16 @@ public class WellnessQuotidien {
     @Column(name = "gene_moment")
     private String geneMoment;
 
+    /** Gêne marquée traitée par le staff (quitte les alertes, reste en historique). */
+    @Column(name = "gene_traitee", nullable = false)
+    private boolean geneTraitee = false;
+
+    @Column(name = "gene_traitee_par")
+    private UUID geneTraiteePar;
+
+    @Column(name = "gene_traitee_le")
+    private LocalDateTime geneTraiteeLe;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

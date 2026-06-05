@@ -6,6 +6,7 @@ import com.remipreparateur.entity.Joueur;
 import com.remipreparateur.entity.WellnessQuotidien;
 import com.remipreparateur.repository.JoueurRepository;
 import com.remipreparateur.repository.WellnessQuotidienRepository;
+import com.remipreparateur.security.CurrentUserProvider;
 import com.remipreparateur.security.Scope;
 import com.remipreparateur.security.ScopeResolver;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,12 +31,14 @@ public class WellnessService {
     private final WellnessQuotidienRepository repository;
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
+    private final CurrentUserProvider currentUser;
 
     public WellnessService(WellnessQuotidienRepository repository, JoueurRepository joueurRepository,
-                           ScopeResolver scopeResolver) {
+                           ScopeResolver scopeResolver, CurrentUserProvider currentUser) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
+        this.currentUser = currentUser;
     }
 
     public WellnessResponse enregistrer(UUID joueurId, WellnessRequest req) {
@@ -58,6 +62,10 @@ public class WellnessService {
         w.setGeneZone(zone);
         w.setGeneIntensite(zone != null ? req.geneIntensite() : null);
         w.setGeneMoment(zone != null ? videEnNull(req.geneMoment()) : null);
+        // Nouvelle saisie : la gêne (re)devient active (non traitée).
+        w.setGeneTraitee(false);
+        w.setGeneTraiteePar(null);
+        w.setGeneTraiteeLe(null);
         return toResponse(repository.save(w), joueur);
     }
 
@@ -85,6 +93,21 @@ public class WellnessService {
         return rows.stream().map(w -> toResponse(w, joueurs.get(w.getJoueurId()))).toList();
     }
 
+    /** Marque la gêne d'une saisie comme traitée (staff). Scopée à l'équipe. */
+    public WellnessResponse traiterGene(UUID wellnessId) {
+        WellnessQuotidien w = repository.findById(wellnessId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Saisie introuvable"));
+        scopeResolver.verifieAcces(w.getEquipeId());
+        if (w.getGeneZone() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune gêne à traiter");
+        }
+        w.setGeneTraitee(true);
+        w.setGeneTraiteePar(currentUser.current().getId());
+        w.setGeneTraiteeLe(LocalDateTime.now());
+        Joueur joueur = joueurRepository.findById(w.getJoueurId()).orElse(null);
+        return toResponse(repository.save(w), joueur);
+    }
+
     /**
      * Score de bien-être 0..100. Les items négatifs (fatigue, douleur, stress) sont inversés
      * pour que « plus haut = mieux ». Moyenne des 5 items (1..5) ramenée sur 100.
@@ -106,7 +129,7 @@ public class WellnessService {
                 j != null ? j.getPrenom() : null,
                 w.getDate(), w.getSommeil(), w.getFatigue(), w.getDouleur(), w.getStress(), w.getHumeur(),
                 scoreBienEtre(w), w.getCommentaire(),
-                w.getGeneZone(), w.getGeneIntensite(), w.getGeneMoment(),
+                w.getGeneZone(), w.getGeneIntensite(), w.getGeneMoment(), w.isGeneTraitee(),
                 w.getCreatedAt());
     }
 }

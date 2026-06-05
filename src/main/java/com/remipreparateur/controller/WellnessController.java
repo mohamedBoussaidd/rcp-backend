@@ -25,4 +25,10 @@ public class WellnessController {
     public List<WellnessResponse> lister(@RequestParam(required = false) UUID joueurId) {
         return wellnessService.listerPourStaff(joueurId);
     }
+
+    /** Marque la gêne d'une saisie comme traitée (médical / préparateur). */
+    @PatchMapping("/{id}/gene-traitee")
+    public WellnessResponse traiterGene(@PathVariable UUID id) {
+        return wellnessService.traiterGene(id);
+    }
 }
