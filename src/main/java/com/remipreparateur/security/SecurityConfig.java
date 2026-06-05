@@ -97,6 +97,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/blessures/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/blessures/**").hasAnyRole("MEDICAL", "SUPER_ADMIN")
 
+                        // Documents medicaux (staff) : lecture = staff (filtrage fin par visibilite
+                        // dans le service) ; suppression = medical. Le depot/gestion par le joueur
+                        // passe par /api/moi/documents-medicaux (regle /api/moi/** ci-dessous).
+                        .requestMatchers(HttpMethod.GET, "/api/documents-medicaux/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/documents-medicaux/**").hasAnyRole("MEDICAL", "SUPER_ADMIN")
+
                         // Espace personnel du joueur : reserve au role JOUEUR (donnees scopees par token)
                         .requestMatchers("/api/moi/**").hasRole("JOUEUR")
 
