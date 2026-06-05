@@ -57,7 +57,9 @@ public class BlessureService {
         Blessure b = new Blessure();
         appliquer(b, req);
         b.setEquipeId(joueur.getEquipeId()); // rattache la blessure a l'equipe du joueur
-        return toResponse(blessureRepository.save(b), joueur);
+        BlessureResponse res = toResponse(blessureRepository.save(b), joueur);
+        synchroniserStatutJoueur(joueur);
+        return res;
     }
 
     public BlessureResponse modifier(UUID id, BlessureRequest req) {
@@ -66,20 +68,31 @@ public class BlessureService {
         scopeResolver.verifieAcces(b.getEquipeId());
         appliquer(b, req);
         Joueur joueur = joueurRepository.findById(b.getJoueurId()).orElse(null);
-        return toResponse(blessureRepository.save(b), joueur);
+        BlessureResponse res = toResponse(blessureRepository.save(b), joueur);
+        synchroniserStatutJoueur(joueur);
+        return res;
     }
 
     public void supprimer(UUID id) {
         Blessure b = blessureRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable"));
         scopeResolver.verifieAcces(b.getEquipeId());
+        UUID joueurId = b.getJoueurId();
         blessureRepository.deleteById(id);
+        joueurRepository.findById(joueurId).ifPresent(this::synchroniserStatutJoueur);
     }
 
     private void appliquer(Blessure b, BlessureRequest req) {
         b.setJoueurId(req.joueurId());
         b.setDateBlessure(req.dateBlessure());
         b.setDateRetourEffectif(req.dateRetourEffectif());
+        b.setDateRetourPrevue(req.dateRetourPrevue());
+        String statut = (req.statut() == null || req.statut().isBlank()) ? "INDISPONIBLE" : req.statut().trim();
+        b.setStatut(statut);
+        // Retour acté sans date réelle saisie : on la fixe à aujourd'hui (pour le calcul des jours perdus).
+        if ("RETABLI".equals(statut) && b.getDateRetourEffectif() == null) {
+            b.setDateRetourEffectif(LocalDate.now());
+        }
         b.setTypeBlessure(req.typeBlessure());
         b.setZoneCorporelle(req.zoneCorporelle());
         b.setCote(req.cote());
@@ -89,14 +102,31 @@ public class BlessureService {
         b.setCommentaire(req.commentaire());
     }
 
+    /**
+     * Bascule le statut joueur actif &lt;-&gt; blesse selon ses blessures actives.
+     * Ne touche jamais aux statuts manuels (suspendu / prete / inactif).
+     */
+    private void synchroniserStatutJoueur(Joueur joueur) {
+        if (joueur == null) return;
+        boolean aBlessureActive = blessureRepository.findByJoueurIdOrderByDateBlessureDesc(joueur.getId())
+                .stream().anyMatch(b -> !"RETABLI".equals(b.getStatut()));
+        String statut = joueur.getStatut();
+        if (aBlessureActive && "actif".equals(statut)) {
+            joueur.setStatut("blesse");
+            joueurRepository.save(joueur);
+        } else if (!aBlessureActive && "blesse".equals(statut)) {
+            joueur.setStatut("actif");
+            joueurRepository.save(joueur);
+        }
+    }
+
     private BlessureResponse toResponse(Blessure b, Joueur j) {
-        boolean enCours = b.getDateRetourEffectif() == null
-                || b.getDateRetourEffectif().isAfter(LocalDate.now());
+        boolean enCours = !"RETABLI".equals(b.getStatut());
         return new BlessureResponse(
                 b.getId(), b.getJoueurId(),
                 j != null ? j.getNom() : null,
                 j != null ? j.getPrenom() : null,
-                b.getDateBlessure(), b.getDateRetourEffectif(),
+                b.getDateBlessure(), b.getDateRetourEffectif(), b.getDateRetourPrevue(), b.getStatut(),
                 b.getTypeBlessure(), b.getZoneCorporelle(), b.getCote(),
                 b.getGravite(), b.getCauseProbable(), b.isRecidive(),
                 b.getCommentaire(), enCours);

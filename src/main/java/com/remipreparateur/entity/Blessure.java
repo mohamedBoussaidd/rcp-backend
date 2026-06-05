@@ -29,6 +29,14 @@ public class Blessure {
     @Column(name = "date_retour_effectif")
     private LocalDate dateRetourEffectif;
 
+    /** Estimation du retour (le retour réel reste dateRetourEffectif). */
+    @Column(name = "date_retour_prevue")
+    private LocalDate dateRetourPrevue;
+
+    /** Cycle clinique : INDISPONIBLE -> EN_REPRISE -> RETABLI. */
+    @Column(name = "statut", nullable = false)
+    private String statut = "INDISPONIBLE";
+
     @Column(name = "type_blessure")
     private String typeBlessure;
 
