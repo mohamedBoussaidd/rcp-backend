@@ -37,5 +37,13 @@ public final class ClubDtos {
             String presidentEmail,
             String presidentNom,
             String presidentPrenom,
-            long nbEquipes) {}
+            long nbEquipes,
+            long nbJoueurs,
+            boolean actif) {}
+
+    /** Aperçu d'équipe pour le sélecteur de contexte (super-admin). */
+    public record EquipeApercu(
+            UUID id,
+            String nom,
+            String categorie) {}
 }

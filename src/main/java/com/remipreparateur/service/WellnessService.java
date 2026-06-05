@@ -66,6 +66,7 @@ public class WellnessService {
         w.setGeneTraitee(false);
         w.setGeneTraiteePar(null);
         w.setGeneTraiteeLe(null);
+        w.setGeneResolution(null);
         return toResponse(repository.save(w), joueur);
     }
 
@@ -93,17 +94,42 @@ public class WellnessService {
         return rows.stream().map(w -> toResponse(w, joueurs.get(w.getJoueurId()))).toList();
     }
 
-    /** Marque la gêne d'une saisie comme traitée (staff). Scopée à l'équipe. */
-    public WellnessResponse traiterGene(UUID wellnessId) {
+    /**
+     * Marque la gêne d'une saisie comme traitée (staff). Scopée à l'équipe.
+     * {@code resolution} = ARCHIVEE (archivage simple) ou CONVERTIE (convertie en blessure).
+     */
+    public WellnessResponse traiterGene(UUID wellnessId, String resolution) {
         WellnessQuotidien w = repository.findById(wellnessId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Saisie introuvable"));
         scopeResolver.verifieAcces(w.getEquipeId());
         if (w.getGeneZone() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune gêne à traiter");
         }
+        String res = "CONVERTIE".equalsIgnoreCase(resolution) ? "CONVERTIE" : "ARCHIVEE";
         w.setGeneTraitee(true);
         w.setGeneTraiteePar(currentUser.current().getId());
         w.setGeneTraiteeLe(LocalDateTime.now());
+        w.setGeneResolution(res);
+        Joueur joueur = joueurRepository.findById(w.getJoueurId()).orElse(null);
+        return toResponse(repository.save(w), joueur);
+    }
+
+    /**
+     * Rouvre une gêne précédemment traitée (réservé MEDICAL/SUPER_ADMIN) : elle
+     * redevient active et réapparaît dans les alertes, pour révision ou conversion
+     * en blessure. Scopée à l'équipe.
+     */
+    public WellnessResponse rouvrirGene(UUID wellnessId) {
+        WellnessQuotidien w = repository.findById(wellnessId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Saisie introuvable"));
+        scopeResolver.verifieAcces(w.getEquipeId());
+        if (w.getGeneZone() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune gêne à rouvrir");
+        }
+        w.setGeneTraitee(false);
+        w.setGeneTraiteePar(null);
+        w.setGeneTraiteeLe(null);
+        w.setGeneResolution(null);
         Joueur joueur = joueurRepository.findById(w.getJoueurId()).orElse(null);
         return toResponse(repository.save(w), joueur);
     }
@@ -130,6 +156,7 @@ public class WellnessService {
                 w.getDate(), w.getSommeil(), w.getFatigue(), w.getDouleur(), w.getStress(), w.getHumeur(),
                 scoreBienEtre(w), w.getCommentaire(),
                 w.getGeneZone(), w.getGeneIntensite(), w.getGeneMoment(), w.isGeneTraitee(),
+                w.getGeneResolution(), w.getGeneTraiteeLe(),
                 w.getCreatedAt());
     }
 }

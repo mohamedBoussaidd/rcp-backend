@@ -4,8 +4,11 @@ import com.remipreparateur.dto.FormationDtos.FormationRequest;
 import com.remipreparateur.dto.FormationDtos.FormationResponse;
 import com.remipreparateur.entity.Formation;
 import com.remipreparateur.entity.Utilisateur;
+import com.remipreparateur.entity.Role;
 import com.remipreparateur.repository.FormationRepository;
 import com.remipreparateur.repository.UtilisateurRepository;
+import com.remipreparateur.security.ContexteActif;
+import com.remipreparateur.security.ContexteActifHolder;
 import com.remipreparateur.security.CurrentUserProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,19 +35,21 @@ public class FormationService {
 
     public List<FormationResponse> lister() {
         Utilisateur u = currentUser.current();
-        List<Formation> formations = (u.getRole() == com.remipreparateur.entity.Role.SUPER_ADMIN)
-                ? formationRepository.findAll()
-                : (u.getClubId() != null ? formationRepository.findByClubIdOrderByCreatedAtDesc(u.getClubId()) : List.of());
+        UUID clubId = clubCourant(u);
+        List<Formation> formations = (clubId != null)
+                ? formationRepository.findByClubIdOrderByCreatedAtDesc(clubId)
+                : (u.getRole() == Role.SUPER_ADMIN ? formationRepository.findAll() : List.of());
         return formations.stream().map(f -> toResponse(f, u)).toList();
     }
 
     public FormationResponse creer(FormationRequest req) {
         Utilisateur u = currentUser.current();
-        if (u.getClubId() == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Aucun club associe au compte");
+        UUID clubId = clubCourant(u);
+        if (clubId == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Aucun club actif");
         }
         Formation f = new Formation();
-        f.setClubId(u.getClubId());
+        f.setClubId(clubId);
         f.setCreePar(u.getId());
         f.setNom(req.nom());
         f.setCouleur(req.couleur());
@@ -60,6 +65,15 @@ public class FormationService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Seul le createur (ou le president) peut supprimer cette formation");
         }
         formationRepository.deleteById(id);
+    }
+
+    /** Club courant : club du contexte actif pour le super-admin, sinon club identité. */
+    private UUID clubCourant(Utilisateur u) {
+        if (u.getRole() == Role.SUPER_ADMIN) {
+            ContexteActif ctx = ContexteActifHolder.get();
+            return ctx != null ? ctx.clubId() : null;
+        }
+        return u.getClubId();
     }
 
     private boolean peutModifier(Formation f, Utilisateur u) {

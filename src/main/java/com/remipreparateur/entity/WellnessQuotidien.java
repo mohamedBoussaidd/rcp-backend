@@ -69,6 +69,10 @@ public class WellnessQuotidien {
     @Column(name = "gene_traitee_le")
     private LocalDateTime geneTraiteeLe;
 
+    /** Type de résolution une fois traitée : ARCHIVEE | CONVERTIE (null si non traitée). */
+    @Column(name = "gene_resolution")
+    private String geneResolution;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

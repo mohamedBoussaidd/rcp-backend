@@ -26,9 +26,19 @@ public class WellnessController {
         return wellnessService.listerPourStaff(joueurId);
     }
 
-    /** Marque la gêne d'une saisie comme traitée (médical / préparateur). */
+    /**
+     * Marque la gêne d'une saisie comme traitée (médical / préparateur).
+     * {@code resolution} = ARCHIVEE (défaut) ou CONVERTIE (convertie en blessure).
+     */
     @PatchMapping("/{id}/gene-traitee")
-    public WellnessResponse traiterGene(@PathVariable UUID id) {
-        return wellnessService.traiterGene(id);
+    public WellnessResponse traiterGene(@PathVariable UUID id,
+                                        @RequestParam(required = false) String resolution) {
+        return wellnessService.traiterGene(id, resolution);
+    }
+
+    /** Rouvre une gêne traitée (médical) : elle redevient active dans les alertes. */
+    @PatchMapping("/{id}/gene-rouvrir")
+    public WellnessResponse rouvrirGene(@PathVariable UUID id) {
+        return wellnessService.rouvrirGene(id);
     }
 }

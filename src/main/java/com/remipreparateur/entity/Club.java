@@ -29,6 +29,10 @@ public class Club {
     @Column(name = "president_id")
     private UUID presidentId;
 
+    /** Club actif (par défaut) ou archivé par le super-admin. */
+    @Column(name = "actif", nullable = false)
+    private boolean actif = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

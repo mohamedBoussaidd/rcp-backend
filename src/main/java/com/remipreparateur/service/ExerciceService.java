@@ -9,6 +9,8 @@ import com.remipreparateur.entity.Utilisateur;
 import com.remipreparateur.repository.EquipeRepository;
 import com.remipreparateur.repository.ExerciceRepository;
 import com.remipreparateur.repository.UtilisateurRepository;
+import com.remipreparateur.security.ContexteActif;
+import com.remipreparateur.security.ContexteActifHolder;
 import com.remipreparateur.security.CurrentUserProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -38,21 +40,22 @@ public class ExerciceService {
 
     public List<ExerciceResponse> lister() {
         Utilisateur u = currentUser.current();
-        List<Exercice> exercices = (u.getRole() == Role.SUPER_ADMIN)
-                ? exerciceRepository.findAll()
-                : (u.getClubId() != null
-                    ? exerciceRepository.findByClubIdOrderByCreatedAtDesc(u.getClubId())
-                    : List.of());
+        UUID clubId = clubCourant(u);
+        List<Exercice> exercices = (clubId != null)
+                ? exerciceRepository.findByClubIdOrderByCreatedAtDesc(clubId)
+                // Super-admin sans club actif (espace admin) : tout ; autres rôles sans club : rien.
+                : (u.getRole() == Role.SUPER_ADMIN ? exerciceRepository.findAll() : List.of());
         return exercices.stream().map(e -> toResponse(e, u)).toList();
     }
 
     public ExerciceResponse creer(ExerciceRequest req) {
         Utilisateur u = currentUser.current();
-        if (u.getClubId() == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Aucun club associe au compte");
+        UUID clubId = clubCourant(u);
+        if (clubId == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Aucun club actif");
         }
         Exercice e = new Exercice();
-        e.setClubId(u.getClubId());
+        e.setClubId(clubId);
         e.setCreePar(u.getId());
         e.setEquipeOrigineId(u.getEquipeId());
         appliquer(e, req);
@@ -84,6 +87,20 @@ public class ExerciceService {
     }
 
     // ── Helpers ──
+
+    /**
+     * Club dont dépend la bibliothèque. Super-admin : le club du contexte actif
+     * (null s'il est sur l'espace admin sans club). Autres rôles : leur propre club
+     * (le contexte ne peut pas changer leur club).
+     */
+    private UUID clubCourant(Utilisateur u) {
+        if (u.getRole() == Role.SUPER_ADMIN) {
+            ContexteActif ctx = ContexteActifHolder.get();
+            return ctx != null ? ctx.clubId() : null;
+        }
+        return u.getClubId();
+    }
+
     private Exercice charge(UUID id) {
         return exerciceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Exercice introuvable"));

@@ -33,11 +33,14 @@ public class SecurityConfig {
             { "ENTRAINEUR", "PREPARATEUR", "MEDICAL", "PRESIDENT", "SUPER_ADMIN" };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ContexteFilter contexteFilter;
     private final CustomUserDetailsService userDetailsService;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          ContexteFilter contexteFilter,
                           CustomUserDetailsService userDetailsService) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.contexteFilter = contexteFilter;
         this.userDetailsService = userDetailsService;
     }
 
@@ -106,6 +109,8 @@ public class SecurityConfig {
                         // Wellness (ressenti) + RPE de seance : saisie par le joueur via /api/moi/**,
                         // lecture staff via /api/wellness et /api/rpe (filtrage equipe en service).
                         .requestMatchers(HttpMethod.GET, "/api/wellness/**", "/api/rpe/**").hasAnyRole(STAFF)
+                        // Réouverture d'une gêne (révision d'une décision) : médical seul
+                        .requestMatchers("/api/wellness/*/gene-rouvrir").hasAnyRole("MEDICAL", "SUPER_ADMIN")
                         // Traitement d'une gêne : médical / préparateur
                         .requestMatchers("/api/wellness/**").hasAnyRole("MEDICAL", "PREPARATEUR", "SUPER_ADMIN")
 
@@ -133,7 +138,8 @@ public class SecurityConfig {
                         // Tout le reste exige juste un token valide.
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(contexteFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 

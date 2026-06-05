@@ -15,4 +15,5 @@ public interface JoueurRepository extends JpaRepository<Joueur, UUID> {
     // ── Scoping par equipe ──
     List<Joueur> findByStatutNotAndEquipeIdIn(String statut, java.util.Collection<UUID> equipeIds);
     List<Joueur> findByEquipeIdIn(java.util.Collection<UUID> equipeIds);
+    long countByEquipeIdIn(java.util.Collection<UUID> equipeIds);
 }

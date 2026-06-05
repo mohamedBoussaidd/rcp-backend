@@ -45,5 +45,8 @@ public final class WellnessDtos {
             Short geneIntensite,
             String geneMoment,
             boolean geneTraitee,
+            /** Type de résolution : ARCHIVEE | CONVERTIE (null tant que non traitée). */
+            String geneResolution,
+            LocalDateTime geneTraiteeLe,
             LocalDateTime createdAt) {}
 }

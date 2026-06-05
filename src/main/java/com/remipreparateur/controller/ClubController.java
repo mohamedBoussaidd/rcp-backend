@@ -3,6 +3,7 @@ package com.remipreparateur.controller;
 import com.remipreparateur.dto.ClubDtos.ClubCreateRequest;
 import com.remipreparateur.dto.ClubDtos.ClubResponse;
 import com.remipreparateur.dto.ClubDtos.ClubUpdateRequest;
+import com.remipreparateur.dto.ClubDtos.EquipeApercu;
 import com.remipreparateur.service.ClubService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -44,5 +45,17 @@ public class ClubController {
     public ResponseEntity<Void> supprimer(@PathVariable UUID id) {
         clubService.supprimerClub(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Active ou archive un club. */
+    @PatchMapping("/{id}/actif")
+    public ClubResponse definirActif(@PathVariable UUID id, @RequestParam boolean actif) {
+        return clubService.definirActif(id, actif);
+    }
+
+    /** Équipes d'un club (pour entrer dans son contexte). */
+    @GetMapping("/{id}/equipes")
+    public List<EquipeApercu> listerEquipes(@PathVariable UUID id) {
+        return clubService.listerEquipes(id);
     }
 }
