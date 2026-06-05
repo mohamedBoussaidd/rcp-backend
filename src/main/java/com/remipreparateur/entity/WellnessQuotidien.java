@@ -48,6 +48,17 @@ public class WellnessQuotidien {
     @Column(name = "commentaire")
     private String commentaire;
 
+    /** Signalement de gêne localisée (null = aucune gêne ce jour). */
+    @Column(name = "gene_zone")
+    private String geneZone;
+
+    @Column(name = "gene_intensite")
+    private Short geneIntensite;
+
+    /** Moment de la gêne : EFFORT | APRES | REPOS. */
+    @Column(name = "gene_moment")
+    private String geneMoment;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

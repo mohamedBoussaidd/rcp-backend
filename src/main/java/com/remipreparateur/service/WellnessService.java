@@ -53,6 +53,11 @@ public class WellnessService {
         w.setStress(req.stress());
         w.setHumeur(req.humeur());
         w.setCommentaire(videEnNull(req.commentaire()));
+        // Gêne optionnelle : si pas de zone, on efface tout le signalement.
+        String zone = videEnNull(req.geneZone());
+        w.setGeneZone(zone);
+        w.setGeneIntensite(zone != null ? req.geneIntensite() : null);
+        w.setGeneMoment(zone != null ? videEnNull(req.geneMoment()) : null);
         return toResponse(repository.save(w), joueur);
     }
 
@@ -100,6 +105,8 @@ public class WellnessService {
                 j != null ? j.getNom() : null,
                 j != null ? j.getPrenom() : null,
                 w.getDate(), w.getSommeil(), w.getFatigue(), w.getDouleur(), w.getStress(), w.getHumeur(),
-                scoreBienEtre(w), w.getCommentaire(), w.getCreatedAt());
+                scoreBienEtre(w), w.getCommentaire(),
+                w.getGeneZone(), w.getGeneIntensite(), w.getGeneMoment(),
+                w.getCreatedAt());
     }
 }

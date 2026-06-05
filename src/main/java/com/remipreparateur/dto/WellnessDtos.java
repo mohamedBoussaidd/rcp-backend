@@ -21,7 +21,11 @@ public final class WellnessDtos {
             @NotNull @Min(1) @Max(5) Short douleur,
             @NotNull @Min(1) @Max(5) Short stress,
             @NotNull @Min(1) @Max(5) Short humeur,
-            String commentaire) {}
+            String commentaire,
+            // Signalement de gêne optionnel (zone null = pas de gêne).
+            String geneZone,
+            @Min(1) @Max(5) Short geneIntensite,
+            String geneMoment) {}
 
     public record WellnessResponse(
             UUID id,
@@ -37,5 +41,8 @@ public final class WellnessDtos {
             /** Score de bien-être 0..100 (items négatifs inversés ; plus haut = mieux). */
             int scoreBienEtre,
             String commentaire,
+            String geneZone,
+            Short geneIntensite,
+            String geneMoment,
             LocalDateTime createdAt) {}
 }
