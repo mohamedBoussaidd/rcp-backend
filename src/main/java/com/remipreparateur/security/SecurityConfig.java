@@ -130,6 +130,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/formations/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/formations/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
 
+                        // Schemas tactiques (bibliotheque, club) : lecture staff ; ecriture entraineur/president
+                        .requestMatchers(HttpMethod.GET, "/api/schemas/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/schemas/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
+
+                        // Plan de jeu (document d'identite equipe) : lecture staff ; ecriture entraineur/president
+                        .requestMatchers(HttpMethod.GET, "/api/plan-de-jeu/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/plan-de-jeu/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
+
+                        // Match (cycle de vie avant/apres, equipe) : lecture staff ; ecriture entraineur/president
+                        .requestMatchers(HttpMethod.GET, "/api/matchs/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/matchs/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
+
                         // Configuration : lecture = staff ; ecriture = president
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/configuration/**").hasAnyRole("PRESIDENT", "SUPER_ADMIN")

@@ -81,6 +81,20 @@ public class ScopeResolver {
         return currentUser.current().getEquipeId();
     }
 
+    /**
+     * L'unique équipe active, pour les ressources « 1 par équipe » (plan de jeu, matchs…).
+     * Le staff a son équipe ; président/super-admin doivent cibler UNE équipe via le contexte.
+     * 409 si le périmètre n'est pas réduit à une seule équipe.
+     */
+    public UUID equipeActiveUnique() {
+        Scope s = resolve();
+        if (!s.all() && s.equipeIds().size() == 1) {
+            return s.equipeIds().get(0);
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                s.none() ? "Aucune équipe active" : "Sélectionnez une équipe");
+    }
+
     /** L'equipe donnee est-elle dans la portee de l'utilisateur courant ? */
     public boolean peutAcceder(UUID equipeId) {
         Scope s = resolve();
