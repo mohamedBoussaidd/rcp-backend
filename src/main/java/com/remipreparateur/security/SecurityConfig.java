@@ -80,6 +80,8 @@ public class SecurityConfig {
                         // (l'entraineur aura son propre module technique). Le joueur lit ses seances
                         // d'equipe en lecture seule via /api/moi/seances (scoping par token).
                         .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAnyRole(STAFF)
+                        // présence : l'entraîneur et le préparateur peuvent écrire
+                        .requestMatchers("/api/seances/*/presence/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "PRESIDENT", "SUPER_ADMIN")
                         .requestMatchers("/api/seances/**").hasAnyRole("PREPARATEUR", "SUPER_ADMIN")
 
                         // Catalogue types de seance + predictions IA : lecture seule (staff)
