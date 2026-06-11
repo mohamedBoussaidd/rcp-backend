@@ -1,6 +1,8 @@
 package com.remipreparateur.performance.seance.controller;
 
 import com.remipreparateur.performance.gps.entity.DonneeGps;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.ContenuSeance;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.ExercicesRequest;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.performance.seance.service.SeanceService;
@@ -68,5 +70,16 @@ public class SeanceController {
                     return ResponseEntity.ok(seanceService.findDonneesGpsBySeance(id));
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── Exercices de la séance (préparation : référence + overrides) ──
+    @GetMapping("/{id}/exercices")
+    public ContenuSeance getExercices(@PathVariable UUID id) {
+        return seanceService.getContenu(id);
+    }
+
+    @PutMapping("/{id}/exercices")
+    public ContenuSeance remplacerExercices(@PathVariable UUID id, @RequestBody ExercicesRequest req) {
+        return seanceService.remplacerExercices(id, req);
     }
 }

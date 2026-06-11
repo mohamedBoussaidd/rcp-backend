@@ -25,6 +25,10 @@ public class Exercice {
     @Column(name = "categorie")
     private String categorie;
 
+    // PHYSIQUE / TECHNIQUE / MIXTE : oriente le contenu et l'usage des attentes physiques.
+    @Column(name = "type", nullable = false, length = 20)
+    private String type = "TECHNIQUE";
+
     @Column(name = "duree_minutes")
     private Short dureeMinutes;
 
@@ -33,6 +37,16 @@ public class Exercice {
 
     @Column(name = "intensite")
     private Short intensite;
+
+    // ── Attentes physiques (optionnelles, surtout pour les exercices PHYSIQUE) ──
+    @Column(name = "distance_attendue_m")
+    private Integer distanceAttendueM;
+
+    @Column(name = "distance_haute_intensite_m")
+    private Integer distanceHauteIntensiteM;
+
+    @Column(name = "nb_sprints")
+    private Short nbSprints;
 
     @Column(name = "description")
     private String description;

@@ -82,7 +82,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAnyRole(STAFF)
                         // présence : l'entraîneur et le préparateur peuvent écrire
                         .requestMatchers("/api/seances/*/presence/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "PRESIDENT", "SUPER_ADMIN")
-                        .requestMatchers("/api/seances/**").hasAnyRole("PREPARATEUR", "SUPER_ADMIN")
+                        // séance unifiée (cadre + exercices) : staff qui planifie l'entraînement
+                        .requestMatchers("/api/seances/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "PRESIDENT", "SUPER_ADMIN")
 
                         // Catalogue types de seance + predictions IA : lecture seule (staff)
                         .requestMatchers(HttpMethod.GET, "/api/type-seances/**", "/api/predictions/**").hasAnyRole(STAFF)
@@ -123,10 +124,6 @@ public class SecurityConfig {
                         // (edition/suppression restreinte au createur/president dans le service)
                         .requestMatchers(HttpMethod.GET, "/api/exercices/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/exercices/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
-
-                        // Seances techniques : lecture staff ; ecriture entraineur (module technique)
-                        .requestMatchers(HttpMethod.GET, "/api/seances-techniques/**").hasAnyRole(STAFF)
-                        .requestMatchers("/api/seances-techniques/**").hasAnyRole("ENTRAINEUR", "SUPER_ADMIN")
 
                         // Formations tactiques personnalisees (club) : lecture staff ; ecriture entraineur/president
                         .requestMatchers(HttpMethod.GET, "/api/formations/**").hasAnyRole(STAFF)

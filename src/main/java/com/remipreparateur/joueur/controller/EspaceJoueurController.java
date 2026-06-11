@@ -6,7 +6,6 @@ import com.remipreparateur.joueur.dto.EspaceJoueurDtos.MaPeseeResponse;
 import com.remipreparateur.performance.gps.dto.GpsHistoriqueDto;
 import com.remipreparateur.performance.rpe.dto.RpeDtos.RpeRequest;
 import com.remipreparateur.performance.rpe.dto.RpeDtos.RpeResponse;
-import com.remipreparateur.tactical.seancetechnique.dto.SeanceTechniqueDtos.SeanceTechniqueResponse;
 import com.remipreparateur.medical.wellness.dto.WellnessDtos.WellnessRequest;
 import com.remipreparateur.medical.wellness.dto.WellnessDtos.WellnessResponse;
 import com.remipreparateur.joueur.entity.Joueur;
@@ -18,7 +17,6 @@ import com.remipreparateur.medical.blessure.service.BlessureSuiviService;
 import com.remipreparateur.joueur.service.JoueurService;
 import com.remipreparateur.performance.rpe.service.RpeService;
 import com.remipreparateur.performance.seance.service.SeanceService;
-import com.remipreparateur.tactical.seancetechnique.service.SeanceTechniqueService;
 import com.remipreparateur.medical.wellness.service.WellnessService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -51,7 +49,6 @@ public class EspaceJoueurController {
     private final HistoriquePoidsRepository historiquePoidsRepository;
     private final BlessureService blessureService;
     private final SeanceService seanceService;
-    private final SeanceTechniqueService seanceTechniqueService;
     private final WellnessService wellnessService;
     private final RpeService rpeService;
     private final BlessureSuiviService blessureSuiviService;
@@ -61,7 +58,6 @@ public class EspaceJoueurController {
                                   HistoriquePoidsRepository historiquePoidsRepository,
                                   BlessureService blessureService,
                                   SeanceService seanceService,
-                                  SeanceTechniqueService seanceTechniqueService,
                                   WellnessService wellnessService,
                                   RpeService rpeService,
                                   BlessureSuiviService blessureSuiviService) {
@@ -70,7 +66,6 @@ public class EspaceJoueurController {
         this.historiquePoidsRepository = historiquePoidsRepository;
         this.blessureService = blessureService;
         this.seanceService = seanceService;
-        this.seanceTechniqueService = seanceTechniqueService;
         this.wellnessService = wellnessService;
         this.rpeService = rpeService;
         this.blessureSuiviService = blessureSuiviService;
@@ -117,14 +112,6 @@ public class EspaceJoueurController {
         return (debut != null && fin != null)
                 ? seanceService.findByPeriode(debut, fin)
                 : seanceService.findAll();
-    }
-
-    /** Séances techniques de l'équipe du joueur (lecture seule, scoping via ScopeResolver). */
-    @GetMapping("/seances-techniques")
-    public List<SeanceTechniqueResponse> mesSeancesTechniques(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
-        return seanceTechniqueService.lister(debut, fin);
     }
 
     // ──────────────────────────── Wellness (ressenti quotidien) ────────────────────────────

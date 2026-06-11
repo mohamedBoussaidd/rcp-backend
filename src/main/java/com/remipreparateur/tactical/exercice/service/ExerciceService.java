@@ -124,6 +124,11 @@ public class ExerciceService {
     private void appliquer(Exercice e, ExerciceRequest req) {
         e.setNom(req.nom());
         e.setCategorie(req.categorie());
+        String type = req.type() == null ? "TECHNIQUE" : req.type().trim().toUpperCase();
+        if (!type.equals("PHYSIQUE") && !type.equals("TECHNIQUE") && !type.equals("MIXTE")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type attendu : PHYSIQUE, TECHNIQUE ou MIXTE");
+        }
+        e.setType(type);
         e.setDureeMinutes(req.dureeMinutes());
         e.setObjectif(req.objectif());
         if (req.intensite() != null && (req.intensite() < 1 || req.intensite() > 5)) {
@@ -131,6 +136,9 @@ public class ExerciceService {
         }
         e.setIntensite(req.intensite());
         e.setDescription(req.description());
+        e.setDistanceAttendueM(req.distanceAttendueM());
+        e.setDistanceHauteIntensiteM(req.distanceHauteIntensiteM());
+        e.setNbSprints(req.nbSprints());
     }
 
     private ExerciceResponse toResponse(Exercice e, Utilisateur courant) {
@@ -143,8 +151,9 @@ public class ExerciceService {
                 ? equipeRepository.findById(e.getEquipeOrigineId()).map(Equipe::getNom).orElse(null)
                 : null;
         return new ExerciceResponse(
-                e.getId(), e.getNom(), e.getCategorie(), e.getDureeMinutes(), e.getObjectif(),
+                e.getId(), e.getNom(), e.getCategorie(), e.getType(), e.getDureeMinutes(), e.getObjectif(),
                 e.getIntensite(), e.getDescription(), e.getSchemaJson(),
+                e.getDistanceAttendueM(), e.getDistanceHauteIntensiteM(), e.getNbSprints(),
                 e.getCreePar(), creeParNom, e.getEquipeOrigineId(), equipeNom,
                 peutModifier(e, courant));
     }

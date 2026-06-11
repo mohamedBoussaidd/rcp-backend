@@ -68,4 +68,22 @@ public class Seance {
 
     @Column(name = "equipe_id")
     private UUID equipeId;
+
+    // Objectif textuel de la séance (ex-séance technique).
+    @Column(name = "objectif")
+    private String objectif;
+
+    // ── Objectifs de volume fixés par le préparateur (niveau équipe, optionnels,
+    //    pré-remplis depuis la somme des exercices physiques mais modifiables) ──
+    @Column(name = "objectif_distance_m")
+    private Integer objectifDistanceM;
+
+    @Column(name = "objectif_intensite")
+    private Short objectifIntensite;
+
+    @Column(name = "objectif_distance_haute_intensite_m")
+    private Integer objectifDistanceHauteIntensiteM;
+
+    @Column(name = "cree_par")
+    private UUID creePar;
 }

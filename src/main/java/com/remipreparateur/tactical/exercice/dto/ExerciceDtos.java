@@ -12,20 +12,28 @@ public final class ExerciceDtos {
     public record ExerciceRequest(
             @NotBlank String nom,
             String categorie,
+            String type,            // PHYSIQUE / TECHNIQUE / MIXTE (defaut TECHNIQUE)
             Short dureeMinutes,
             String objectif,
             Short intensite,        // 1..5
-            String description) {}
+            String description,
+            Integer distanceAttendueM,
+            Integer distanceHauteIntensiteM,
+            Short nbSprints) {}
 
     public record ExerciceResponse(
             UUID id,
             String nom,
             String categorie,
+            String type,
             Short dureeMinutes,
             String objectif,
             Short intensite,
             String description,
             String schemaJson,
+            Integer distanceAttendueM,
+            Integer distanceHauteIntensiteM,
+            Short nbSprints,
             UUID creeParId,
             String creeParNom,
             UUID equipeOrigineId,

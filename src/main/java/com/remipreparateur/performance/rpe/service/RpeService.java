@@ -5,11 +5,9 @@ import com.remipreparateur.performance.rpe.dto.RpeDtos.RpeResponse;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.performance.rpe.entity.RpeSeance;
 import com.remipreparateur.performance.seance.entity.Seance;
-import com.remipreparateur.tactical.seancetechnique.entity.SeanceTechnique;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.performance.rpe.repository.RpeSeanceRepository;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
-import com.remipreparateur.tactical.seancetechnique.repository.SeanceTechniqueRepository;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
 import org.springframework.http.HttpStatus;
@@ -38,44 +36,31 @@ public class RpeService {
     private final RpeSeanceRepository repository;
     private final JoueurRepository joueurRepository;
     private final SeanceRepository seanceRepository;
-    private final SeanceTechniqueRepository seanceTechniqueRepository;
     private final ScopeResolver scopeResolver;
 
     public RpeService(RpeSeanceRepository repository, JoueurRepository joueurRepository,
-                      SeanceRepository seanceRepository, SeanceTechniqueRepository seanceTechniqueRepository,
+                      SeanceRepository seanceRepository,
                       ScopeResolver scopeResolver) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.seanceRepository = seanceRepository;
-        this.seanceTechniqueRepository = seanceTechniqueRepository;
         this.scopeResolver = scopeResolver;
     }
 
     public RpeResponse enregistrer(UUID joueurId, RpeRequest req) {
-        String type = req.seanceType() == null ? "" : req.seanceType().trim().toUpperCase();
-        if (!TYPE_PHYSIQUE.equals(type) && !TYPE_TECHNIQUE.equals(type)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type de séance invalide");
-        }
+        // Séances unifiées : la RPE porte toujours sur une Seance. seanceType conservé en base
+        // pour compat (défaut PHYSIQUE).
+        String type = req.seanceType() == null || req.seanceType().isBlank()
+                ? TYPE_PHYSIQUE : req.seanceType().trim().toUpperCase();
         Joueur joueur = joueurRepository.findById(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Fiche joueur introuvable"));
 
         // Résolution date + équipe + durée depuis la séance référencée.
-        LocalDate date;
-        UUID equipeSeance;
-        Short duree;
-        if (TYPE_PHYSIQUE.equals(type)) {
-            Seance s = seanceRepository.findById(req.seanceId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
-            date = s.getDate();
-            equipeSeance = s.getEquipeId();
-            duree = req.dureeMinutes() != null ? req.dureeMinutes() : s.getDureeMinutes();
-        } else {
-            SeanceTechnique s = seanceTechniqueRepository.findById(req.seanceId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
-            date = s.getDate();
-            equipeSeance = s.getEquipeId();
-            duree = req.dureeMinutes(); // la séance technique ne stocke pas la durée
-        }
+        Seance s = seanceRepository.findById(req.seanceId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
+        LocalDate date = s.getDate();
+        UUID equipeSeance = s.getEquipeId();
+        Short duree = req.dureeMinutes() != null ? req.dureeMinutes() : s.getDureeMinutes();
 
         // Le joueur ne peut noter qu'une séance de sa propre équipe.
         if (joueur.getEquipeId() == null || !Objects.equals(joueur.getEquipeId(), equipeSeance)) {
