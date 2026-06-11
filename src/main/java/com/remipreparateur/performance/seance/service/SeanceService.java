@@ -48,9 +48,15 @@ public class SeanceService {
         return seanceRepository.save(seance);
     }
 
-    /** Creation : rattache la seance a l'equipe du staff connecte. */
+    /** Creation : rattache la seance a l'equipe du staff connecte.
+     *  Pour SUPER_ADMIN (equipeId null sur l'utilisateur), on tente l'equipe du contexte actif. */
     public Seance create(Seance seance) {
-        seance.setEquipeId(scopeResolver.equipePourEcriture());
+        UUID equipeId = scopeResolver.equipePourEcriture();
+        if (equipeId == null) {
+            try { equipeId = scopeResolver.equipeActiveUnique(); }
+            catch (ResponseStatusException ignored) {}
+        }
+        seance.setEquipeId(equipeId);
         return seanceRepository.save(seance);
     }
 
