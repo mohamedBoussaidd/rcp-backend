@@ -1,0 +1,51 @@
+package com.remipreparateur.tactical.exercice.entity;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "exercice")
+@Getter
+@Setter
+public class Exercice {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private UUID id;
+
+    @Column(name = "club_id", nullable = false)
+    private UUID clubId;
+
+    @Column(name = "nom", nullable = false)
+    private String nom;
+
+    @Column(name = "categorie")
+    private String categorie;
+
+    @Column(name = "duree_minutes")
+    private Short dureeMinutes;
+
+    @Column(name = "objectif")
+    private String objectif;
+
+    @Column(name = "intensite")
+    private Short intensite;
+
+    @Column(name = "description")
+    private String description;
+
+    @Column(name = "schema_json", columnDefinition = "text")
+    private String schemaJson;
+
+    @Column(name = "cree_par")
+    private UUID creePar;
+
+    @Column(name = "equipe_origine_id")
+    private UUID equipeOrigineId;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+}
