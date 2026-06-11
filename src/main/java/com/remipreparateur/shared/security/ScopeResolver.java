@@ -82,6 +82,27 @@ public class ScopeResolver {
     }
 
     /**
+     * Club actif : contexte de navigation s'il en fixe un, sinon le club de l'utilisateur
+     * (directement, ou déduit de son équipe). 409 si indéterminé (ex. super-admin sans contexte).
+     */
+    public UUID clubActif() {
+        ContexteActif ctx = ContexteActifHolder.get();
+        if (ctx != null && ctx.clubId() != null) {
+            return ctx.clubId();
+        }
+        Utilisateur u = currentUser.current();
+        if (u.getClubId() != null) {
+            return u.getClubId();
+        }
+        if (u.getEquipeId() != null) {
+            UUID club = equipeRepository.findById(u.getEquipeId())
+                    .map(Equipe::getClubId).orElse(null);
+            if (club != null) return club;
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "Aucun club actif — sélectionnez un club");
+    }
+
+    /**
      * L'unique équipe active, pour les ressources « 1 par équipe » (plan de jeu, matchs…).
      * Le staff a son équipe ; président/super-admin doivent cibler UNE équipe via le contexte.
      * 409 si le périmètre n'est pas réduit à une seule équipe.

@@ -10,8 +10,10 @@ import com.remipreparateur.medical.wellness.dto.WellnessDtos.WellnessRequest;
 import com.remipreparateur.medical.wellness.dto.WellnessDtos.WellnessResponse;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.performance.seance.entity.Seance;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.ContenuSeance;
 import com.remipreparateur.performance.poids.repository.HistoriquePoidsRepository;
 import com.remipreparateur.shared.security.CurrentUserProvider;
+import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.medical.blessure.service.BlessureService;
 import com.remipreparateur.medical.blessure.service.BlessureSuiviService;
 import com.remipreparateur.joueur.service.JoueurService;
@@ -52,6 +54,7 @@ public class EspaceJoueurController {
     private final WellnessService wellnessService;
     private final RpeService rpeService;
     private final BlessureSuiviService blessureSuiviService;
+    private final ScopeResolver scopeResolver;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
@@ -60,7 +63,8 @@ public class EspaceJoueurController {
                                   SeanceService seanceService,
                                   WellnessService wellnessService,
                                   RpeService rpeService,
-                                  BlessureSuiviService blessureSuiviService) {
+                                  BlessureSuiviService blessureSuiviService,
+                                  ScopeResolver scopeResolver) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
         this.historiquePoidsRepository = historiquePoidsRepository;
@@ -69,6 +73,7 @@ public class EspaceJoueurController {
         this.wellnessService = wellnessService;
         this.rpeService = rpeService;
         this.blessureSuiviService = blessureSuiviService;
+        this.scopeResolver = scopeResolver;
     }
 
     @GetMapping("/profil")
@@ -112,6 +117,15 @@ public class EspaceJoueurController {
         return (debut != null && fin != null)
                 ? seanceService.findByPeriode(debut, fin)
                 : seanceService.findAll();
+    }
+
+    /** Contenu (exercices + schémas) d'une séance de l'équipe du joueur, lecture seule. */
+    @GetMapping("/seances/{id}/exercices")
+    public ContenuSeance mesSeanceExercices(@PathVariable UUID id) {
+        seanceService.findById(id)
+                .map(s -> { scopeResolver.verifieAcces(s.getEquipeId()); return s; })
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
+        return seanceService.getContenu(id);
     }
 
     // ──────────────────────────── Wellness (ressenti quotidien) ────────────────────────────

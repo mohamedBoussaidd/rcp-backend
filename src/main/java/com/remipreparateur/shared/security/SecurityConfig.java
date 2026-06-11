@@ -85,6 +85,8 @@ public class SecurityConfig {
                         // séance unifiée (cadre + exercices) : staff qui planifie l'entraînement
                         .requestMatchers("/api/seances/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "PRESIDENT", "SUPER_ADMIN")
 
+                        // Catalogue types de seance : lecture staff ; cibles paramétrables = staff qui planifie
+                        .requestMatchers(HttpMethod.PUT, "/api/type-seances/**").hasAnyRole("ENTRAINEUR", "PREPARATEUR", "PRESIDENT", "SUPER_ADMIN")
                         // Catalogue types de seance + predictions IA : lecture seule (staff)
                         .requestMatchers(HttpMethod.GET, "/api/type-seances/**", "/api/predictions/**").hasAnyRole(STAFF)
 
