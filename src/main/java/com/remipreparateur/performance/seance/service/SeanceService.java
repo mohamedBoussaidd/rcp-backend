@@ -91,6 +91,7 @@ public class SeanceService {
         if (patch.getDomicileExterieur() != null) existing.setDomicileExterieur(patch.getDomicileExterieur());
         if (patch.getScoreMatch()        != null) existing.setScoreMatch(patch.getScoreMatch());
         if (patch.getDescription()       != null) existing.setDescription(patch.getDescription());
+        if (patch.getResponsable()       != null) existing.setResponsable(patch.getResponsable());
         existing.setTypeSeance((TypeSeance) Hibernate.unproxy(existing.getTypeSeance()));
         return seanceRepository.save(existing);
     }

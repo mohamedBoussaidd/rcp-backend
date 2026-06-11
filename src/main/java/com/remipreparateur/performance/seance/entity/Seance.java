@@ -66,6 +66,10 @@ public class Seance {
     @Column(name = "description")
     private String description;
 
+    // Nom de l'encadrant en charge de la séance (texte libre, affiché en vue Liste).
+    @Column(name = "responsable")
+    private String responsable;
+
     @Column(name = "equipe_id")
     private UUID equipeId;
 
