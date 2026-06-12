@@ -4,6 +4,8 @@ import com.remipreparateur.medical.blessure.dto.BlessureDtos.BlessureResponse;
 import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.EtapeResponse;
 import com.remipreparateur.joueur.dto.EspaceJoueurDtos.MaPeseeResponse;
 import com.remipreparateur.performance.gps.dto.GpsHistoriqueDto;
+import com.remipreparateur.medical.conseil.dto.ConseilDtos.ConseilResponse;
+import com.remipreparateur.medical.conseil.service.ConseilService;
 import com.remipreparateur.performance.rpe.dto.RpeDtos.RpeRequest;
 import com.remipreparateur.performance.rpe.dto.RpeDtos.RpeResponse;
 import com.remipreparateur.medical.wellness.dto.WellnessDtos.WellnessRequest;
@@ -54,6 +56,7 @@ public class EspaceJoueurController {
     private final WellnessService wellnessService;
     private final RpeService rpeService;
     private final BlessureSuiviService blessureSuiviService;
+    private final ConseilService conseilService;
     private final ScopeResolver scopeResolver;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
@@ -64,6 +67,7 @@ public class EspaceJoueurController {
                                   WellnessService wellnessService,
                                   RpeService rpeService,
                                   BlessureSuiviService blessureSuiviService,
+                                  ConseilService conseilService,
                                   ScopeResolver scopeResolver) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
@@ -73,6 +77,7 @@ public class EspaceJoueurController {
         this.wellnessService = wellnessService;
         this.rpeService = rpeService;
         this.blessureSuiviService = blessureSuiviService;
+        this.conseilService = conseilService;
         this.scopeResolver = scopeResolver;
     }
 
@@ -152,6 +157,14 @@ public class EspaceJoueurController {
     @PostMapping("/rpe")
     public RpeResponse saisirRpe(@Valid @RequestBody RpeRequest req) {
         return rpeService.enregistrer(monJoueurId(), req);
+    }
+
+    // ──────────────────────────── Conseils du staff (lecture) ────────────────────────────
+
+    /** Conseils du staff visibles par le joueur : ceux de son equipe + ses conseils perso. */
+    @GetMapping("/conseils")
+    public List<ConseilResponse> mesConseils() {
+        return conseilService.listerPourJoueur(monJoueurId());
     }
 
     /** joueurId du compte connecte, ou 409 si le compte n'est pas rattache a une fiche. */

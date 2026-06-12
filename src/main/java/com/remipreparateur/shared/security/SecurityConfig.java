@@ -119,6 +119,11 @@ public class SecurityConfig {
                         // Traitement d'une gêne : médical / préparateur
                         .requestMatchers("/api/wellness/**").hasAnyRole("MEDICAL", "PREPARATEUR", "SUPER_ADMIN")
 
+                        // Conseils du staff au joueur : lecture = staff ; écriture = médical / préparateur.
+                        // Le joueur lit ses conseils via /api/moi/conseils (regle /api/moi/** ci-dessous).
+                        .requestMatchers(HttpMethod.GET, "/api/conseils/**").hasAnyRole(STAFF)
+                        .requestMatchers("/api/conseils/**").hasAnyRole("MEDICAL", "PREPARATEUR", "SUPER_ADMIN")
+
                         // Espace personnel du joueur : reserve au role JOUEUR (donnees scopees par token)
                         .requestMatchers("/api/moi/**").hasRole("JOUEUR")
 

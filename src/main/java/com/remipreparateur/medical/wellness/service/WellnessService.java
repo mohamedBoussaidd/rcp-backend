@@ -135,11 +135,12 @@ public class WellnessService {
     }
 
     /**
-     * Score de bien-être 0..100. Les items négatifs (fatigue, douleur, stress) sont inversés
-     * pour que « plus haut = mieux ». Moyenne des 5 items (1..5) ramenée sur 100.
+     * Score de bien-être 0..100. Convention Hooper uniforme : pour les 5 items,
+     * 1 = bon → 5 = mauvais. On inverse donc chaque item ({@code 6 - valeur}) pour que
+     * « plus haut = mieux », puis on ramène la moyenne (1..5) sur 100.
      */
     private int scoreBienEtre(WellnessQuotidien w) {
-        int somme = w.getSommeil() + w.getHumeur()
+        int somme = (6 - w.getSommeil()) + (6 - w.getHumeur())
                 + (6 - w.getFatigue()) + (6 - w.getDouleur()) + (6 - w.getStress());
         return Math.round(somme / 5f * 20f);
     }
