@@ -48,4 +48,19 @@ public final class SeanceDtos {
             Integer distanceTotaleAttendueM,
             Integer distanceHauteIntensiteTotaleM,
             Integer nbSprintsTotal) {}
+
+    /** Données GPS d'un joueur pour une séance, à plat (évite la sérialisation du proxy lazy joueur). */
+    public record DonneeGpsDto(
+            UUID joueurId,
+            Short dureeMinutes,
+            java.math.BigDecimal distanceTotaleM,
+            java.math.BigDecimal distance15kmhM,
+            java.math.BigDecimal distance19kmhM,
+            java.math.BigDecimal distanceSprint24kmhM,
+            java.math.BigDecimal distanceSprint28kmhM,
+            Short nbSprints24kmh,
+            java.math.BigDecimal vitesseMaxKmh,
+            Short nbAccelerations,
+            Short nbFreinages,
+            java.math.BigDecimal ratioDistanceMin) {}
 }

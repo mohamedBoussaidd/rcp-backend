@@ -1,7 +1,7 @@
 package com.remipreparateur.performance.seance.controller;
 
-import com.remipreparateur.performance.gps.entity.DonneeGps;
 import com.remipreparateur.performance.seance.dto.SeanceDtos.ContenuSeance;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.DonneeGpsDto;
 import com.remipreparateur.performance.seance.dto.SeanceDtos.ExercicesRequest;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.shared.security.ScopeResolver;
@@ -63,11 +63,26 @@ public class SeanceController {
     }
 
     @GetMapping("/{id}/donnees")
-    public ResponseEntity<List<DonneeGps>> getDonneesGps(@PathVariable UUID id) {
+    public ResponseEntity<List<DonneeGpsDto>> getDonneesGps(@PathVariable UUID id) {
         return seanceService.findById(id)
                 .map(s -> {
                     scopeResolver.verifieAcces(s.getEquipeId());
-                    return ResponseEntity.ok(seanceService.findDonneesGpsBySeance(id));
+                    List<DonneeGpsDto> dtos = seanceService.findDonneesGpsBySeance(id).stream()
+                            .map(d -> new DonneeGpsDto(
+                                    d.getJoueur().getId(),
+                                    d.getDureeMinutes(),
+                                    d.getDistanceTotaleM(),
+                                    d.getDistance15kmhM(),
+                                    d.getDistance19kmhM(),
+                                    d.getDistanceSprint24kmhM(),
+                                    d.getDistanceSprint28kmhM(),
+                                    d.getNbSprints24kmh(),
+                                    d.getVitesseMaxKmh(),
+                                    d.getNbAccelerations(),
+                                    d.getNbFreinages(),
+                                    d.getRatioDistanceMin()))
+                            .toList();
+                    return ResponseEntity.ok(dtos);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
