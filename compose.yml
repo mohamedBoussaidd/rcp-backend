@@ -1,0 +1,27 @@
+# Backend Spring Boot — déployé dans /opt/applications/sportgestions/backend/
+# Variables ${...} lues depuis le .env partagé (../.env) via --env-file dans le workflow.
+services:
+  backend:
+    image: mohamedd69/sportgestions-backend:latest
+    container_name: sportgestions-backend
+    restart: always
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://sportgestions-postgres:5432/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      PYTHON_API_URL: http://sportgestions-python:8000
+      APP_JWT_SECRET: ${APP_JWT_SECRET}
+      APP_JWT_EXPIRATION_MS: ${APP_JWT_EXPIRATION_MS}
+      APP_SUPERADMIN_EMAIL: ${APP_SUPERADMIN_EMAIL}
+      APP_SUPERADMIN_PASSWORD: ${APP_SUPERADMIN_PASSWORD}
+      SPRING_DEVTOOLS_RESTART_ENABLED: "false"
+      JAVA_OPTS: "-Xmx512m"
+    volumes:
+      - /var/private_data/sportgestions/documents-medicaux:/app/data/documents-medicaux
+    networks:
+      - sportgestions-network
+
+networks:
+  sportgestions-network:
+    external: true
+    name: sportgestions-network
