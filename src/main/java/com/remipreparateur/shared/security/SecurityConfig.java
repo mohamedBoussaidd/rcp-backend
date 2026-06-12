@@ -143,9 +143,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/matchs/**").hasAnyRole(STAFF)
                         .requestMatchers("/api/matchs/**").hasAnyRole("ENTRAINEUR", "PRESIDENT", "SUPER_ADMIN")
 
-                        // Configuration : lecture = staff ; ecriture = president
+                        // Configuration : lecture = staff ; ecriture = preparateur + president
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAnyRole(STAFF)
-                        .requestMatchers("/api/configuration/**").hasAnyRole("PRESIDENT", "SUPER_ADMIN")
+                        .requestMatchers("/api/configuration/**").hasAnyRole("PREPARATEUR", "PRESIDENT", "SUPER_ADMIN")
 
                         // Clubs / mon-club / equipes / membres : deja proteges par @PreAuthorize.
                         // Tout le reste exige juste un token valide.
