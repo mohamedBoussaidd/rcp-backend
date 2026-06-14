@@ -2,6 +2,7 @@ package com.remipreparateur.club.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
 import java.util.UUID;
@@ -39,6 +40,10 @@ public final class GestionDtos {
             String specialite,
             UUID equipeId,
             Boolean actif) {}
+
+    /** Liaison d'un compte JOUEUR à une fiche joueur existante (posée a posteriori). */
+    public record LierFicheRequest(
+            @NotNull UUID joueurId) {}
 
     public record MembreResponse(
             UUID id,

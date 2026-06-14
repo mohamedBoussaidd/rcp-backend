@@ -8,6 +8,10 @@ import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
+import com.remipreparateur.joueur.entity.Joueur;
+import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.shared.security.ContexteActif;
+import com.remipreparateur.shared.security.ContexteActifHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,15 +34,18 @@ public class GestionClubService {
     private final EquipeRepository equipeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final ClubRepository clubRepository;
+    private final JoueurRepository joueurRepository;
     private final PasswordEncoder passwordEncoder;
 
     public GestionClubService(EquipeRepository equipeRepository,
                               UtilisateurRepository utilisateurRepository,
                               ClubRepository clubRepository,
+                              JoueurRepository joueurRepository,
                               PasswordEncoder passwordEncoder) {
         this.equipeRepository = equipeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.clubRepository = clubRepository;
+        this.joueurRepository = joueurRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -114,7 +121,22 @@ public class GestionClubService {
         m.setSpecialite(req.specialite());
         m.setClubId(clubId);
         m.setEquipeId(req.equipeId());
-        m.setJoueurId(req.joueurId());
+
+        // Lien optionnel à une fiche dès la création (compte JOUEUR uniquement).
+        if (req.joueurId() != null) {
+            if (role != Role.JOUEUR) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seul un compte joueur peut etre lie a une fiche");
+            }
+            Joueur fiche = joueurRepository.findById(req.joueurId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche joueur introuvable"));
+            if (fiche.getEquipeId() != null) verifieEquipeDuClub(fiche.getEquipeId(), clubId);
+            if (utilisateurRepository.existsByJoueurId(req.joueurId())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Fiche deja reliee a un autre compte");
+            }
+            m.setJoueurId(req.joueurId());
+            if (fiche.getEquipeId() != null) m.setEquipeId(fiche.getEquipeId());
+        }
+
         m = utilisateurRepository.save(m);
         return toMembreResponse(m);
     }
@@ -145,16 +167,58 @@ public class GestionClubService {
         utilisateurRepository.deleteById(m.getId());
     }
 
-    // ── Helpers ──
-    private UUID exigeClub(Utilisateur president) {
-        if (president.getClubId() == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Aucun club associe");
+    // ── Liaison compte JOUEUR ↔ fiche (posée a posteriori) ──
+    @Transactional
+    public MembreResponse lierFiche(Utilisateur acteur, UUID membreId, UUID joueurId) {
+        Utilisateur m = chargeMembreDuClub(acteur, membreId);
+        if (m.getRole() != Role.JOUEUR) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seul un compte joueur peut etre lie a une fiche");
         }
-        return president.getClubId();
+        UUID clubId = exigeClub(acteur);
+        Joueur fiche = joueurRepository.findById(joueurId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche joueur introuvable"));
+        if (fiche.getEquipeId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fiche sans equipe");
+        }
+        verifieEquipeDuClub(fiche.getEquipeId(), clubId);
+        if (utilisateurRepository.existsByJoueurIdAndIdNot(joueurId, membreId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Fiche deja reliee a un autre compte");
+        }
+        m.setJoueurId(joueurId);
+        m.setEquipeId(fiche.getEquipeId()); // on aligne l'equipe du compte sur celle de la fiche
+        return toMembreResponse(utilisateurRepository.save(m));
     }
 
-    private void verifieMemeClub(Utilisateur president, UUID clubId) {
-        if (!exigeClub(president).equals(clubId)) {
+    @Transactional
+    public MembreResponse delierFiche(Utilisateur acteur, UUID membreId) {
+        Utilisateur m = chargeMembreDuClub(acteur, membreId);
+        m.setJoueurId(null);
+        return toMembreResponse(utilisateurRepository.save(m));
+    }
+
+    // ── Helpers ──
+
+    /**
+     * Club sur lequel agit l'utilisateur : son club de rattachement (président,
+     * entraîneur, préparateur…) ou, pour le SUPER_ADMIN sans club, le club « entré »
+     * via le contexte de navigation actif.
+     */
+    private UUID exigeClub(Utilisateur acteur) {
+        if (acteur.getClubId() != null) {
+            return acteur.getClubId();
+        }
+        if (acteur.getRole() == Role.SUPER_ADMIN) {
+            ContexteActif ctx = ContexteActifHolder.get();
+            if (ctx != null && ctx.clubId() != null) {
+                return ctx.clubId();
+            }
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Entrez d'abord dans un club");
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Aucun club associe");
+    }
+
+    private void verifieMemeClub(Utilisateur acteur, UUID clubId) {
+        if (!exigeClub(acteur).equals(clubId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Ressource hors de votre club");
         }
     }

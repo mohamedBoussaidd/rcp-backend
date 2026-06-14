@@ -11,10 +11,15 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-/** Gestion d'un club par son president : equipes + membres. */
+/**
+ * Gestion d'un club : équipes + membres. Les membres (création / liaison fiche)
+ * sont ouverts au staff (entraîneur, préparateur) et au super-admin (sur le club
+ * « entré » via le contexte) ; la gestion des équipes reste réservée au président
+ * et au super-admin.
+ */
 @RestController
 @RequestMapping("/api")
-@PreAuthorize("hasRole('PRESIDENT')")
+@PreAuthorize("hasAnyRole('PRESIDENT','ENTRAINEUR','PREPARATEUR','SUPER_ADMIN')")
 public class MonClubController {
 
     private final GestionClubService gestion;
@@ -30,18 +35,21 @@ public class MonClubController {
         return gestion.monClub(currentUser.current());
     }
 
-    // ── Equipes ──
+    // ── Equipes (président / super-admin uniquement) ──
     @PostMapping("/mon-club/equipes")
+    @PreAuthorize("hasAnyRole('PRESIDENT','SUPER_ADMIN')")
     public ResponseEntity<EquipeResponse> creerEquipe(@Valid @RequestBody EquipeRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(gestion.creerEquipe(currentUser.current(), req));
     }
 
     @PutMapping("/equipes/{id}")
+    @PreAuthorize("hasAnyRole('PRESIDENT','SUPER_ADMIN')")
     public EquipeResponse modifierEquipe(@PathVariable UUID id, @Valid @RequestBody EquipeRequest req) {
         return gestion.modifierEquipe(currentUser.current(), id, req);
     }
 
     @DeleteMapping("/equipes/{id}")
+    @PreAuthorize("hasAnyRole('PRESIDENT','SUPER_ADMIN')")
     public ResponseEntity<Void> supprimerEquipe(@PathVariable UUID id) {
         gestion.supprimerEquipe(currentUser.current(), id);
         return ResponseEntity.noContent().build();
@@ -67,5 +75,16 @@ public class MonClubController {
     public ResponseEntity<Void> supprimerMembre(@PathVariable UUID id) {
         gestion.supprimerMembre(currentUser.current(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ── Liaison compte JOUEUR ↔ fiche ──
+    @PutMapping("/membres/{id}/fiche")
+    public MembreResponse lierFiche(@PathVariable UUID id, @Valid @RequestBody LierFicheRequest req) {
+        return gestion.lierFiche(currentUser.current(), id, req.joueurId());
+    }
+
+    @DeleteMapping("/membres/{id}/fiche")
+    public MembreResponse delierFiche(@PathVariable UUID id) {
+        return gestion.delierFiche(currentUser.current(), id);
     }
 }

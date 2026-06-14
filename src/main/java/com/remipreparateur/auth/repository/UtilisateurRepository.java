@@ -13,4 +13,7 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, UUID> 
     boolean existsByEmailIgnoreCase(String email);
     List<Utilisateur> findByClubId(UUID clubId);
     List<Utilisateur> findByEquipeId(UUID equipeId);
+    /** Une fiche joueur ne peut être reliée qu'à un seul compte. */
+    boolean existsByJoueurId(UUID joueurId);
+    boolean existsByJoueurIdAndIdNot(UUID joueurId, UUID id);
 }
