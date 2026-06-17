@@ -29,5 +29,8 @@ public final class BlessureSuiviDtos {
             short ordre,
             String libelle,
             String statut,
-            LocalDate dateValidation) {}
+            LocalDate dateValidation,
+            Short jDebut,
+            Short jFin,
+            String description) {}
 }

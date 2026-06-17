@@ -100,6 +100,7 @@ public class BlessureService {
         b.setCauseProbable(req.causeProbable());
         b.setRecidive(Boolean.TRUE.equals(req.recidive()));
         b.setCommentaire(req.commentaire());
+        b.setNotesMedicales(req.notesMedicales());
     }
 
     /**
@@ -129,6 +130,6 @@ public class BlessureService {
                 b.getDateBlessure(), b.getDateRetourEffectif(), b.getDateRetourPrevue(), b.getStatut(),
                 b.getTypeBlessure(), b.getZoneCorporelle(), b.getCote(),
                 b.getGravite(), b.getCauseProbable(), b.isRecidive(),
-                b.getCommentaire(), enCours);
+                b.getCommentaire(), b.getNotesMedicales(), enCours);
     }
 }

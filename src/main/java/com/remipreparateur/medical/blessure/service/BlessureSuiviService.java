@@ -31,15 +31,15 @@ public class BlessureSuiviService {
 
     private static final Set<String> STATUTS_ETAPE = Set.of("A_FAIRE", "EN_COURS", "VALIDEE");
 
-    /** Étapes par défaut du protocole de reprise (réathlétisation progressive). */
-    private static final List<String> ETAPES_DEFAUT = List.of(
-            "Repos & soins",
-            "Course en ligne",
-            "Changements de direction",
-            "Travail avec ballon",
-            "Entraînement collectif partiel",
-            "Entraînement collectif complet",
-            "Retour compétition");
+    /** Phase type du protocole de retour au jeu (libellé, fenêtre en jours, détail). */
+    private record PhaseDefaut(String libelle, short jDebut, short jFin, String description) {}
+
+    /** Protocole par défaut (réathlétisation progressive en 4 phases). */
+    private static final List<PhaseDefaut> ETAPES_DEFAUT = List.of(
+            new PhaseDefaut("Phase 1 — Soins",                (short) 1,  (short) 5,  "Soins médicaux, glaçage, compression"),
+            new PhaseDefaut("Phase 2 — Reprise individuelle", (short) 6,  (short) 12, "Course, renforcement musculaire, proprioception"),
+            new PhaseDefaut("Phase 3 — Reprise collective",   (short) 13, (short) 18, "Entraînement avec le groupe sans contact"),
+            new PhaseDefaut("Phase 4 — Retour compétition",   (short) 19, (short) 21, "Validation médicale, retour à la compétition"));
 
     private final BlessureRepository blessureRepository;
     private final BlessureNoteRepository noteRepository;
@@ -111,11 +111,14 @@ public class BlessureSuiviService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Protocole déjà initialisé");
         }
         short ordre = 1;
-        for (String libelle : ETAPES_DEFAUT) {
+        for (PhaseDefaut phase : ETAPES_DEFAUT) {
             RtpEtape e = new RtpEtape();
             e.setBlessureId(blessureId);
             e.setOrdre(ordre++);
-            e.setLibelle(libelle);
+            e.setLibelle(phase.libelle());
+            e.setJDebut(phase.jDebut());
+            e.setJFin(phase.jFin());
+            e.setDescription(phase.description());
             e.setStatut("A_FAIRE");
             etapeRepository.save(e);
         }
@@ -159,6 +162,6 @@ public class BlessureSuiviService {
 
     private EtapeResponse toEtape(RtpEtape e) {
         return new EtapeResponse(e.getId(), e.getBlessureId(), e.getOrdre(), e.getLibelle(),
-                e.getStatut(), e.getDateValidation());
+                e.getStatut(), e.getDateValidation(), e.getJDebut(), e.getJFin(), e.getDescription());
     }
 }

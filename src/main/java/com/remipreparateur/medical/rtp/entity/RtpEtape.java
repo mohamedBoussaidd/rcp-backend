@@ -36,6 +36,17 @@ public class RtpEtape {
     @Column(name = "date_validation")
     private LocalDate dateValidation;
 
+    /** Fenêtre indicative de la phase, en jours depuis la blessure (ex. J1–J5). */
+    @Column(name = "j_debut")
+    private Short jDebut;
+
+    @Column(name = "j_fin")
+    private Short jFin;
+
+    /** Détail des actions de la phase. */
+    @Column(name = "description")
+    private String description;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

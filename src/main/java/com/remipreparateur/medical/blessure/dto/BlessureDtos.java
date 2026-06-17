@@ -22,7 +22,8 @@ public final class BlessureDtos {
             String gravite,
             String causeProbable,
             Boolean recidive,
-            String commentaire) {}
+            String commentaire,
+            String notesMedicales) {}
 
     public record BlessureResponse(
             UUID id,
@@ -40,5 +41,6 @@ public final class BlessureDtos {
             String causeProbable,
             boolean recidive,
             String commentaire,
+            String notesMedicales,
             boolean enCours) {}
 }

@@ -58,6 +58,10 @@ public class Blessure {
     @Column(name = "commentaire")
     private String commentaire;
 
+    /** Notes réservées au staff médical (distinct du commentaire général). */
+    @Column(name = "notes_medicales")
+    private String notesMedicales;
+
     @Column(name = "equipe_id")
     private UUID equipeId;
 

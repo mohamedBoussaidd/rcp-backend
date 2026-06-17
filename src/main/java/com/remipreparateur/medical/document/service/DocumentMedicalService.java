@@ -42,7 +42,7 @@ public class DocumentMedicalService {
 
     private static final long TAILLE_MAX = 10L * 1024 * 1024; // 10 Mo
     private static final Set<String> CATEGORIES =
-            Set.of("certificat", "ordonnance", "imagerie", "compte_rendu", "autre");
+            Set.of("irm", "radio", "echographie", "bilan_sanguin", "certificat", "ordonnance", "autre");
     /** Roles que le joueur peut ajouter au partage (le medical/super-admin voient toujours). */
     private static final Set<String> ROLES_PARTAGEABLES =
             Set.of("ENTRAINEUR", "PREPARATEUR", "PRESIDENT");
