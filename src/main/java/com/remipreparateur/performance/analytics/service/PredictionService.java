@@ -49,13 +49,40 @@ public class PredictionService {
                 .toList();
     }
 
-    public Object getChargeCollective() {
-        String url = pythonApiUrl + "/api/predictions/charge-collective";
+    public Object getChargeCollective(int semaines) {
+        String url = pythonApiUrl + "/api/predictions/charge-collective?semaines=" + semaines;
         return restTemplate.getForObject(url, Object.class);
     }
 
     public Object getRapportSeance(UUID seanceId) {
         String url = pythonApiUrl + "/api/predictions/seance/" + seanceId + "/rapport";
         return restTemplate.getForObject(url, Object.class);
+    }
+
+    public Object getChargeEquipe(String debut, String fin, String types) {
+        StringBuilder url = new StringBuilder(pythonApiUrl + "/api/predictions/equipe/charge");
+        StringBuilder qs = new StringBuilder();
+        if (debut != null && !debut.isBlank()) qs.append(qs.length() == 0 ? "?" : "&").append("debut=").append(debut);
+        if (fin   != null && !fin.isBlank())   qs.append(qs.length() == 0 ? "?" : "&").append("fin=").append(fin);
+        if (types != null && !types.isBlank()) qs.append(qs.length() == 0 ? "?" : "&").append("types=").append(types);
+        url.append(qs);
+
+        Object res = restTemplate.getForObject(url.toString(), Object.class);
+        Scope scope = scopeResolver.resolve();
+        if (scope.all()) return res;
+        if (scope.none()) return Map.of("seances", List.of(), "joueurs", List.of());
+        if (!(res instanceof Map<?, ?> map)) return res;
+
+        // Post-filtre du classement par joueur sur la portée (équipe) de l'utilisateur.
+        Set<String> ids = joueurService.findAll().stream()
+                .map(j -> j.getId().toString()).collect(Collectors.toSet());
+        Object joueurs = map.get("joueurs");
+        List<?> joueursFiltres = (joueurs instanceof List<?> list)
+                ? list.stream()
+                    .filter(o -> o instanceof Map<?, ?> m && ids.contains(String.valueOf(m.get("joueur_id"))))
+                    .toList()
+                : List.of();
+        Object seances = map.get("seances");
+        return Map.of("seances", seances != null ? seances : List.of(), "joueurs", joueursFiltres);
     }
 }

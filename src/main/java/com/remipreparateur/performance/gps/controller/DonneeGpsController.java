@@ -28,12 +28,19 @@ public class DonneeGpsController {
     }
 
     @GetMapping("/charge-collective")
-    public Object getChargeCollective() {
-        return predictionService.getChargeCollective();
+    public Object getChargeCollective(@RequestParam(defaultValue = "4") int semaines) {
+        return predictionService.getChargeCollective(semaines);
     }
 
     @GetMapping("/seance/{seanceId}/rapport")
     public Object getRapportSeance(@PathVariable UUID seanceId) {
         return predictionService.getRapportSeance(seanceId);
+    }
+
+    @GetMapping("/equipe/charge")
+    public Object getChargeEquipe(@RequestParam(required = false) String debut,
+                                  @RequestParam(required = false) String fin,
+                                  @RequestParam(required = false) String types) {
+        return predictionService.getChargeEquipe(debut, fin, types);
     }
 }
