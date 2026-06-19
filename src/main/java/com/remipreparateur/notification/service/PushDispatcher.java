@@ -5,11 +5,13 @@ import com.remipreparateur.notification.entity.PushSubscription;
 import com.remipreparateur.notification.repository.PushSubscriptionRepository;
 import jakarta.annotation.PostConstruct;
 import nl.martijndwars.webpush.PushService;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.security.Security;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -48,7 +50,11 @@ public class PushDispatcher {
             return;
         }
         try {
-            // PushService enregistre lui-même le provider BouncyCastle nécessaire au chiffrement.
+            // bcprov-jdk18on n'auto-enregistre PAS le provider "BC" : web-push fait des
+            // KeyFactory.getInstance(..., "BC") → on l'enregistre nous-mêmes au démarrage.
+            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+                Security.addProvider(new BouncyCastleProvider());
+            }
             pushService = new PushService(publicKey, privateKey, subject);
             log.info("Web Push activé (VAPID).");
         } catch (Throwable e) {
@@ -62,7 +68,7 @@ public class PushDispatcher {
     /** Pousse la notification à tous les abonnements push du destinataire (best-effort). */
     public void envoyer(com.remipreparateur.notification.entity.Notification notification) {
         if (pushService == null) {
-            log.info("Web Push ignoré (push désactivé : clés VAPID absentes) — notif {} pour user {}",
+            log.info("Web Push ignoré (push indisponible : clés VAPID absentes ou init échouée) — notif {} pour user {}",
                     notification.getType(), notification.getDestinataireUserId());
             return;
         }
