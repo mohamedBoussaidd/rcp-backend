@@ -105,6 +105,18 @@
 			<artifactId>web-push</artifactId>
 			<version>5.1.1</version>
 		</dependency>
+		<!-- BouncyCastle requis a l'execution par web-push (chiffrement ECDH/VAPID) :
+		     non tire transitivement par web-push:5.1.1, a declarer explicitement. -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.78.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>1.78.1</version>
+		</dependency>
 
 		<!-- Flyway (suivi des migrations BDD) -->
 		<dependency>

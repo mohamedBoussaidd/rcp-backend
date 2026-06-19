@@ -51,8 +51,10 @@ public class PushDispatcher {
             // PushService enregistre lui-même le provider BouncyCastle nécessaire au chiffrement.
             pushService = new PushService(publicKey, privateKey, subject);
             log.info("Web Push activé (VAPID).");
-        } catch (Exception e) {
-            log.warn("Web Push : initialisation impossible — {}", e.getMessage());
+        } catch (Throwable e) {
+            // Throwable (et pas Exception) : un NoClassDefFoundError sur BouncyCastle est une
+            // Error ; le push reste optionnel et ne doit jamais empêcher le démarrage de l'app.
+            log.warn("Web Push : initialisation impossible — {} ({})", e.getMessage(), e.getClass().getSimpleName());
             pushService = null;
         }
     }
