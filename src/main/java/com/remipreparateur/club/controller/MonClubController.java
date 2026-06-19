@@ -19,7 +19,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api")
-@PreAuthorize("hasAnyRole('PRESIDENT','ENTRAINEUR','PREPARATEUR','SUPER_ADMIN')")
+@PreAuthorize("hasAnyRole('PRESIDENT','ENTRAINEUR','PREPARATEUR','SUPER_ADMIN') or hasAuthority('club:manage')")
 public class MonClubController {
 
     private final GestionClubService gestion;

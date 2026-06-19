@@ -41,6 +41,12 @@ public class SchemaTactiqueController {
         return schemaService.modifier(id, req);
     }
 
+    /** Duplique un schéma existant en une copie éditable attribuée à l'utilisateur courant. */
+    @PostMapping("/{id}/dupliquer")
+    public ResponseEntity<SchemaTactiqueResponse> dupliquer(@PathVariable UUID id) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(schemaService.dupliquer(id));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> supprimer(@PathVariable UUID id) {
         schemaService.supprimer(id);

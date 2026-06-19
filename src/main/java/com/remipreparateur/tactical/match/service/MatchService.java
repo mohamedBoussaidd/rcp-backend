@@ -8,7 +8,9 @@ import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
 import com.remipreparateur.performance.gps.repository.DonneeGpsRepository;
+import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
+import com.remipreparateur.auth.rbac.PermissionResolver;
 import com.remipreparateur.medical.blessure.repository.BlessureRepository;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
@@ -44,6 +46,7 @@ public class MatchService {
     private final BlessureRepository blessureRepository;
     private final CurrentUserProvider currentUser;
     private final ScopeResolver scopeResolver;
+    private final PermissionResolver permissionResolver;
 
     public MatchService(MatchPrepaRepository matchRepository,
                         MatchSchemaRepository schemaRepository,
@@ -54,7 +57,8 @@ public class MatchService {
                         DonneeGpsRepository donneeGpsRepository,
                         BlessureRepository blessureRepository,
                         CurrentUserProvider currentUser,
-                        ScopeResolver scopeResolver) {
+                        ScopeResolver scopeResolver,
+                        PermissionResolver permissionResolver) {
         this.matchRepository = matchRepository;
         this.schemaRepository = schemaRepository;
         this.compoRepository = compoRepository;
@@ -65,6 +69,7 @@ public class MatchService {
         this.blessureRepository = blessureRepository;
         this.currentUser = currentUser;
         this.scopeResolver = scopeResolver;
+        this.permissionResolver = permissionResolver;
     }
 
     // ── Liste / création ──
@@ -358,9 +363,6 @@ public class MatchService {
     }
 
     private boolean peutModifier(Utilisateur u) {
-        return switch (u.getRole()) {
-            case ENTRAINEUR, PRESIDENT, SUPER_ADMIN -> true;
-            default -> false;
-        };
+        return u.getRole() == Role.SUPER_ADMIN || permissionResolver.permissionsPour(u).contains("matchs:write");
     }
 }

@@ -8,6 +8,9 @@ import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
+import com.remipreparateur.auth.rbac.AffectationRole;
+import com.remipreparateur.auth.rbac.AffectationRoleRepository;
+import com.remipreparateur.auth.rbac.RoleApplicatifRepository;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.shared.security.ContexteActif;
@@ -30,23 +33,32 @@ public class GestionClubService {
     private static final int MAX_EQUIPES = 3;
     private static final Set<Role> ROLES_MEMBRES = EnumSet.of(
             Role.ENTRAINEUR, Role.PREPARATEUR, Role.MEDICAL, Role.ADMINISTRATIF, Role.JOUEUR);
+    /** Rôles staff dotés d'une affectation RBAC « principale » (le joueur reste en self-scope). */
+    private static final Set<Role> ROLES_STAFF = EnumSet.of(
+            Role.ENTRAINEUR, Role.PREPARATEUR, Role.MEDICAL, Role.ADMINISTRATIF);
 
     private final EquipeRepository equipeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final ClubRepository clubRepository;
     private final JoueurRepository joueurRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RoleApplicatifRepository roleRepository;
+    private final AffectationRoleRepository affectationRepository;
 
     public GestionClubService(EquipeRepository equipeRepository,
                               UtilisateurRepository utilisateurRepository,
                               ClubRepository clubRepository,
                               JoueurRepository joueurRepository,
-                              PasswordEncoder passwordEncoder) {
+                              PasswordEncoder passwordEncoder,
+                              RoleApplicatifRepository roleRepository,
+                              AffectationRoleRepository affectationRepository) {
         this.equipeRepository = equipeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.clubRepository = clubRepository;
         this.joueurRepository = joueurRepository;
         this.passwordEncoder = passwordEncoder;
+        this.roleRepository = roleRepository;
+        this.affectationRepository = affectationRepository;
     }
 
     // ── Vue agregee ──
@@ -138,6 +150,7 @@ public class GestionClubService {
         }
 
         m = utilisateurRepository.save(m);
+        synchroniserAffectationPrincipale(m, clubId);
         return toMembreResponse(m);
     }
 
@@ -151,6 +164,9 @@ public class GestionClubService {
     @Transactional
     public MembreResponse modifierMembre(Utilisateur president, UUID membreId, MembreUpdateRequest req) {
         Utilisateur m = chargeMembreDuClub(president, membreId);
+        Role ancienRole = m.getRole();
+        UUID ancienneEquipe = m.getEquipeId();
+
         if (req.role() != null) m.setRole(parseRoleMembre(req.role()));
         if (req.specialite() != null) m.setSpecialite(req.specialite());
         if (req.equipeId() != null) {
@@ -158,7 +174,18 @@ public class GestionClubService {
             m.setEquipeId(req.equipeId());
         }
         if (req.actif() != null) m.setActif(req.actif());
-        return toMembreResponse(utilisateurRepository.save(m));
+        m = utilisateurRepository.save(m);
+
+        UUID clubId = m.getClubId();
+        if (m.getRole() != ancienRole) {
+            // Changement de rôle « principal » → on réinitialise les affectations à ce seul rôle
+            // (le cumul de rôles se gère ensuite dans l'onglet « Rôles & accès »).
+            synchroniserAffectationPrincipale(m, clubId);
+        } else if (!java.util.Objects.equals(m.getEquipeId(), ancienneEquipe)) {
+            // Le membre change d'équipe : on repointe ses affectations d'équipe sur la nouvelle.
+            repointerAffectationsSurEquipe(m, clubId);
+        }
+        return toMembreResponse(m);
     }
 
     @Transactional
@@ -263,5 +290,37 @@ public class GestionClubService {
         return new MembreResponse(
                 u.getId(), u.getEmail(), u.getNom(), u.getPrenom(),
                 u.getRole().name(), u.getSpecialite(), u.getEquipeId(), u.getJoueurId(), u.isActif());
+    }
+
+    // ── Synchronisation du rôle « principal » (legacy) avec une affectation RBAC ──
+
+    /**
+     * Réinitialise les affectations du membre dans le club à son SEUL rôle principal (système).
+     * Garantit qu'un membre fraîchement créé (ou dont on change le rôle) possède bien des
+     * permissions. Le cumul de rôles supplémentaires se gère ensuite via « Rôles & accès ».
+     */
+    private void synchroniserAffectationPrincipale(Utilisateur membre, UUID clubId) {
+        affectationRepository.deleteByUserIdAndClubId(membre.getId(), clubId);
+        if (!ROLES_STAFF.contains(membre.getRole()) || membre.getEquipeId() == null) {
+            return; // joueur (self-scope) ou membre sans équipe → pas d'affectation
+        }
+        roleRepository.findBySystemeTrueAndCode(membre.getRole().name()).ifPresent(role -> {
+            AffectationRole a = new AffectationRole();
+            a.setUserId(membre.getId());
+            a.setClubId(clubId);
+            a.setEquipeId(membre.getEquipeId());
+            a.setRoleId(role.getId());
+            affectationRepository.save(a);
+        });
+    }
+
+    /** Repointe les affectations scopées équipe du membre sur sa nouvelle équipe (cumul préservé). */
+    private void repointerAffectationsSurEquipe(Utilisateur membre, UUID clubId) {
+        for (AffectationRole a : affectationRepository.findByUserIdAndClubId(membre.getId(), clubId)) {
+            if (a.getEquipeId() != null) {
+                a.setEquipeId(membre.getEquipeId());
+                affectationRepository.save(a);
+            }
+        }
     }
 }

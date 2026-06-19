@@ -47,6 +47,12 @@ public class ExerciceController {
         return exerciceService.modifierSchema(id, req.schemaJson());
     }
 
+    /** Duplique un exercice existant en une copie éditable attribuée à l'utilisateur courant. */
+    @PostMapping("/{id}/dupliquer")
+    public ResponseEntity<ExerciceResponse> dupliquer(@PathVariable UUID id) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(exerciceService.dupliquer(id));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> supprimer(@PathVariable UUID id) {
         exerciceService.supprimer(id);

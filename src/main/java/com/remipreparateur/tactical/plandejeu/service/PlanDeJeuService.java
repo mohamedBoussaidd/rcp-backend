@@ -7,7 +7,9 @@ import com.remipreparateur.tactical.plandejeu.dto.PlanDeJeuDtos.SectionResponse;
 import com.remipreparateur.tactical.plandejeu.dto.PlanDeJeuDtos.SectionUpdateRequest;
 import com.remipreparateur.tactical.plandejeu.entity.PlanDeJeu;
 import com.remipreparateur.tactical.plandejeu.entity.SectionPlan;
+import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
+import com.remipreparateur.auth.rbac.PermissionResolver;
 import com.remipreparateur.tactical.plandejeu.repository.PlanDeJeuRepository;
 import com.remipreparateur.tactical.plandejeu.repository.SectionPlanRepository;
 import com.remipreparateur.shared.security.CurrentUserProvider;
@@ -42,15 +44,18 @@ public class PlanDeJeuService {
     private final SectionPlanRepository sectionRepository;
     private final CurrentUserProvider currentUser;
     private final ScopeResolver scopeResolver;
+    private final PermissionResolver permissionResolver;
 
     public PlanDeJeuService(PlanDeJeuRepository planRepository,
                             SectionPlanRepository sectionRepository,
                             CurrentUserProvider currentUser,
-                            ScopeResolver scopeResolver) {
+                            ScopeResolver scopeResolver,
+                            PermissionResolver permissionResolver) {
         this.planRepository = planRepository;
         this.sectionRepository = sectionRepository;
         this.currentUser = currentUser;
         this.scopeResolver = scopeResolver;
+        this.permissionResolver = permissionResolver;
     }
 
     @Transactional
@@ -154,9 +159,6 @@ public class PlanDeJeuService {
 
     /** Droit d'édition (indicatif pour l'UI) ; l'écriture est aussi gardée par SecurityConfig. */
     private boolean peutModifier(Utilisateur u) {
-        return switch (u.getRole()) {
-            case ENTRAINEUR, PRESIDENT, SUPER_ADMIN -> true;
-            default -> false;
-        };
+        return u.getRole() == Role.SUPER_ADMIN || permissionResolver.permissionsPour(u).contains("plandejeu:write");
     }
 }

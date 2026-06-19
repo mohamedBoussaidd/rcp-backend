@@ -19,7 +19,12 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.UUID;
 
-/** Bibliotheque d'exercices, partagee au sein d'un club. */
+/**
+ * Bibliotheque d'exercices, partagee au sein d'un club. Un exercice n'est
+ * <b>modifiable/supprimable que par son créateur</b> (pour éviter qu'un coach écrase le travail
+ * d'un autre). Les autres peuvent le réutiliser ou le <b>dupliquer</b> pour en obtenir une copie
+ * éditable à leur nom.
+ */
 @Service
 public class ExerciceService {
 
@@ -45,7 +50,7 @@ public class ExerciceService {
                 ? exerciceRepository.findByClubIdOrderByCreatedAtDesc(clubId)
                 // Super-admin sans club actif (espace admin) : tout ; autres rôles sans club : rien.
                 : (u.getRole() == Role.SUPER_ADMIN ? exerciceRepository.findAll() : List.of());
-        return exercices.stream().map(e -> toResponse(e, u)).toList();
+        return exercices.stream().map(e -> toResponse(e, estCreateur(e, u))).toList();
     }
 
     public ExerciceResponse creer(ExerciceRequest req) {
@@ -59,31 +64,60 @@ public class ExerciceService {
         e.setCreePar(u.getId());
         e.setEquipeOrigineId(u.getEquipeId());
         appliquer(e, req);
-        return toResponse(exerciceRepository.save(e), u);
+        return toResponse(exerciceRepository.save(e), true);
     }
 
     public ExerciceResponse modifier(UUID id, ExerciceRequest req) {
         Utilisateur u = currentUser.current();
         Exercice e = charge(id);
-        exigeDroit(e, u);
+        exigeCreateur(e, u);
         appliquer(e, req);
-        return toResponse(exerciceRepository.save(e), u);
+        return toResponse(exerciceRepository.save(e), true);
     }
 
     public void supprimer(UUID id) {
         Utilisateur u = currentUser.current();
         Exercice e = charge(id);
-        exigeDroit(e, u);
+        exigeCreateur(e, u);
         exerciceRepository.deleteById(id);
     }
 
-    /** Sauvegarde du schéma tactique (même droit que l'édition de l'exercice). */
+    /** Sauvegarde du schéma tactique (même droit que l'édition de l'exercice : créateur). */
     public ExerciceResponse modifierSchema(UUID id, String schemaJson) {
         Utilisateur u = currentUser.current();
         Exercice e = charge(id);
-        exigeDroit(e, u);
+        exigeCreateur(e, u);
         e.setSchemaJson(schemaJson);
-        return toResponse(exerciceRepository.save(e), u);
+        return toResponse(exerciceRepository.save(e), true);
+    }
+
+    /**
+     * Duplique un exercice du club en une copie éditable attribuée à l'utilisateur courant.
+     * Permet de repartir du travail d'un autre sans modifier l'original.
+     */
+    public ExerciceResponse dupliquer(UUID id) {
+        Utilisateur u = currentUser.current();
+        Exercice source = charge(id);
+        UUID clubId = clubCourant(u);
+        if (u.getRole() != Role.SUPER_ADMIN && (clubId == null || !clubId.equals(source.getClubId()))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Exercice introuvable");
+        }
+        Exercice c = new Exercice();
+        c.setClubId(source.getClubId());
+        c.setCreePar(u.getId());
+        c.setEquipeOrigineId(u.getEquipeId());
+        c.setNom(source.getNom() + " (copie)");
+        c.setCategorie(source.getCategorie());
+        c.setType(source.getType());
+        c.setDureeMinutes(source.getDureeMinutes());
+        c.setObjectif(source.getObjectif());
+        c.setIntensite(source.getIntensite());
+        c.setDescription(source.getDescription());
+        c.setSchemaJson(source.getSchemaJson());
+        c.setDistanceAttendueM(source.getDistanceAttendueM());
+        c.setDistanceHauteIntensiteM(source.getDistanceHauteIntensiteM());
+        c.setNbSprints(source.getNbSprints());
+        return toResponse(exerciceRepository.save(c), true);
     }
 
     // ── Helpers ──
@@ -106,19 +140,16 @@ public class ExerciceService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Exercice introuvable"));
     }
 
-    /** Edition/suppression : createur, ou president/super-admin du club. */
-    private void exigeDroit(Exercice e, Utilisateur u) {
-        if (!peutModifier(e, u)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Seul le createur (ou le president) peut modifier cet exercice");
+    /** Edition/suppression réservées au créateur (le super-admin peut administrer). */
+    private void exigeCreateur(Exercice e, Utilisateur u) {
+        if (!estCreateur(e, u)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Seul le créateur peut modifier cet exercice — vous pouvez le dupliquer pour l'adapter");
         }
     }
 
-    private boolean peutModifier(Exercice e, Utilisateur u) {
-        return switch (u.getRole()) {
-            case SUPER_ADMIN -> true;
-            case PRESIDENT -> u.getClubId() != null && u.getClubId().equals(e.getClubId());
-            default -> e.getCreePar() != null && e.getCreePar().equals(u.getId());
-        };
+    private boolean estCreateur(Exercice e, Utilisateur u) {
+        return u.getRole() == Role.SUPER_ADMIN || (e.getCreePar() != null && e.getCreePar().equals(u.getId()));
     }
 
     private void appliquer(Exercice e, ExerciceRequest req) {
@@ -141,7 +172,7 @@ public class ExerciceService {
         e.setNbSprints(req.nbSprints());
     }
 
-    private ExerciceResponse toResponse(Exercice e, Utilisateur courant) {
+    private ExerciceResponse toResponse(Exercice e, boolean modifiable) {
         String creeParNom = e.getCreePar() != null
                 ? utilisateurRepository.findById(e.getCreePar())
                     .map(c -> ((c.getPrenom() != null ? c.getPrenom() + " " : "") + (c.getNom() != null ? c.getNom() : "")).trim())
@@ -155,6 +186,6 @@ public class ExerciceService {
                 e.getIntensite(), e.getDescription(), e.getSchemaJson(),
                 e.getDistanceAttendueM(), e.getDistanceHauteIntensiteM(), e.getNbSprints(),
                 e.getCreePar(), creeParNom, e.getEquipeOrigineId(), equipeNom,
-                peutModifier(e, courant));
+                modifiable);
     }
 }
