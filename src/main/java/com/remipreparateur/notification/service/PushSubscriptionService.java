@@ -1,6 +1,7 @@
 package com.remipreparateur.notification.service;
 
 import com.remipreparateur.notification.dto.PushDtos.ClePubliqueDto;
+import com.remipreparateur.notification.dto.PushDtos.EtatAbonnementDto;
 import com.remipreparateur.notification.dto.PushDtos.SubscriptionRequest;
 import com.remipreparateur.notification.entity.PushSubscription;
 import com.remipreparateur.notification.repository.PushSubscriptionRepository;
@@ -30,6 +31,13 @@ public class PushSubscriptionService {
     public ClePubliqueDto clePublique() {
         boolean actif = publicKey != null && !publicKey.isBlank();
         return new ClePubliqueDto(actif ? publicKey : null, actif);
+    }
+
+    /** Diagnostic : combien de devices abonnés pour l'utilisateur courant + push actif côté serveur. */
+    @Transactional(readOnly = true)
+    public EtatAbonnementDto etatAbonnement() {
+        boolean pushActif = publicKey != null && !publicKey.isBlank();
+        return new EtatAbonnementDto(repository.countByUserId(currentUser.current().getId()), pushActif);
     }
 
     @Transactional

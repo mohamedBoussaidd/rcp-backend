@@ -61,9 +61,16 @@ public class PushDispatcher {
 
     /** Pousse la notification à tous les abonnements push du destinataire (best-effort). */
     public void envoyer(com.remipreparateur.notification.entity.Notification notification) {
-        if (pushService == null) return;
+        if (pushService == null) {
+            log.info("Web Push ignoré (push désactivé : clés VAPID absentes) — notif {} pour user {}",
+                    notification.getType(), notification.getDestinataireUserId());
+            return;
+        }
         byte[] payload = payload(notification);
-        for (PushSubscription sub : subscriptionRepository.findByUserId(notification.getDestinataireUserId())) {
+        var abonnements = subscriptionRepository.findByUserId(notification.getDestinataireUserId());
+        log.info("Web Push : envoi notif {} à user {} → {} abonnement(s)",
+                notification.getType(), notification.getDestinataireUserId(), abonnements.size());
+        for (PushSubscription sub : abonnements) {
             envoyerA(sub, payload);
         }
     }
@@ -74,13 +81,17 @@ public class PushDispatcher {
                     sub.getEndpoint(), sub.getP256dh(), sub.getAuth(), payload);
             var response = pushService.send(push);
             int status = response.getStatusLine().getStatusCode();
+            String service = serviceDe(sub.getEndpoint());
             if (status == 404 || status == 410) {
+                log.info("Web Push {} → HTTP {} (abonnement expiré, supprimé)", service, status);
                 subscriptionRepository.deleteByEndpoint(sub.getEndpoint()); // abonnement expiré
             } else if (status >= 400) {
-                log.debug("Web Push {} → HTTP {}", sub.getEndpoint(), status);
+                log.warn("Web Push {} → HTTP {} (rejeté par le service de push)", service, status);
+            } else {
+                log.info("Web Push {} → HTTP {} (accepté)", service, status);
             }
         } catch (Exception e) {
-            log.debug("Web Push échec ({}) : {}", sub.getEndpoint(), e.getMessage());
+            log.warn("Web Push échec ({}) : {}", serviceDe(sub.getEndpoint()), e.getMessage());
         }
     }
 
@@ -105,5 +116,14 @@ public class PushDispatcher {
 
     private String safe(String s) {
         return s == null ? "" : s.replace("\"", "'");
+    }
+
+    /** Identifie le service de push depuis l'endpoint (pour des logs lisibles). */
+    private String serviceDe(String endpoint) {
+        if (endpoint == null) return "?";
+        if (endpoint.contains("push.apple.com")) return "Apple";
+        if (endpoint.contains("fcm.googleapis.com") || endpoint.contains("android.googleapis.com")) return "Google/FCM";
+        if (endpoint.contains("mozilla.com") || endpoint.contains("push.services.mozilla")) return "Mozilla";
+        return "autre";
     }
 }

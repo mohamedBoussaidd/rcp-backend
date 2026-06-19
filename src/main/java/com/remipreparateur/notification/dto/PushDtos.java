@@ -18,4 +18,7 @@ public final class PushDtos {
 
     /** Clé publique VAPID exposée au front + indicateur d'activation du push. */
     public record ClePubliqueDto(String publicKey, boolean actif) {}
+
+    /** Diagnostic : nb d'abonnements (devices) de l'utilisateur courant + push actif côté serveur. */
+    public record EtatAbonnementDto(long abonnements, boolean pushActifServeur) {}
 }

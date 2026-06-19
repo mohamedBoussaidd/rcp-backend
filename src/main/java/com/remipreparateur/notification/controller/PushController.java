@@ -2,6 +2,7 @@ package com.remipreparateur.notification.controller;
 
 import com.remipreparateur.notification.dto.PushDtos.ClePubliqueDto;
 import com.remipreparateur.notification.dto.PushDtos.DesabonnementRequest;
+import com.remipreparateur.notification.dto.PushDtos.EtatAbonnementDto;
 import com.remipreparateur.notification.dto.PushDtos.SubscriptionRequest;
 import com.remipreparateur.notification.service.PushSubscriptionService;
 import jakarta.validation.Valid;
@@ -24,6 +25,12 @@ public class PushController {
     @GetMapping("/cle-publique")
     public ClePubliqueDto clePublique() {
         return service.clePublique();
+    }
+
+    /** Diagnostic : l'appareil courant est-il bien abonné côté serveur ? */
+    @GetMapping("/abonnement/etat")
+    public EtatAbonnementDto etatAbonnement() {
+        return service.etatAbonnement();
     }
 
     @PostMapping("/abonnement")
