@@ -127,6 +127,17 @@ public class SecurityConfig {
                         // Espace personnel du joueur : reserve au role JOUEUR (donnees scopees par token)
                         .requestMatchers("/api/moi/**").hasRole("JOUEUR")
 
+                        // Notifications — configuration (seuils, routage, droits) : tout le staff.
+                        // Gestion des préférences d'un joueur ciblé (coupure + verrou) : staff.
+                        .requestMatchers("/api/notifications/config/**",
+                                "/api/notifications/routage/**",
+                                "/api/notifications/droits/**",
+                                "/api/notifications/preferences/joueur/**",
+                                "/api/notifications/preferences/equipe/**").hasAnyRole(STAFF)
+                        // Cloche, liste, marquage lu, /preferences/me, chat : tout utilisateur
+                        // authentifié (staff ET joueur) — chacun ne voit que ses données.
+                        .requestMatchers("/api/notifications/**").authenticated()
+
                         // Bibliotheque d'exercices (club) : lecture staff ; ecriture entraineur/president
                         // (edition/suppression restreinte au createur/president dans le service)
                         .requestMatchers(HttpMethod.GET, "/api/exercices/**").hasAnyRole(STAFF)

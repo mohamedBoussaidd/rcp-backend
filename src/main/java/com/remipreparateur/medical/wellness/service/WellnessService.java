@@ -6,6 +6,7 @@ import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.medical.wellness.entity.WellnessQuotidien;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.medical.wellness.repository.WellnessQuotidienRepository;
+import com.remipreparateur.notification.service.NotificationProducer;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
@@ -32,13 +33,16 @@ public class WellnessService {
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
     private final CurrentUserProvider currentUser;
+    private final NotificationProducer notificationProducer;
 
     public WellnessService(WellnessQuotidienRepository repository, JoueurRepository joueurRepository,
-                           ScopeResolver scopeResolver, CurrentUserProvider currentUser) {
+                           ScopeResolver scopeResolver, CurrentUserProvider currentUser,
+                           NotificationProducer notificationProducer) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
         this.currentUser = currentUser;
+        this.notificationProducer = notificationProducer;
     }
 
     public WellnessResponse enregistrer(UUID joueurId, WellnessRequest req) {
@@ -67,7 +71,13 @@ public class WellnessService {
         w.setGeneTraiteePar(null);
         w.setGeneTraiteeLe(null);
         w.setGeneResolution(null);
-        return toResponse(repository.save(w), joueur);
+        WellnessQuotidien saved = repository.save(w);
+        // Gêne signalée → alerte URGENTE au staff médical (best-effort, n'interrompt pas la saisie).
+        if (zone != null) {
+            notificationProducer.geneDeclaree(joueur.getEquipeId(), joueurId,
+                    (joueur.getPrenom() + " " + joueur.getNom()).trim(), zone, w.getGeneIntensite());
+        }
+        return toResponse(saved, joueur);
     }
 
     public List<WellnessResponse> listerPourJoueur(UUID joueurId) {
