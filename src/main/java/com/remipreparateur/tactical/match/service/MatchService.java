@@ -5,6 +5,9 @@ import com.remipreparateur.tactical.match.entity.*;
 import com.remipreparateur.tactical.match.repository.*;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.club.entity.Equipe;
+import com.remipreparateur.club.repository.EquipeRepository;
+import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
 import com.remipreparateur.performance.gps.repository.DonneeGpsRepository;
@@ -12,6 +15,7 @@ import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.auth.rbac.PermissionResolver;
 import com.remipreparateur.medical.blessure.repository.BlessureRepository;
+import com.remipreparateur.notification.service.NotificationProducer;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
 import org.springframework.http.HttpStatus;
@@ -40,10 +44,14 @@ public class MatchService {
     private final MatchSchemaRepository schemaRepository;
     private final MatchCompoRepository compoRepository;
     private final MatchJoueurSurveilleRepository surveilleRepository;
+    private final MatchSuspenduRepository suspenduRepository;
     private final JoueurRepository joueurRepository;
+    private final EquipeRepository equipeRepository;
+    private final ClubRepository clubRepository;
     private final SeanceRepository seanceRepository;
     private final DonneeGpsRepository donneeGpsRepository;
     private final BlessureRepository blessureRepository;
+    private final NotificationProducer notificationProducer;
     private final CurrentUserProvider currentUser;
     private final ScopeResolver scopeResolver;
     private final PermissionResolver permissionResolver;
@@ -52,10 +60,14 @@ public class MatchService {
                         MatchSchemaRepository schemaRepository,
                         MatchCompoRepository compoRepository,
                         MatchJoueurSurveilleRepository surveilleRepository,
+                        MatchSuspenduRepository suspenduRepository,
                         JoueurRepository joueurRepository,
+                        EquipeRepository equipeRepository,
+                        ClubRepository clubRepository,
                         SeanceRepository seanceRepository,
                         DonneeGpsRepository donneeGpsRepository,
                         BlessureRepository blessureRepository,
+                        NotificationProducer notificationProducer,
                         CurrentUserProvider currentUser,
                         ScopeResolver scopeResolver,
                         PermissionResolver permissionResolver) {
@@ -63,10 +75,14 @@ public class MatchService {
         this.schemaRepository = schemaRepository;
         this.compoRepository = compoRepository;
         this.surveilleRepository = surveilleRepository;
+        this.suspenduRepository = suspenduRepository;
         this.joueurRepository = joueurRepository;
+        this.equipeRepository = equipeRepository;
+        this.clubRepository = clubRepository;
         this.seanceRepository = seanceRepository;
         this.donneeGpsRepository = donneeGpsRepository;
         this.blessureRepository = blessureRepository;
+        this.notificationProducer = notificationProducer;
         this.currentUser = currentUser;
         this.scopeResolver = scopeResolver;
         this.permissionResolver = permissionResolver;
@@ -106,10 +122,65 @@ public class MatchService {
         MatchPrepa m = chargerMatch(matchId);
         m.setAdversaire(req.adversaire());
         m.setDateMatch(req.dateMatch());
+        m.setHeureMatch(req.heureMatch());
         m.setCompetition(req.competition());
         m.setDomicile(req.domicile());
         m.setConsignes(req.consignes());
+        m.setLieuRdv(req.lieuRdv());
+        m.setHeureRdv(req.heureRdv());
+        m.setCouleurMaillot(req.couleurMaillot());
+        m.setInfosLogistiques(req.infosLogistiques());
         return toResponse(touch(m), currentUser.current());
+    }
+
+    // ── Publication vers les joueurs ──
+
+    @Transactional
+    public MatchResponse publier(UUID matchId, PublicationRequest req) {
+        MatchPrepa m = chargerMatch(matchId);
+        boolean etaitPublie = m.isPublie();
+        m.setCompoVisible(req.compoVisible());
+        m.setPublie(req.publie());
+        if (req.publie() && m.getPublieAt() == null) {
+            m.setPublieAt(LocalDateTime.now());
+        }
+        MatchResponse resp = toResponse(touch(m), currentUser.current());
+        if (req.publie() && !etaitPublie) {
+            notificationProducer.matchPublie(m.getEquipeId(), m.getAdversaire());
+        }
+        return resp;
+    }
+
+    // ── Suspensions (indisponibilité manuelle pour ce match) ──
+
+    @Transactional
+    public MatchResponse definirSuspendus(UUID matchId, SuspendusRequest req) {
+        MatchPrepa m = chargerMatch(matchId);
+        suspenduRepository.deleteByMatchId(m.getId());
+        suspenduRepository.flush();
+        if (req.joueurIds() != null) {
+            for (UUID joueurId : req.joueurIds().stream().distinct().toList()) {
+                MatchSuspendu s = new MatchSuspendu();
+                s.setMatchId(m.getId());
+                s.setJoueurId(joueurId);
+                suspenduRepository.save(s);
+            }
+        }
+        return toResponse(touch(m), currentUser.current());
+    }
+
+    /** Compo du match précédent de l'équipe (le plus récent autre que celui-ci), pour la reprendre. */
+    @Transactional(readOnly = true)
+    public List<CompoItemResponse> compoDernierMatch(UUID matchId) {
+        MatchPrepa courant = chargerMatch(matchId);
+        var precedent = matchRepository.findByEquipeIdOrderByDateMatchDescCreatedAtDesc(courant.getEquipeId())
+                .stream().filter(x -> !x.getId().equals(matchId)).findFirst().orElse(null);
+        if (precedent == null) return List.of();
+        List<MatchCompo> compos = compoRepository.findByMatchId(precedent.getId());
+        if (compos.isEmpty()) return List.of();
+        Map<UUID, Joueur> joueurs = joueurRepository.findAllById(compos.stream().map(MatchCompo::getJoueurId).toList())
+                .stream().collect(Collectors.toMap(Joueur::getId, Function.identity()));
+        return compos.stream().map(c -> toCompoItem(c, joueurs.get(c.getJoueurId()), true)).toList();
     }
 
     @Transactional
@@ -172,6 +243,7 @@ public class MatchService {
             c.setX(item.x() != null ? item.x() : BigDecimal.ZERO);
             c.setY(item.y() != null ? item.y() : BigDecimal.ZERO);
             c.setStatut(item.statut() != null ? item.statut() : "TITULAIRE");
+            c.setConsigne(item.consigne());
             compoRepository.save(c);
         }
         return toResponse(touch(m), currentUser.current());
@@ -287,6 +359,77 @@ public class MatchService {
                 .stream().map(b -> b.getJoueurId()).distinct().toList();
     }
 
+    // ════════════ Lecture côté JOUEUR (matchs publiés de son équipe) ════════════
+
+    @Transactional(readOnly = true)
+    public List<MatchJoueurResume> listerPourJoueur(UUID joueurId) {
+        UUID equipeId = equipeDuJoueur(joueurId);
+        return matchRepository.findByEquipeIdAndPublieTrueOrderByDateMatchDescCreatedAtDesc(equipeId)
+                .stream().map(m -> {
+                    MatchCompo mien = compoRepository.findByMatchId(m.getId()).stream()
+                            .filter(c -> c.getJoueurId().equals(joueurId)).findFirst().orElse(null);
+                    return new MatchJoueurResume(m.getId(), m.getAdversaire(), m.getDateMatch(), m.getHeureMatch(),
+                            m.getCompetition(), m.isDomicile(), mien != null ? mien.getStatut() : null);
+                }).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public MatchJoueurDetail detailPourJoueur(UUID joueurId, UUID matchId) {
+        UUID equipeId = equipeDuJoueur(joueurId);
+        MatchPrepa m = matchRepository.findById(matchId)
+                .filter(x -> x.getEquipeId().equals(equipeId) && x.isPublie())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Match introuvable"));
+
+        List<MatchCompo> compos = compoRepository.findByMatchId(m.getId());
+        Map<UUID, Joueur> joueurs = compos.isEmpty() ? Map.of()
+                : joueurRepository.findAllById(compos.stream().map(MatchCompo::getJoueurId).toList())
+                    .stream().collect(Collectors.toMap(Joueur::getId, Function.identity()));
+
+        MatchCompo mien = compos.stream().filter(c -> c.getJoueurId().equals(joueurId)).findFirst().orElse(null);
+        String monStatut = mien != null ? mien.getStatut() : null;
+        String maConsigne = mien != null ? mien.getConsigne() : null;
+
+        boolean visible = m.isCompoVisible();
+        List<CompoItemResponse> compo = compos.stream()
+                .map(c -> toCompoItem(c, joueurs.get(c.getJoueurId()), visible)).toList();
+
+        // Non convoqués (joueurs de l'équipe absents de la compo) : montrés seulement si compo visible.
+        List<NomJoueur> nonConvoques = List.of();
+        if (visible) {
+            java.util.Set<UUID> dansCompo = compos.stream().map(MatchCompo::getJoueurId).collect(Collectors.toSet());
+            nonConvoques = joueurRepository.findByEquipeIdIn(List.of(equipeId)).stream()
+                    .filter(j -> !dansCompo.contains(j.getId()))
+                    .map(j -> new NomJoueur(j.getId(), j.getNom(), j.getPrenom(), j.getPostePrincipal()))
+                    .toList();
+        }
+
+        List<SchemaResponse> schemas = schemaRepository.findByMatchIdOrderByOrdreAsc(m.getId())
+                .stream().map(this::toSchemaResponse).toList();
+        List<SurveilleResponse> surveilles = surveilleRepository.findByMatchIdOrderByCreatedAtAsc(m.getId())
+                .stream().map(this::toSurveilleResponse).toList();
+
+        return new MatchJoueurDetail(m.getId(), m.getAdversaire(), nomClubDeLEquipe(equipeId),
+                m.getDateMatch(), m.getHeureMatch(), m.getCompetition(),
+                m.isDomicile(), m.getLieuRdv(), m.getHeureRdv(), m.getCouleurMaillot(), m.getInfosLogistiques(),
+                m.getConsignes(), monStatut, maConsigne, visible, compo, nonConvoques, schemas, surveilles);
+    }
+
+    /** Nom du club de l'équipe (pour le résumé « VS » côté joueur), avec repli sur le nom d'équipe. */
+    private String nomClubDeLEquipe(UUID equipeId) {
+        Equipe e = equipeRepository.findById(equipeId).orElse(null);
+        if (e == null) return null;
+        return clubRepository.findById(e.getClubId()).map(c -> c.getNom()).orElse(e.getNom());
+    }
+
+    private UUID equipeDuJoueur(UUID joueurId) {
+        Joueur j = joueurRepository.findById(joueurId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche joueur introuvable"));
+        if (j.getEquipeId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Joueur sans équipe");
+        }
+        return j.getEquipeId();
+    }
+
     // ── Helpers de chargement / périmètre ──
 
     private MatchPrepa chargerMatch(UUID matchId) {
@@ -321,7 +464,7 @@ public class MatchService {
 
     private MatchResume toResume(MatchPrepa m) {
         return new MatchResume(m.getId(), m.getAdversaire(), m.getDateMatch(), m.getCompetition(),
-                m.isDomicile(), m.getResultat(), m.getScore(), m.getSessionGpsId() != null);
+                m.isDomicile(), m.getResultat(), m.getScore(), m.getSessionGpsId() != null, m.isPublie());
     }
 
     private MatchResponse toResponse(MatchPrepa m, Utilisateur u) {
@@ -331,20 +474,29 @@ public class MatchService {
         Map<UUID, Joueur> joueurs = compos.isEmpty() ? Map.of()
                 : joueurRepository.findAllById(compos.stream().map(MatchCompo::getJoueurId).toList())
                     .stream().collect(Collectors.toMap(Joueur::getId, Function.identity()));
-        List<CompoItemResponse> compo = compos.stream().map(c -> {
-            Joueur j = joueurs.get(c.getJoueurId());
-            return new CompoItemResponse(c.getJoueurId(),
-                    j != null ? j.getNom() : null,
-                    j != null ? j.getPrenom() : null,
-                    j != null ? j.getPostePrincipal() : null,
-                    c.getX(), c.getY(), c.getStatut());
-        }).toList();
+        List<CompoItemResponse> compo = compos.stream()
+                .map(c -> toCompoItem(c, joueurs.get(c.getJoueurId()), true)).toList();
         List<SurveilleResponse> surveilles = surveilleRepository.findByMatchIdOrderByCreatedAtAsc(m.getId())
                 .stream().map(this::toSurveilleResponse).toList();
+        List<UUID> suspendus = suspenduRepository.findByMatchId(m.getId())
+                .stream().map(MatchSuspendu::getJoueurId).toList();
         return new MatchResponse(m.getId(), m.getEquipeId(), peutModifier(u),
                 m.getAdversaire(), m.getDateMatch(), m.getCompetition(), m.isDomicile(),
-                m.getConsignes(), m.getResultat(), m.getScore(), m.getNotesDebrief(),
-                m.getSessionGpsId(), schemas, compo, surveilles, m.getUpdatedAt());
+                m.getConsignes(), m.getLieuRdv(), m.getHeureRdv(), m.getHeureMatch(), m.getCouleurMaillot(), m.getInfosLogistiques(),
+                m.isPublie(), m.getPublieAt(), m.isCompoVisible(),
+                m.getResultat(), m.getScore(), m.getNotesDebrief(),
+                m.getSessionGpsId(), schemas, compo, surveilles, suspendus, m.getUpdatedAt());
+    }
+
+    /** Mappe un placement de compo. Si {@code positions} est faux, masque x/y (compo non visible au joueur). */
+    private CompoItemResponse toCompoItem(MatchCompo c, Joueur j, boolean positions) {
+        return new CompoItemResponse(c.getJoueurId(),
+                j != null ? j.getNom() : null,
+                j != null ? j.getPrenom() : null,
+                j != null ? j.getPostePrincipal() : null,
+                positions ? c.getX() : BigDecimal.ZERO,
+                positions ? c.getY() : BigDecimal.ZERO,
+                c.getStatut(), c.getConsigne());
     }
 
     private SchemaResponse toSchemaResponse(MatchSchema s) {

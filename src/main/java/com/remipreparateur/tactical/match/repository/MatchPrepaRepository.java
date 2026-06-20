@@ -9,4 +9,7 @@ import java.util.UUID;
 @Repository
 public interface MatchPrepaRepository extends JpaRepository<MatchPrepa, UUID> {
     List<MatchPrepa> findByEquipeIdOrderByDateMatchDescCreatedAtDesc(UUID equipeId);
+
+    /** Matchs publiés (visibles côté joueur), du plus récent au plus ancien. */
+    List<MatchPrepa> findByEquipeIdAndPublieTrueOrderByDateMatchDescCreatedAtDesc(UUID equipeId);
 }

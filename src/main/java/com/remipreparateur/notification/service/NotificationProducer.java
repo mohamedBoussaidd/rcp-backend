@@ -46,6 +46,15 @@ public class NotificationProducer {
                 "Mise à jour de séance", resume, "/joueur", null, null, false));
     }
 
+    /** Prépa d'un match partagée (publiée) → info aux joueurs de l'équipe. */
+    public void matchPublie(UUID equipeId, String adversaire) {
+        if (equipeId == null) return;
+        String corps = "Le staff a partagé la prépa du match"
+                + (adversaire != null && !adversaire.isBlank() ? " contre " + adversaire : "");
+        safe(() -> dispatcher.versEquipeJoueurs(equipeId, TypeNotification.MATCH_PARTAGE,
+                "Match partagé", corps, "/joueur/matchs", null, null, false));
+    }
+
     /** Changement de statut d'un joueur (indisponible…) → alerte au staff. */
     public void statutJoueurChange(UUID equipeId, UUID joueurId, String joueurNom, String statut) {
         if (equipeId == null) return;

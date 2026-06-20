@@ -32,6 +32,9 @@ public class MatchPrepa {
     @Column(name = "date_match")
     private LocalDate dateMatch;
 
+    @Column(name = "heure_match")
+    private java.time.LocalTime heureMatch;
+
     @Column(name = "competition")
     private String competition;
 
@@ -40,6 +43,30 @@ public class MatchPrepa {
 
     @Column(name = "consignes", columnDefinition = "text")
     private String consignes;
+
+    // ── Publication vers les joueurs ──
+    @Column(name = "publie", nullable = false)
+    private boolean publie = false;
+
+    @Column(name = "publie_at")
+    private LocalDateTime publieAt;
+
+    /** true = les joueurs voient la compo complète ; false = seulement les convoqués (cf. lecture joueur). */
+    @Column(name = "compo_visible", nullable = false)
+    private boolean compoVisible = true;
+
+    // ── Logistique de match ──
+    @Column(name = "lieu_rdv")
+    private String lieuRdv;
+
+    @Column(name = "heure_rdv")
+    private java.time.LocalTime heureRdv;
+
+    @Column(name = "couleur_maillot")
+    private String couleurMaillot;
+
+    @Column(name = "infos_logistiques", columnDefinition = "text")
+    private String infosLogistiques;
 
     @Column(name = "resultat")
     private String resultat;

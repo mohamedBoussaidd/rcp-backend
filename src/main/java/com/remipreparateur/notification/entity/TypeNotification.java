@@ -17,6 +17,7 @@ public enum TypeNotification {
     SEANCE_MODIFIEE(Categorie.INFO, false),
     DOC_MEDICAL(Categorie.INFO, false),
     GENE_SUIVI(Categorie.INFO, false),
+    MATCH_PARTAGE(Categorie.INFO, false),
 
     // ── Messages humains ──
     MESSAGE_STAFF(Categorie.MESSAGE, false),

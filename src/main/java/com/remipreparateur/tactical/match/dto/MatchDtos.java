@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,7 +24,8 @@ public final class MatchDtos {
             boolean domicile,
             String resultat,
             String score,
-            boolean gpsLie) {}
+            boolean gpsLie,
+            boolean publie) {}
 
     // ── Détail complet ──
     public record MatchResponse(
@@ -35,6 +37,16 @@ public final class MatchDtos {
             String competition,
             boolean domicile,
             String consignes,
+            // Logistique
+            String lieuRdv,
+            LocalTime heureRdv,
+            LocalTime heureMatch,
+            String couleurMaillot,
+            String infosLogistiques,
+            // Publication
+            boolean publie,
+            LocalDateTime publieAt,
+            boolean compoVisible,
             String resultat,
             String score,
             String notesDebrief,
@@ -42,6 +54,7 @@ public final class MatchDtos {
             List<SchemaResponse> schemas,
             List<CompoItemResponse> compo,
             List<SurveilleResponse> surveilles,
+            List<UUID> suspendus,
             LocalDateTime updatedAt) {}
 
     // ── Création / mise à jour ──
@@ -51,13 +64,27 @@ public final class MatchDtos {
             String competition,
             boolean domicile) {}
 
-    /** Bloc AVANT (prépa) : infos de match + consignes. */
+    /** Bloc AVANT (prépa) : infos de match + consignes + logistique. */
     public record MatchInfosRequest(
             @NotBlank String adversaire,
             LocalDate dateMatch,
             String competition,
             boolean domicile,
-            String consignes) {}
+            String consignes,
+            String lieuRdv,
+            LocalTime heureRdv,
+            LocalTime heureMatch,
+            String couleurMaillot,
+            String infosLogistiques) {}
+
+    /** Publication vers les joueurs + réglage de visibilité de la compo. */
+    public record PublicationRequest(
+            boolean publie,
+            boolean compoVisible) {}
+
+    /** Liste des joueurs suspendus pour ce match (remplace l'existant). */
+    public record SuspendusRequest(
+            List<UUID> joueurIds) {}
 
     /** Bloc APRÈS (débrief) : résultat, score, notes. */
     public record MatchDebriefRequest(
@@ -83,7 +110,8 @@ public final class MatchDtos {
             @NotNull UUID joueurId,
             BigDecimal x,
             BigDecimal y,
-            String statut) {}
+            String statut,
+            String consigne) {}
 
     public record CompoUpdateRequest(
             @NotNull List<CompoItemRequest> placements) {}
@@ -95,7 +123,8 @@ public final class MatchDtos {
             String postePrincipal,
             BigDecimal x,
             BigDecimal y,
-            String statut) {}
+            String statut,
+            String consigne) {}
 
     // ── Joueurs à surveiller ──
     public record SurveilleRequest(
@@ -143,4 +172,45 @@ public final class MatchDtos {
             BigDecimal distanceSprint24kmhM,
             Short nbSprints24kmh,
             BigDecimal vitesseMaxKmh) {}
+
+    // ════════════ Lecture côté JOUEUR (PWA, matchs publiés) ════════════
+
+    /** Carte d'un match publié, vue joueur. */
+    public record MatchJoueurResume(
+            UUID id,
+            String adversaire,
+            LocalDate dateMatch,
+            LocalTime heureMatch,
+            String competition,
+            boolean domicile,
+            String monStatut) {}   // null = non convoqué
+
+    /** Identité minimale d'un joueur (non convoqués affichés au joueur si compo complète). */
+    public record NomJoueur(
+            UUID joueurId,
+            String nom,
+            String prenom,
+            String postePrincipal) {}
+
+    /** Détail d'un match publié, vue joueur (lecture seule). */
+    public record MatchJoueurDetail(
+            UUID id,
+            String adversaire,
+            String monEquipeNom,               // nom du club (équipe du joueur), pour le résumé VS
+            LocalDate dateMatch,
+            LocalTime heureMatch,
+            String competition,
+            boolean domicile,
+            String lieuRdv,
+            LocalTime heureRdv,
+            String couleurMaillot,
+            String infosLogistiques,
+            String consignes,
+            String monStatut,                  // null = non convoqué
+            String maConsigne,                 // consigne perso ; null → le joueur lit les consignes d'équipe
+            boolean compoVisible,
+            List<CompoItemResponse> compo,     // positions masquées (x=y=0) si compo non visible
+            List<NomJoueur> nonConvoques,      // peuplé seulement si compo visible
+            List<SchemaResponse> schemas,
+            List<SurveilleResponse> surveilles) {}
 }

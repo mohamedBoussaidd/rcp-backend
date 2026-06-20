@@ -36,4 +36,8 @@ public class MatchCompo {
 
     @Column(name = "statut", nullable = false)
     private String statut = "TITULAIRE";
+
+    /** Consigne individuelle affichée à ce joueur dans sa PWA (sinon il voit les consignes d'équipe). */
+    @Column(name = "consigne", columnDefinition = "text")
+    private String consigne;
 }

@@ -76,11 +76,30 @@ public class MatchController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── Publication vers les joueurs ──
+
+    @PutMapping("/{id}/publier")
+    public MatchResponse publier(@PathVariable UUID id, @RequestBody PublicationRequest req) {
+        return matchService.publier(id, req);
+    }
+
     // ── Compo ──
 
     @PutMapping("/{id}/compo")
     public MatchResponse enregistrerCompo(@PathVariable UUID id, @Valid @RequestBody CompoUpdateRequest req) {
         return matchService.enregistrerCompo(id, req);
+    }
+
+    /** Joueurs suspendus pour ce match (remplace la liste). */
+    @PutMapping("/{id}/suspendus")
+    public MatchResponse definirSuspendus(@PathVariable UUID id, @RequestBody SuspendusRequest req) {
+        return matchService.definirSuspendus(id, req);
+    }
+
+    /** Compo du match précédent, pour la reprendre dans la compo courante. */
+    @GetMapping("/{id}/compo-dernier-match")
+    public List<CompoItemResponse> compoDernierMatch(@PathVariable UUID id) {
+        return matchService.compoDernierMatch(id);
     }
 
     // ── Joueurs à surveiller ──

@@ -6,6 +6,9 @@ import com.remipreparateur.joueur.dto.EspaceJoueurDtos.MaPeseeResponse;
 import com.remipreparateur.performance.gps.dto.GpsHistoriqueDto;
 import com.remipreparateur.medical.conseil.dto.ConseilDtos.ConseilResponse;
 import com.remipreparateur.medical.conseil.service.ConseilService;
+import com.remipreparateur.tactical.match.dto.MatchDtos.MatchJoueurResume;
+import com.remipreparateur.tactical.match.dto.MatchDtos.MatchJoueurDetail;
+import com.remipreparateur.tactical.match.service.MatchService;
 import com.remipreparateur.performance.rpe.dto.RpeDtos.RpeRequest;
 import com.remipreparateur.performance.rpe.dto.RpeDtos.RpeResponse;
 import com.remipreparateur.medical.wellness.dto.WellnessDtos.WellnessRequest;
@@ -57,6 +60,7 @@ public class EspaceJoueurController {
     private final RpeService rpeService;
     private final BlessureSuiviService blessureSuiviService;
     private final ConseilService conseilService;
+    private final MatchService matchService;
     private final ScopeResolver scopeResolver;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
@@ -68,6 +72,7 @@ public class EspaceJoueurController {
                                   RpeService rpeService,
                                   BlessureSuiviService blessureSuiviService,
                                   ConseilService conseilService,
+                                  MatchService matchService,
                                   ScopeResolver scopeResolver) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
@@ -78,6 +83,7 @@ public class EspaceJoueurController {
         this.rpeService = rpeService;
         this.blessureSuiviService = blessureSuiviService;
         this.conseilService = conseilService;
+        this.matchService = matchService;
         this.scopeResolver = scopeResolver;
     }
 
@@ -165,6 +171,20 @@ public class EspaceJoueurController {
     @GetMapping("/conseils")
     public List<ConseilResponse> mesConseils() {
         return conseilService.listerPourJoueur(monJoueurId());
+    }
+
+    // ──────────────────────────── Matchs partagés (lecture seule) ────────────────────────────
+
+    /** Matchs publiés de l'équipe du joueur. */
+    @GetMapping("/matchs")
+    public List<MatchJoueurResume> mesMatchs() {
+        return matchService.listerPourJoueur(monJoueurId());
+    }
+
+    /** Détail d'un match publié (consignes, ma consigne perso, mon statut, compo selon réglage staff). */
+    @GetMapping("/matchs/{id}")
+    public MatchJoueurDetail mesMatchDetail(@PathVariable UUID id) {
+        return matchService.detailPourJoueur(monJoueurId(), id);
     }
 
     /** joueurId du compte connecte, ou 409 si le compte n'est pas rattache a une fiche. */
