@@ -153,6 +153,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/matchs/**").hasAuthority("matchs:read")
                         .requestMatchers("/api/matchs/**").hasAuthority("matchs:write")
 
+                        // Diaporamas : lecture / écriture ; suppression élargie au modérateur (règle créateur dans le service)
+                        .requestMatchers(HttpMethod.GET, "/api/diaporamas/**").hasAuthority("diaporama:read")
+                        .requestMatchers(HttpMethod.DELETE, "/api/diaporamas/**").hasAnyAuthority("diaporama:write", "diaporama:manage")
+                        .requestMatchers("/api/diaporamas/**").hasAuthority("diaporama:write")
+
                         // Configuration : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAuthority("configuration:read")
                         .requestMatchers("/api/configuration/**").hasAuthority("configuration:write")

@@ -56,6 +56,9 @@ public enum Permission {
     PLANDEJEU_WRITE("plandejeu:write", "Tactique & Match", "Éditer le plan de jeu"),
     MATCHS_READ("matchs:read", "Tactique & Match", "Voir les matchs"),
     MATCHS_WRITE("matchs:write", "Tactique & Match", "Gérer les matchs"),
+    DIAPORAMA_READ("diaporama:read", "Tactique & Match", "Voir les diaporamas"),
+    DIAPORAMA_WRITE("diaporama:write", "Tactique & Match", "Créer / éditer ses diaporamas"),
+    DIAPORAMA_MANAGE("diaporama:manage", "Tactique & Match", "Supprimer / modérer toute diapo du club"),
 
     // ── Paramètres & Notifications ──────────────────────────────────
     CONFIGURATION_READ("configuration:read", "Paramètres & Notifications", "Voir la configuration"),
