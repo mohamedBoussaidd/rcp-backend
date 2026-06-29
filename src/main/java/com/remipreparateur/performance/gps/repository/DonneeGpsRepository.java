@@ -11,6 +11,7 @@ import java.util.UUID;
 @Repository
 public interface DonneeGpsRepository extends JpaRepository<DonneeGps, UUID> {
     List<DonneeGps> findBySeanceId(UUID seanceId);
+    boolean existsBySeanceId(UUID seanceId);
     void deleteBySeanceId(UUID seanceId);
     List<DonneeGps> findByJoueurId(UUID joueurId);
     List<DonneeGps> findByJoueurIdOrderBySeanceDateDesc(UUID joueurId);

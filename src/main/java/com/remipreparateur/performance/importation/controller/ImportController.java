@@ -175,8 +175,9 @@ public class ImportController {
                 inseres++;
             }
 
-            // Marquer la séance comme réalisée
-            if (!"REALISEE".equals(seance.getStatut())) {
+            // Marquer la séance comme réalisée (uniquement si elle a eu lieu : jour J ou passé).
+            if (!"REALISEE".equals(seance.getStatut())
+                    && seance.getDate() != null && !seance.getDate().isAfter(LocalDate.now())) {
                 seance.setStatut("REALISEE");
                 seanceRepository.save(seance);
             }
@@ -220,14 +221,17 @@ public class ImportController {
                             Seance s = new Seance();
                             s.setDate(date);
                             s.setTypeSeance(typeSeance);
-                            s.setStatut("REALISEE");
+                            if (!date.isAfter(LocalDate.now())) s.setStatut("REALISEE");
                             return s;
                         });
             } else {
                 return ResponseEntity.badRequest().body(Map.of("error", "Paramètre seanceId ou date+typeSeance requis"));
             }
 
-            if (!"REALISEE".equals(seanceTrouvee.getStatut())) seanceTrouvee.setStatut("REALISEE");
+            if (!"REALISEE".equals(seanceTrouvee.getStatut())
+                    && seanceTrouvee.getDate() != null && !seanceTrouvee.getDate().isAfter(LocalDate.now())) {
+                seanceTrouvee.setStatut("REALISEE");
+            }
             final Seance seance = seanceRepository.save(seanceTrouvee);
 
             Workbook workbook = new XSSFWorkbook(file.getInputStream());

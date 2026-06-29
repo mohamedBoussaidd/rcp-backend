@@ -62,6 +62,15 @@ public class SeanceController {
         }
     }
 
+    @PatchMapping("/{id}/devalider")
+    public ResponseEntity<Seance> annulerRealisation(@PathVariable UUID id) {
+        try {
+            return ResponseEntity.ok(seanceService.annulerRealisation(id));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     @GetMapping("/{id}/donnees")
     public ResponseEntity<List<DonneeGpsDto>> getDonneesGps(@PathVariable UUID id) {
         return seanceService.findById(id)

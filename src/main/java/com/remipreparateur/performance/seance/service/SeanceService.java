@@ -109,7 +109,30 @@ public class SeanceService {
         Seance s = seanceRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Séance introuvable : " + id));
         scopeResolver.verifieAcces(s.getEquipeId());
+        // Une séance n'est "réalisée" qu'à partir du jour même (jour J ou passé) ; jamais une séance future.
+        if (s.getDate() != null && s.getDate().isAfter(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de marquer réalisée une séance future");
+        }
         s.setStatut("REALISEE");
+        s.setTypeSeance((TypeSeance) Hibernate.unproxy(s.getTypeSeance()));
+        return seanceRepository.save(s);
+    }
+
+    /** Retour arrière : repasse une séance réalisée en PLANIFIEE. Bloqué si des données GPS sont attachées. */
+    public Seance annulerRealisation(UUID id) {
+        Seance s = seanceRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Séance introuvable : " + id));
+        scopeResolver.verifieAcces(s.getEquipeId());
+        if (!"REALISEE".equals(s.getStatut())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Seule une séance réalisée peut être dé-réalisée");
+        }
+        if (donneeGpsRepository.existsBySeanceId(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Supprime d'abord les données GPS de cette séance");
+        }
+        s.setStatut("PLANIFIEE");
         s.setTypeSeance((TypeSeance) Hibernate.unproxy(s.getTypeSeance()));
         return seanceRepository.save(s);
     }
