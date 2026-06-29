@@ -65,8 +65,13 @@ public enum Permission {
     CONFIGURATION_WRITE("configuration:write", "Paramètres & Notifications", "Modifier la configuration"),
     NOTIFICATIONS_CONFIG("notifications:config", "Paramètres & Notifications", "Configurer les notifications"),
 
+    // ── Saison ──────────────────────────────────────────────────────
+    SAISON_READ("saison:read", "Saison", "Voir la saison et les périodes"),
+    SAISON_MANAGE("saison:manage", "Saison", "Ouvrir / clôturer la saison, gérer les périodes et l'effectif"),
+
     // ── Gestion du club ─────────────────────────────────────────────
-    CLUB_MANAGE("club:manage", "Gestion du club", "Gérer le club (membres, équipes, rôles)");
+    MEMBRES_MANAGE("membres:manage", "Gestion du club", "Gérer les comptes (staff & joueurs) de son périmètre"),
+    CLUB_MANAGE("club:manage", "Gestion du club", "Gérer le club (équipes, rôles, tous les membres)");
 
     private final String code;
     private final String module;

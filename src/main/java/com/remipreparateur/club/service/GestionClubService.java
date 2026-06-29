@@ -10,7 +10,9 @@ import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
 import com.remipreparateur.auth.rbac.AffectationRole;
 import com.remipreparateur.auth.rbac.AffectationRoleRepository;
+import com.remipreparateur.auth.rbac.Permission;
 import com.remipreparateur.auth.rbac.RoleApplicatifRepository;
+import com.remipreparateur.auth.rbac.RolePermissionRepository;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.shared.security.ContexteActif;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +47,7 @@ public class GestionClubService {
     private final PasswordEncoder passwordEncoder;
     private final RoleApplicatifRepository roleRepository;
     private final AffectationRoleRepository affectationRepository;
+    private final RolePermissionRepository rolePermissionRepository;
 
     public GestionClubService(EquipeRepository equipeRepository,
                               UtilisateurRepository utilisateurRepository,
@@ -51,7 +55,8 @@ public class GestionClubService {
                               JoueurRepository joueurRepository,
                               PasswordEncoder passwordEncoder,
                               RoleApplicatifRepository roleRepository,
-                              AffectationRoleRepository affectationRepository) {
+                              AffectationRoleRepository affectationRepository,
+                              RolePermissionRepository rolePermissionRepository) {
         this.equipeRepository = equipeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.clubRepository = clubRepository;
@@ -59,18 +64,29 @@ public class GestionClubService {
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
         this.affectationRepository = affectationRepository;
+        this.rolePermissionRepository = rolePermissionRepository;
     }
 
     // ── Vue agregee ──
-    public MonClubResponse monClub(Utilisateur president) {
-        UUID clubId = exigeClub(president);
+    public MonClubResponse monClub(Utilisateur acteur) {
+        UUID clubId = exigeClub(acteur);
         Club club = clubRepository.findById(clubId).orElse(null);
+        Autorite a = autoriteDe(acteur, clubId);
+        List<EquipeResponse> equipes = listerEquipes(clubId);
+        List<MembreResponse> membres = listerMembres(clubId);
+        // Acteur scopé à une/des équipe(s) (ex. entraîneur) : ne voit que SON périmètre.
+        if (!a.clubWide()) {
+            equipes = equipes.stream().filter(e -> a.equipes().contains(e.id())).toList();
+            membres = membres.stream()
+                    .filter(m -> m.equipeId() != null && a.equipes().contains(m.equipeId()))
+                    .toList();
+        }
         return new MonClubResponse(
                 clubId,
                 club != null ? club.getNom() : null,
                 club != null ? club.getLogo() : null,
-                listerEquipes(clubId),
-                listerMembres(clubId));
+                equipes,
+                membres);
     }
 
     // ── Equipes ──
@@ -149,6 +165,9 @@ public class GestionClubService {
             if (fiche.getEquipeId() != null) m.setEquipeId(fiche.getEquipeId());
         }
 
+        // Hiérarchie + périmètre : on ne crée qu'un membre de rang inférieur, dans son équipe.
+        verifiePeutGerer(president, niveauRole(role), m.getEquipeId(), clubId);
+
         m = utilisateurRepository.save(m);
         synchroniserAffectationPrincipale(m, clubId);
         return toMembreResponse(m);
@@ -164,6 +183,10 @@ public class GestionClubService {
     @Transactional
     public MembreResponse modifierMembre(Utilisateur president, UUID membreId, MembreUpdateRequest req) {
         Utilisateur m = chargeMembreDuClub(president, membreId);
+        UUID clubId = m.getClubId();
+        // Droit de gérer la cible TELLE QU'ELLE EST aujourd'hui.
+        verifiePeutGerer(president, niveauDe(m, clubId), m.getEquipeId(), clubId);
+
         Role ancienRole = m.getRole();
         UUID ancienneEquipe = m.getEquipeId();
 
@@ -174,9 +197,11 @@ public class GestionClubService {
             m.setEquipeId(req.equipeId());
         }
         if (req.actif() != null) m.setActif(req.actif());
+
+        // Droit sur la cible APRÈS modif (interdit toute élévation de rang / sortie de périmètre).
+        verifiePeutGerer(president, niveauRole(m.getRole()), m.getEquipeId(), clubId);
         m = utilisateurRepository.save(m);
 
-        UUID clubId = m.getClubId();
         if (m.getRole() != ancienRole) {
             // Changement de rôle « principal » → on réinitialise les affectations à ce seul rôle
             // (le cumul de rôles se gère ensuite dans l'onglet « Rôles & accès »).
@@ -191,6 +216,7 @@ public class GestionClubService {
     @Transactional
     public void supprimerMembre(Utilisateur president, UUID membreId) {
         Utilisateur m = chargeMembreDuClub(president, membreId);
+        verifiePeutGerer(president, niveauDe(m, m.getClubId()), m.getEquipeId(), m.getClubId());
         utilisateurRepository.deleteById(m.getId());
     }
 
@@ -208,6 +234,8 @@ public class GestionClubService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fiche sans equipe");
         }
         verifieEquipeDuClub(fiche.getEquipeId(), clubId);
+        // La fiche (donc l'équipe résultante du compte) doit être dans le périmètre de l'acteur.
+        verifiePeutGerer(acteur, niveauRole(Role.JOUEUR), fiche.getEquipeId(), clubId);
         if (utilisateurRepository.existsByJoueurIdAndIdNot(joueurId, membreId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Fiche deja reliee a un autre compte");
         }
@@ -219,6 +247,7 @@ public class GestionClubService {
     @Transactional
     public MembreResponse delierFiche(Utilisateur acteur, UUID membreId) {
         Utilisateur m = chargeMembreDuClub(acteur, membreId);
+        verifiePeutGerer(acteur, niveauDe(m, m.getClubId()), m.getEquipeId(), m.getClubId());
         m.setJoueurId(null);
         return toMembreResponse(utilisateurRepository.save(m));
     }
@@ -255,6 +284,67 @@ public class GestionClubService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Equipe introuvable"));
         if (!e.getClubId().equals(clubId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Equipe hors de votre club");
+        }
+    }
+
+    // ── Hiérarchie & périmètre de gestion des membres ──
+
+    /**
+     * Autorité de gestion d'un utilisateur sur les MEMBRES, déduite de ses affectations RBAC
+     * (permission {@code membres:manage}) dans le club actif :
+     *   niveau 4 = président / super-admin · 3 = chef (membres:manage club-wide) ·
+     *   2 = staff scopé équipe (entraîneur) · 1 = aucun pouvoir de gestion (joueur, prépa, médical…).
+     */
+    private record Autorite(int niveau, boolean clubWide, Set<UUID> equipes) {}
+
+    private Autorite autoriteDe(Utilisateur u, UUID clubId) {
+        if (u.getRole() == Role.SUPER_ADMIN || u.getRole() == Role.PRESIDENT) {
+            return new Autorite(4, true, Set.of());
+        }
+        boolean clubWide = false;
+        Set<UUID> equipes = new HashSet<>();
+        for (AffectationRole a : affectationRepository.findByUserIdAndClubId(u.getId(), clubId)) {
+            if (rolePermissionRepository.existsByRoleIdAndPermission(
+                    a.getRoleId(), Permission.MEMBRES_MANAGE.getCode())) {
+                if (a.getEquipeId() == null) clubWide = true;
+                else equipes.add(a.getEquipeId());
+            }
+        }
+        if (clubWide) return new Autorite(3, true, Set.of());
+        if (!equipes.isEmpty()) return new Autorite(2, false, equipes);
+        return new Autorite(1, false, Set.of());
+    }
+
+    /** Niveau hiérarchique d'un membre EXISTANT (selon ses affectations effectives). */
+    private int niveauDe(Utilisateur u, UUID clubId) {
+        return autoriteDe(u, clubId).niveau();
+    }
+
+    /** Niveau d'un membre selon le rôle « principal » visé (création / changement de rôle). */
+    private int niveauRole(Role r) {
+        return switch (r) {
+            case SUPER_ADMIN, PRESIDENT -> 4;
+            case ENTRAINEUR -> 2;                 // l'entraîneur gère les membres de son équipe
+            default -> 1;                         // PREPARATEUR, MEDICAL, ADMINISTRATIF, JOUEUR
+        };
+    }
+
+    /**
+     * Autorise une action de gestion sur un membre de niveau {@code cibleNiveau} appartenant à
+     * {@code cibleEquipeId} : l'acteur doit avoir la gestion des membres, un rang STRICTEMENT
+     * supérieur à la cible, et le couvrir dans son périmètre (club entier ou équipe précise).
+     */
+    private void verifiePeutGerer(Utilisateur acteur, int cibleNiveau, UUID cibleEquipeId, UUID clubId) {
+        Autorite a = autoriteDe(acteur, clubId);
+        if (a.niveau() < 2) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vous n'avez pas la gestion des membres");
+        }
+        if (a.niveau() <= cibleNiveau) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Action non autorisée sur un membre de rang égal ou supérieur");
+        }
+        if (!a.clubWide() && (cibleEquipeId == null || !a.equipes().contains(cibleEquipeId))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Membre hors de votre équipe");
         }
     }
 

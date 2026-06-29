@@ -130,4 +130,21 @@ public class ScopeResolver {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ressource hors de votre perimetre");
         }
     }
+
+    /** Le club donne est-il dans la portee de l'utilisateur (une de ses equipes y appartient) ? */
+    public boolean peutAccederClub(UUID clubId) {
+        if (clubId == null) return false;
+        Scope s = resolve();
+        if (s.all()) return true;
+        if (s.none()) return false;
+        return equipeRepository.findAllById(s.equipeIds()).stream()
+                .anyMatch(e -> clubId.equals(e.getClubId()));
+    }
+
+    /** Verifie l'acces a une ressource de club ; 404 si hors perimetre. */
+    public void verifieAccesClub(UUID clubId) {
+        if (!peutAccederClub(clubId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ressource hors de votre perimetre");
+        }
+    }
 }

@@ -101,6 +101,37 @@ public class BlessureService {
         b.setRecidive(Boolean.TRUE.equals(req.recidive()));
         b.setCommentaire(req.commentaire());
         b.setNotesMedicales(req.notesMedicales());
+        b.setRetourConfirme(true);   // toute saisie/édition manuelle vaut confirmation
+    }
+
+    /**
+     * Réconciliation quotidienne : solde AUTOMATIQUEMENT les blessures dont la date de
+     * retour prévue est dépassée (statut → RETABLI, date de retour effectif = date prévue),
+     * remet le joueur disponible, mais marque {@code retourConfirme = false} pour que le
+     * staff confirme ou prolonge. Renvoie les blessures soldées (pour notification).
+     */
+    public List<Blessure> cloturerRetoursDepasses() {
+        List<Blessure> depasses = blessureRepository.findRetoursDepasses(LocalDate.now());
+        for (Blessure b : depasses) {
+            b.setStatut("RETABLI");
+            if (b.getDateRetourEffectif() == null) {
+                b.setDateRetourEffectif(b.getDateRetourPrevue());
+            }
+            b.setRetourConfirme(false);
+            blessureRepository.save(b);
+            joueurRepository.findById(b.getJoueurId()).ifPresent(this::synchroniserStatutJoueur);
+        }
+        return depasses;
+    }
+
+    /** Confirmation par le staff d'un retour soldé automatiquement. */
+    public BlessureResponse confirmerRetour(UUID id) {
+        Blessure b = blessureRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable"));
+        scopeResolver.verifieAcces(b.getEquipeId());
+        b.setRetourConfirme(true);
+        Joueur joueur = joueurRepository.findById(b.getJoueurId()).orElse(null);
+        return toResponse(blessureRepository.save(b), joueur);
     }
 
     /**
@@ -130,6 +161,6 @@ public class BlessureService {
                 b.getDateBlessure(), b.getDateRetourEffectif(), b.getDateRetourPrevue(), b.getStatut(),
                 b.getTypeBlessure(), b.getZoneCorporelle(), b.getCote(),
                 b.getGravite(), b.getCauseProbable(), b.isRecidive(),
-                b.getCommentaire(), b.getNotesMedicales(), enCours);
+                b.getCommentaire(), b.getNotesMedicales(), enCours, b.isRetourConfirme());
     }
 }

@@ -39,4 +39,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     boolean existsByDestinataireUserIdAndTypeAndCreatedAtAfter(
             UUID destinataireUserId, TypeNotification type, LocalDateTime depuis);
+
+    /** Une notif de ce type a-t-elle déjà été émise pour cette équipe depuis {@code depuis} ? */
+    boolean existsByEquipeIdAndTypeAndCreatedAtAfter(
+            UUID equipeId, TypeNotification type, LocalDateTime depuis);
 }

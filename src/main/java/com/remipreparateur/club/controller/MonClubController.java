@@ -12,14 +12,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 /**
- * Gestion d'un club : équipes + membres. Les membres (création / liaison fiche)
- * sont ouverts au staff (entraîneur, préparateur) et au super-admin (sur le club
- * « entré » via le contexte) ; la gestion des équipes reste réservée au président
- * et au super-admin.
+ * Gestion d'un club : équipes + membres.
+ *   - Membres (création / édition / suppression / liaison fiche) : permission {@code membres:manage}
+ *     (président & entraîneur en chef = club entier ; entraîneur = sa seule équipe). Le service
+ *     applique en plus la hiérarchie + le périmètre (cf. GestionClubService).
+ *   - Équipes : permission {@code club:manage} (président, entraîneur en chef, super-admin).
  */
 @RestController
 @RequestMapping("/api")
-@PreAuthorize("hasAnyRole('PRESIDENT','ENTRAINEUR','PREPARATEUR','SUPER_ADMIN') or hasAuthority('club:manage')")
+@PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('membres:manage') or hasAuthority('club:manage')")
 public class MonClubController {
 
     private final GestionClubService gestion;
@@ -37,19 +38,19 @@ public class MonClubController {
 
     // ── Equipes (président / super-admin uniquement) ──
     @PostMapping("/mon-club/equipes")
-    @PreAuthorize("hasAnyRole('PRESIDENT','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('club:manage')")
     public ResponseEntity<EquipeResponse> creerEquipe(@Valid @RequestBody EquipeRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(gestion.creerEquipe(currentUser.current(), req));
     }
 
     @PutMapping("/equipes/{id}")
-    @PreAuthorize("hasAnyRole('PRESIDENT','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('club:manage')")
     public EquipeResponse modifierEquipe(@PathVariable UUID id, @Valid @RequestBody EquipeRequest req) {
         return gestion.modifierEquipe(currentUser.current(), id, req);
     }
 
     @DeleteMapping("/equipes/{id}")
-    @PreAuthorize("hasAnyRole('PRESIDENT','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('club:manage')")
     public ResponseEntity<Void> supprimerEquipe(@PathVariable UUID id) {
         gestion.supprimerEquipe(currentUser.current(), id);
         return ResponseEntity.noContent().build();

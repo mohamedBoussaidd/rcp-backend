@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -41,6 +42,9 @@ public class AuthController {
             Utilisateur utilisateur = ((CustomUserDetails) authentication.getPrincipal()).getUtilisateur();
             String token = jwtService.generateToken(utilisateur);
             return ResponseEntity.ok(AuthResponse.of(token, utilisateur));
+        } catch (DisabledException e) {
+            // Compte désactivé (ex. joueur écarté de l'effectif de la saison → accès PWA coupé).
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Compte désactivé — contactez votre club");
         } catch (BadCredentialsException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Email ou mot de passe incorrect");
         }

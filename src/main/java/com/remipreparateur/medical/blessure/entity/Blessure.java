@@ -65,6 +65,14 @@ public class Blessure {
     @Column(name = "equipe_id")
     private UUID equipeId;
 
+    /**
+     * Vrai pour les retours saisis/validés par le staff. Mis à false quand le scheduler
+     * solde AUTOMATIQUEMENT une blessure dont la date de retour prévue est dépassée :
+     * le joueur redevient dispo mais le staff doit confirmer (ou prolonger).
+     */
+    @Column(name = "retour_confirme", nullable = false)
+    private boolean retourConfirme = true;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

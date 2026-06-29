@@ -42,5 +42,6 @@ public final class BlessureDtos {
             boolean recidive,
             String commentaire,
             String notesMedicales,
-            boolean enCours) {}
+            boolean enCours,
+            boolean retourConfirme) {}
 }

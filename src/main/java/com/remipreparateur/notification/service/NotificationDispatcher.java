@@ -47,6 +47,18 @@ public class NotificationDispatcher {
         return n;
     }
 
+    /** Diffuse à des rôles staff EXPLICITES de l'équipe (indépendant du routage configurable). */
+    public int versStaffRoles(UUID equipeId, List<Role> roles, TypeNotification type, String titre,
+                              String corps, String lien, Priorite priorite) {
+        if (roles == null || roles.isEmpty()) return 0;
+        int n = 0;
+        for (Utilisateur u : utilisateurRepository.findByEquipeIdAndRoleIn(equipeId, roles)) {
+            Notification notif = base(equipeId, u.getId(), type, titre, corps, lien, priorite);
+            if (notificationService.delivrer(notif).isPresent()) n++;
+        }
+        return n;
+    }
+
     /** Notifie un joueur (via son compte) ; no-op si la fiche n'est reliée à aucun compte. */
     public boolean versJoueurFiche(UUID equipeId, UUID joueurId, TypeNotification type,
                                    String titre, String corps, String lien, Priorite priorite,

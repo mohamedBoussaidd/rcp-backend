@@ -4,8 +4,11 @@ import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
 import com.remipreparateur.club.entity.Equipe;
 import com.remipreparateur.club.repository.EquipeRepository;
+import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.medical.blessure.entity.Blessure;
+import com.remipreparateur.medical.blessure.service.BlessureService;
 import com.remipreparateur.medical.wellness.repository.WellnessQuotidienRepository;
 import com.remipreparateur.notification.entity.NotifConfigEquipe;
 import com.remipreparateur.notification.entity.Priorite;
@@ -45,6 +48,7 @@ public class NotificationScheduler {
     private final RpeSeanceRepository rpeRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationRepository notificationRepository;
+    private final BlessureService blessureService;
 
     public NotificationScheduler(EquipeRepository equipeRepository, NotifConfigService configService,
                                  DigestService digestService, NotificationDispatcher dispatcher,
@@ -52,7 +56,8 @@ public class NotificationScheduler {
                                  WellnessQuotidienRepository wellnessRepository,
                                  SeanceRepository seanceRepository, RpeSeanceRepository rpeRepository,
                                  UtilisateurRepository utilisateurRepository,
-                                 NotificationRepository notificationRepository) {
+                                 NotificationRepository notificationRepository,
+                                 BlessureService blessureService) {
         this.equipeRepository = equipeRepository;
         this.configService = configService;
         this.digestService = digestService;
@@ -63,7 +68,37 @@ public class NotificationScheduler {
         this.rpeRepository = rpeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.notificationRepository = notificationRepository;
+        this.blessureService = blessureService;
     }
+
+    /**
+     * Réconciliation quotidienne des blessures (08:00) : solde celles dont la date de retour
+     * prévue est dépassée (joueur de nouveau disponible) et notifie le staff médical +
+     * préparateur pour confirmation/prolongation. Cf. {@link BlessureService#cloturerRetoursDepasses()}.
+     */
+    @Scheduled(cron = "0 0 8 * * *")
+    public void reconcilierRetoursBlessure() {
+        try {
+            for (Blessure b : blessureService.cloturerRetoursDepasses()) {
+                if (b.getEquipeId() == null) continue;
+                Joueur j = joueurRepository.findById(b.getJoueurId()).orElse(null);
+                String nom = j != null ? (orVide(j.getPrenom()) + " " + orVide(j.getNom())).trim() : "Un joueur";
+                if (nom.isBlank()) nom = "Un joueur";
+                dispatcher.versStaffRoles(b.getEquipeId(),
+                        List.of(Role.MEDICAL, Role.PREPARATEUR),
+                        TypeNotification.RETOUR_BLESSURE_A_CONFIRMER,
+                        "Retour à confirmer : " + nom,
+                        "La date de retour prévue de " + nom + " est atteinte. Le joueur est de nouveau "
+                                + "disponible — confirme son retour ou prolonge l'indisponibilité.",
+                        "/medical",
+                        Priorite.NORMALE);
+            }
+        } catch (Exception e) {
+            log.warn("Réconciliation retours blessure : {}", e.getMessage());
+        }
+    }
+
+    private static String orVide(String s) { return s == null ? "" : s; }
 
     /** Tick minute : évalue chaque équipe. Cron à la seconde 0 de chaque minute. */
     @Scheduled(cron = "0 * * * * *")
@@ -77,6 +112,9 @@ public class NotificationScheduler {
             }
         }
     }
+
+    /** Heure du rappel staff « vérifier la semaine à venir » (dimanche). */
+    private static final LocalTime HEURE_VERIF_SEMAINE = LocalTime.of(18, 0);
 
     private void traiterEquipe(UUID equipeId, LocalTime now) {
         NotifConfigEquipe cfg = configService.getOrCreate(equipeId);
@@ -94,6 +132,40 @@ public class NotificationScheduler {
         if (cfg.isDigestActif() && estLHeure(now, cfg.getDigestSoirHeure())) {
             digestService.genererEtEnvoyer(cfg, "soir");
         }
+        // Rappel staff : dimanche en fin de journée, vérifier la semaine d'entraînement à venir.
+        if (LocalDate.now().getDayOfWeek() == java.time.DayOfWeek.SUNDAY
+                && estLHeure(now, HEURE_VERIF_SEMAINE)) {
+            verifSemaine(equipeId);
+        }
+    }
+
+    /**
+     * Notifie le préparateur ET l'entraîneur de l'équipe pour vérifier la semaine à venir
+     * (lundi → dimanche prochains). Deux cas : des séances sont posées (les vérifier) ou
+     * aucune (en poser). Dédoublonné par équipe sur la journée.
+     */
+    private void verifSemaine(UUID equipeId) {
+        LocalDateTime debutJour = LocalDate.now().atStartOfDay();
+        if (notificationRepository
+                .existsByEquipeIdAndTypeAndCreatedAtAfter(equipeId, TypeNotification.VERIF_SEMAINE, debutJour)) {
+            return;
+        }
+        LocalDate lundiProchain = LocalDate.now().plusDays(1);            // demain = lundi
+        LocalDate dimancheProchain = lundiProchain.plusDays(6);
+        boolean aSeances = !seanceRepository
+                .findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(
+                        lundiProchain, dimancheProchain, List.of(equipeId)).isEmpty();
+
+        String titre = aSeances ? "Vérifie la semaine à venir" : "Aucune séance posée";
+        String corps = aSeances
+                ? "Contrôle les séances de la semaine prochaine (types, durées, horaires) avant qu'elle ne démarre."
+                : "Aucune séance n'est posée pour la semaine prochaine. Pense à planifier l'entraînement.";
+
+        dispatcher.versStaffRoles(equipeId,
+                List.of(com.remipreparateur.auth.entity.Role.PREPARATEUR,
+                        com.remipreparateur.auth.entity.Role.ENTRAINEUR),
+                TypeNotification.VERIF_SEMAINE, titre, corps, "/planning-technique",
+                Priorite.NORMALE);
     }
 
     // ── Rappels joueur ──

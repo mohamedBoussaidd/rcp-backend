@@ -85,6 +85,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/seances/*/presence/**").hasAuthority("presence:write")
                         .requestMatchers("/api/seances/**").hasAuthority("seances:write")
 
+                        // Modèles de semaine (gabarits hebdo) : réutilise les droits séances
+                        .requestMatchers(HttpMethod.GET, "/api/modeles-semaine/**").hasAuthority("seances:read")
+                        .requestMatchers("/api/modeles-semaine/**").hasAuthority("seances:write")
+
+                        // Saisons (cadre temporel) + périodes + effectif de saison
+                        .requestMatchers(HttpMethod.GET, "/api/saisons/**").hasAuthority("saison:read")
+                        .requestMatchers("/api/saisons/**").hasAuthority("saison:manage")
+
                         // Catalogue types de séance : cibles paramétrables (écriture) ; lecture + prédictions IA
                         .requestMatchers(HttpMethod.PUT, "/api/type-seances/**").hasAuthority("typeseances:write")
                         .requestMatchers(HttpMethod.GET, "/api/type-seances/**", "/api/predictions/**").hasAuthority("predictions:read")

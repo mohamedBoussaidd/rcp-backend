@@ -45,4 +45,10 @@ public class BlessureController {
         blessureService.supprimer(id);
         return ResponseEntity.noContent().build();
     }
+
+    /** Confirme un retour soldé automatiquement par le scheduler (lève le « à confirmer »). */
+    @PostMapping("/{id}/confirmer-retour")
+    public BlessureResponse confirmerRetour(@PathVariable UUID id) {
+        return blessureService.confirmerRetour(id);
+    }
 }
