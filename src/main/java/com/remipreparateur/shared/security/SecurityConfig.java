@@ -80,6 +80,10 @@ public class SecurityConfig {
                         // plus du code. SUPER_ADMIN a toutes les permissions (bypass via le resolver).
                         // Le joueur lit SES séances via /api/moi/** (self-scope, hors de ce catalogue).
 
+                        // Historique de présence (page dédiée) : isolé sous /api/presence pour être
+                        // gardé par presence:write (et non seances:read qui couvre tout /api/seances).
+                        .requestMatchers("/api/presence/**").hasAuthority("presence:write")
+
                         // Séances unifiées (cadre + exercices) : lecture / présence / écriture
                         .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAuthority("seances:read")
                         .requestMatchers("/api/seances/*/presence/**").hasAuthority("presence:write")

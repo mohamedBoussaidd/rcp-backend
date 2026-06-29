@@ -55,6 +55,14 @@ public class NotificationProducer {
                 "Match partagé", corps, "/joueur/matchs", null, null, false));
     }
 
+    /** Absence/retard déclaré(e) par un joueur depuis la PWA (appel) → info au staff. */
+    public void absenceDeclaree(UUID equipeId, UUID joueurId, String joueurNom, String statutLabel, String quand) {
+        if (equipeId == null) return;
+        String corps = joueurNom + " se déclare " + statutLabel + (quand != null ? quand : "");
+        safe(() -> dispatcher.versStaff(equipeId, TypeNotification.ALERTE_STATUT,
+                "Présence : auto-déclaration", corps, "/dashboard", joueurId, Priorite.NORMALE));
+    }
+
     /** Changement de statut d'un joueur (indisponible…) → alerte au staff. */
     public void statutJoueurChange(UUID equipeId, UUID joueurId, String joueurNom, String statut) {
         if (equipeId == null) return;

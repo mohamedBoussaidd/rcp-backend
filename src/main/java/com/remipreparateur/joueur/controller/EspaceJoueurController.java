@@ -16,6 +16,10 @@ import com.remipreparateur.medical.wellness.dto.WellnessDtos.WellnessResponse;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.performance.seance.dto.SeanceDtos.ContenuSeance;
+import com.remipreparateur.performance.seance.dto.PresenceDtos.DeclarationPresence;
+import com.remipreparateur.performance.seance.dto.PresenceDtos.LignePresence;
+import com.remipreparateur.performance.seance.dto.PresenceDtos.MaDeclaration;
+import com.remipreparateur.performance.seance.service.PresenceService;
 import com.remipreparateur.performance.poids.repository.HistoriquePoidsRepository;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
@@ -61,6 +65,7 @@ public class EspaceJoueurController {
     private final BlessureSuiviService blessureSuiviService;
     private final ConseilService conseilService;
     private final MatchService matchService;
+    private final PresenceService presenceService;
     private final ScopeResolver scopeResolver;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
@@ -73,6 +78,7 @@ public class EspaceJoueurController {
                                   BlessureSuiviService blessureSuiviService,
                                   ConseilService conseilService,
                                   MatchService matchService,
+                                  PresenceService presenceService,
                                   ScopeResolver scopeResolver) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
@@ -84,6 +90,7 @@ public class EspaceJoueurController {
         this.blessureSuiviService = blessureSuiviService;
         this.conseilService = conseilService;
         this.matchService = matchService;
+        this.presenceService = presenceService;
         this.scopeResolver = scopeResolver;
     }
 
@@ -137,6 +144,24 @@ public class EspaceJoueurController {
                 .map(s -> { scopeResolver.verifieAcces(s.getEquipeId()); return s; })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
         return seanceService.getContenu(id);
+    }
+
+    /** Mes déclarations de présence déjà saisies (pour pré-remplir les boutons de la PWA). */
+    @GetMapping("/presences")
+    public List<MaDeclaration> mesDeclarations() {
+        return presenceService.mesDeclarations(monJoueurId());
+    }
+
+    /**
+     * Auto-déclaration de présence du joueur pour une séance de SON équipe (Présent / Absent +
+     * commentaire). Met à jour la feuille d'appel du staff (source JOUEUR) ; une absence notifie le staff.
+     */
+    @PostMapping("/seances/{id}/presence")
+    public LignePresence declarerPresence(@PathVariable UUID id, @RequestBody DeclarationPresence req) {
+        seanceService.findById(id)
+                .map(s -> { scopeResolver.verifieAcces(s.getEquipeId()); return s; })
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
+        return presenceService.declarerParJoueur(id, monJoueurId(), req);
     }
 
     // ──────────────────────────── Wellness (ressenti quotidien) ────────────────────────────

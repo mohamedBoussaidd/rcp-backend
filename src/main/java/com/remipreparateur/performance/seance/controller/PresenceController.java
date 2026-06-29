@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -14,6 +15,12 @@ import java.util.UUID;
 public class PresenceController {
 
     private final PresenceService presenceService;
+
+    /** Résumés chiffrés de l'appel de plusieurs séances (dashboard, pastille « X/Y dispo »). */
+    @GetMapping("/presence/resumes")
+    public ResponseEntity<List<ResumeAppel>> resumes(@RequestParam("ids") List<UUID> ids) {
+        return ResponseEntity.ok(presenceService.resumes(ids));
+    }
 
     /** Feuille de présence complète d'une séance (effectif + statuts). */
     @GetMapping("/{id}/presence")

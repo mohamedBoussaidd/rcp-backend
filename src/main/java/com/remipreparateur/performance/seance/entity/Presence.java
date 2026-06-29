@@ -32,6 +32,10 @@ public class Presence {
     @Column(name = "note")
     private String note;
 
+    /** Origine de la saisie : STAFF (appel) ou JOUEUR (auto-déclaration PWA). */
+    @Column(name = "source", nullable = false)
+    private String source = "STAFF";
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

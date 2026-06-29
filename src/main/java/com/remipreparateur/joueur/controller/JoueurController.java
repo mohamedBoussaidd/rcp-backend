@@ -2,6 +2,9 @@ package com.remipreparateur.joueur.controller;
 
 import com.remipreparateur.performance.gps.dto.GpsHistoriqueDto;
 import com.remipreparateur.performance.gps.dto.VitesseJoueurDto;
+import com.remipreparateur.performance.seance.dto.PresenceDtos.AssiduiteJoueur;
+import com.remipreparateur.performance.seance.dto.PresenceDtos.AssiduiteResume;
+import com.remipreparateur.performance.seance.service.PresenceService;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.joueur.service.JoueurService;
@@ -18,11 +21,24 @@ import java.util.UUID;
 public class JoueurController {
 
     private final JoueurService joueurService;
+    private final PresenceService presenceService;
     private final ScopeResolver scopeResolver;
 
     @GetMapping
     public List<Joueur> getAll() {
         return joueurService.findAll();
+    }
+
+    /** Assiduité (résumé léger) de tout l'effectif du périmètre — colonne triable de l'effectif. */
+    @GetMapping("/assiduite-equipe")
+    public List<AssiduiteResume> getAssiduiteEquipe() {
+        return presenceService.assiduiteEquipe();
+    }
+
+    /** Bilan d'assiduité du joueur sur la saison active (entraînements) : taux, compteurs, historique. */
+    @GetMapping("/{id}/assiduite")
+    public AssiduiteJoueur getAssiduite(@PathVariable UUID id) {
+        return presenceService.assiduite(id);   // scope vérifié dans le service
     }
 
     @GetMapping("/{id}")
