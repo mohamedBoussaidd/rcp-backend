@@ -20,6 +20,7 @@ public final class RbacDtos {
             String code,
             String libelle,
             boolean systeme,
+            boolean global,         // rôle sans club (système prédéfini OU global custom) — non éditable par un président
             List<String> permissions,
             long nbAffectations) {}
 

@@ -16,4 +16,7 @@ public interface RoleApplicatifRepository extends JpaRepository<RoleApplicatif, 
 
     /** Rôles custom d'un club. */
     List<RoleApplicatif> findByClubId(UUID clubId);
+
+    /** Rôles globaux custom (super-admin) : non-système, sans club, réutilisables par tous. */
+    List<RoleApplicatif> findBySystemeFalseAndClubIdIsNull();
 }

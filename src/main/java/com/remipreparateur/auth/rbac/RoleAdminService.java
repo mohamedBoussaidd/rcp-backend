@@ -64,10 +64,11 @@ public class RoleAdminService {
 
     // ─────────────────────────── Rôles ───────────────────────────
 
-    /** Rôles disponibles dans le club actif : système (communs) + custom du club. */
+    /** Rôles disponibles dans le club actif : système (communs) + globaux custom + custom du club. */
     public List<RoleDto> listerRoles(Utilisateur acteur) {
         UUID clubId = exigeClub(acteur);
         List<RoleApplicatif> roles = new ArrayList<>(roleRepo.findBySystemeTrue());
+        roles.addAll(roleRepo.findBySystemeFalseAndClubIdIsNull());  // globaux custom (gérés par le super-admin)
         roles.addAll(roleRepo.findByClubId(clubId));
         return roles.stream().map(this::toRoleDto).toList();
     }
@@ -107,6 +108,80 @@ public class RoleAdminService {
         }
         rolePermRepo.deleteByRoleId(r.getId());
         roleRepo.delete(r);
+    }
+
+    // ─────────────────────────── Rôles GLOBAUX (super-admin) ───────────────────────────
+    // Hors de tout club : éditer les permissions des rôles PRÉDÉFINIS et gérer des rôles
+    // globaux custom réutilisables par tous les clubs. Réservé au SUPER_ADMIN (bypass « dieu »),
+    // donc pas d'anti-escalade ni d'exigence de club. Les présidents ne peuvent que les ATTRIBUER.
+
+    /** Tous les rôles globaux (sans club) : prédéfinis système + globaux custom. */
+    public List<RoleDto> listerGlobaux() {
+        List<RoleApplicatif> roles = new ArrayList<>(roleRepo.findBySystemeTrue());
+        roles.addAll(roleRepo.findBySystemeFalseAndClubIdIsNull());
+        return roles.stream().map(this::toRoleDto).toList();
+    }
+
+    @Transactional
+    public RoleDto creerGlobal(RoleUpsertRequest req) {
+        List<String> perms = valideEtFiltre(req.permissions());
+        RoleApplicatif r = new RoleApplicatif();
+        r.setClubId(null);
+        r.setCode(genererCodeGlobal(req.libelle()));
+        r.setLibelle(req.libelle().trim());
+        r.setSysteme(false);
+        r = roleRepo.save(r);
+        remplacePermissions(r.getId(), perms);
+        return toRoleDto(r);
+    }
+
+    @Transactional
+    public RoleDto majGlobal(UUID roleId, RoleUpsertRequest req) {
+        RoleApplicatif r = chargeRoleGlobal(roleId);
+        List<String> perms = valideEtFiltre(req.permissions());
+        r.setLibelle(req.libelle().trim());   // code immuable : ancre du mapping legacy utilisateur.role
+        roleRepo.save(r);
+        remplacePermissions(r.getId(), perms);
+        return toRoleDto(r);
+    }
+
+    @Transactional
+    public void supprimerGlobal(UUID roleId) {
+        RoleApplicatif r = chargeRoleGlobal(roleId);
+        if (r.isSysteme()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Un rôle prédéfini ne peut pas être supprimé");
+        }
+        if (affectationRepo.countByRoleId(r.getId()) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Rôle attribué à des membres — retirez-le d'abord");
+        }
+        rolePermRepo.deleteByRoleId(r.getId());
+        roleRepo.delete(r);
+    }
+
+    /** Charge un rôle GLOBAL (club_id NULL) : prédéfini ou global custom. */
+    private RoleApplicatif chargeRoleGlobal(UUID roleId) {
+        RoleApplicatif r = roleRepo.findById(roleId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Rôle introuvable"));
+        if (r.getClubId() != null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Rôle non global (custom d'un club)");
+        }
+        return r;
+    }
+
+    /** Code unique parmi les rôles globaux (préfixe G_), distinct des codes système et des C_ de club. */
+    private String genererCodeGlobal(String libelle) {
+        String base = libelle.toUpperCase().replaceAll("[^A-Z0-9]+", "_").replaceAll("^_|_$", "");
+        base = "G_" + (base.isBlank() ? "ROLE" : base);
+        if (base.length() > 46) base = base.substring(0, 46);
+        Set<String> existants = new java.util.HashSet<>();
+        roleRepo.findBySystemeTrue().forEach(r -> existants.add(r.getCode()));
+        roleRepo.findBySystemeFalseAndClubIdIsNull().forEach(r -> existants.add(r.getCode()));
+        String code = base;
+        int i = 1;
+        while (existants.contains(code)) {
+            code = base + "_" + (++i);
+        }
+        return code;
     }
 
     // ─────────────────────────── Affectations ───────────────────────────
@@ -172,6 +247,7 @@ public class RoleAdminService {
 
     private RoleDto toRoleDto(RoleApplicatif r) {
         return new RoleDto(r.getId(), r.getCode(), r.getLibelle(), r.isSysteme(),
+                r.getClubId() == null,   // global = sans club (système prédéfini ou global custom)
                 permissionsDuRole(r.getId()), affectationRepo.countByRoleId(r.getId()));
     }
 
@@ -227,11 +303,11 @@ public class RoleAdminService {
         return r;
     }
 
-    /** Rôle utilisable dans le club : système, ou custom appartenant à ce club. */
+    /** Rôle utilisable dans le club : global (système ou global custom), ou custom appartenant à ce club. */
     private RoleApplicatif chargeRoleDisponible(UUID roleId, UUID clubId) {
         RoleApplicatif r = roleRepo.findById(roleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Rôle introuvable"));
-        if (!r.isSysteme() && !clubId.equals(r.getClubId())) {
+        if (r.getClubId() != null && !clubId.equals(r.getClubId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Rôle hors de votre club");
         }
         return r;
