@@ -21,6 +21,9 @@ import com.remipreparateur.performance.seance.dto.PresenceDtos.LignePresence;
 import com.remipreparateur.performance.seance.dto.PresenceDtos.MaDeclaration;
 import com.remipreparateur.performance.seance.service.PresenceService;
 import com.remipreparateur.performance.poids.repository.HistoriquePoidsRepository;
+import com.remipreparateur.auth.rbac.FeatureModule;
+import com.remipreparateur.auth.rbac.PermissionResolver;
+import com.remipreparateur.club.pack.ClubModulesService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.medical.blessure.service.BlessureService;
@@ -67,6 +70,8 @@ public class EspaceJoueurController {
     private final MatchService matchService;
     private final PresenceService presenceService;
     private final ScopeResolver scopeResolver;
+    private final ClubModulesService clubModulesService;
+    private final PermissionResolver permissionResolver;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
@@ -79,7 +84,9 @@ public class EspaceJoueurController {
                                   ConseilService conseilService,
                                   MatchService matchService,
                                   PresenceService presenceService,
-                                  ScopeResolver scopeResolver) {
+                                  ScopeResolver scopeResolver,
+                                  ClubModulesService clubModulesService,
+                                  PermissionResolver permissionResolver) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
         this.historiquePoidsRepository = historiquePoidsRepository;
@@ -92,6 +99,21 @@ public class EspaceJoueurController {
         this.matchService = matchService;
         this.presenceService = presenceService;
         this.scopeResolver = scopeResolver;
+        this.clubModulesService = clubModulesService;
+        this.permissionResolver = permissionResolver;
+    }
+
+    /**
+     * Bloque (403) l'accès à un endpoint dont le module n'est pas activé pour le club du joueur.
+     * Miroir serveur du masquage front : un club sans GPS/Médical/Match/… n'expose pas ces données
+     * même via appel direct de l'API. Les données ne sont jamais supprimées, seulement inaccessibles.
+     */
+    private void exigeModule(FeatureModule module) {
+        UUID clubId = permissionResolver.clubActif(currentUser.current());
+        if (!clubModulesService.modulesActifs(clubId).contains(module.getCode())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Le module « " + module.getLibelle() + " » n'est pas activé pour votre club.");
+        }
     }
 
     @GetMapping("/profil")
@@ -103,11 +125,13 @@ public class EspaceJoueurController {
 
     @GetMapping("/gps")
     public List<GpsHistoriqueDto> mesSeancesGps() {
+        exigeModule(FeatureModule.GPS);
         return joueurService.getHistoriqueGps(monJoueurId());
     }
 
     @GetMapping("/pesees")
     public List<MaPeseeResponse> mesPesees() {
+        exigeModule(FeatureModule.PESEES);
         return historiquePoidsRepository.findByJoueurIdOrderByDateDesc(monJoueurId()).stream()
                 .map(h -> new MaPeseeResponse(h.getDate(), h.getPoids(), h.getCommentaire()))
                 .toList();
@@ -115,12 +139,14 @@ public class EspaceJoueurController {
 
     @GetMapping("/blessures")
     public List<BlessureResponse> mesBlessures() {
+        exigeModule(FeatureModule.MEDICAL);
         return blessureService.lister(monJoueurId());
     }
 
     /** Protocole de reprise (RTP) d'une de mes blessures — lecture seule. */
     @GetMapping("/blessures/{blessureId}/rtp")
     public List<EtapeResponse> mesEtapesRtp(@PathVariable UUID blessureId) {
+        exigeModule(FeatureModule.MEDICAL);
         return blessureSuiviService.listerRtpPourJoueur(monJoueurId(), blessureId);
     }
 
@@ -149,6 +175,7 @@ public class EspaceJoueurController {
     /** Mes déclarations de présence déjà saisies (pour pré-remplir les boutons de la PWA). */
     @GetMapping("/presences")
     public List<MaDeclaration> mesDeclarations() {
+        exigeModule(FeatureModule.PRESENCE);
         return presenceService.mesDeclarations(monJoueurId());
     }
 
@@ -158,6 +185,7 @@ public class EspaceJoueurController {
      */
     @PostMapping("/seances/{id}/presence")
     public LignePresence declarerPresence(@PathVariable UUID id, @RequestBody DeclarationPresence req) {
+        exigeModule(FeatureModule.PRESENCE);
         seanceService.findById(id)
                 .map(s -> { scopeResolver.verifieAcces(s.getEquipeId()); return s; })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
@@ -168,12 +196,14 @@ public class EspaceJoueurController {
 
     @GetMapping("/wellness")
     public List<WellnessResponse> mesWellness() {
+        exigeModule(FeatureModule.WELLNESS);
         return wellnessService.listerPourJoueur(monJoueurId());
     }
 
     /** Saisie/mise a jour du ressenti du jour (upsert sur joueur + date). */
     @PostMapping("/wellness")
     public WellnessResponse saisirWellness(@Valid @RequestBody WellnessRequest req) {
+        exigeModule(FeatureModule.WELLNESS);
         return wellnessService.enregistrer(monJoueurId(), req);
     }
 
@@ -181,12 +211,14 @@ public class EspaceJoueurController {
 
     @GetMapping("/rpe")
     public List<RpeResponse> mesRpe() {
+        exigeModule(FeatureModule.WELLNESS);
         return rpeService.listerPourJoueur(monJoueurId());
     }
 
     /** Saisie/mise a jour du RPE d'une seance (upsert sur joueur + seance). */
     @PostMapping("/rpe")
     public RpeResponse saisirRpe(@Valid @RequestBody RpeRequest req) {
+        exigeModule(FeatureModule.WELLNESS);
         return rpeService.enregistrer(monJoueurId(), req);
     }
 
@@ -195,6 +227,7 @@ public class EspaceJoueurController {
     /** Conseils du staff visibles par le joueur : ceux de son equipe + ses conseils perso. */
     @GetMapping("/conseils")
     public List<ConseilResponse> mesConseils() {
+        exigeModule(FeatureModule.WELLNESS);
         return conseilService.listerPourJoueur(monJoueurId());
     }
 
@@ -203,12 +236,14 @@ public class EspaceJoueurController {
     /** Matchs publiés de l'équipe du joueur. */
     @GetMapping("/matchs")
     public List<MatchJoueurResume> mesMatchs() {
+        exigeModule(FeatureModule.MATCH);
         return matchService.listerPourJoueur(monJoueurId());
     }
 
     /** Détail d'un match publié (consignes, ma consigne perso, mon statut, compo selon réglage staff). */
     @GetMapping("/matchs/{id}")
     public MatchJoueurDetail mesMatchDetail(@PathVariable UUID id) {
+        exigeModule(FeatureModule.MATCH);
         return matchService.detailPourJoueur(monJoueurId(), id);
     }
 

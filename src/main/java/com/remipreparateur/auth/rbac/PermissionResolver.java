@@ -3,6 +3,7 @@ package com.remipreparateur.auth.rbac;
 import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.club.entity.Equipe;
+import com.remipreparateur.club.pack.ClubModulesService;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.shared.security.ContexteActif;
 import com.remipreparateur.shared.security.ContexteActifHolder;
@@ -32,17 +33,31 @@ public class PermissionResolver {
     private final AffectationRoleRepository affectations;
     private final RolePermissionRepository rolePermissions;
     private final EquipeRepository equipeRepository;
+    private final ClubModulesService clubModulesService;
 
     public PermissionResolver(AffectationRoleRepository affectations,
                               RolePermissionRepository rolePermissions,
-                              EquipeRepository equipeRepository) {
+                              EquipeRepository equipeRepository,
+                              ClubModulesService clubModulesService) {
         this.affectations = affectations;
         this.rolePermissions = rolePermissions;
         this.equipeRepository = equipeRepository;
+        this.clubModulesService = clubModulesService;
     }
 
-    /** Codes de permission (ex. {@code seances:write}) effectifs de l'utilisateur dans le contexte actif. */
+    /** Codes de permission (ex. {@code seances:write}) EFFECTIFS de l'utilisateur (RBAC ∩ modules actifs). */
     public Set<String> permissionsPour(Utilisateur u) {
+        return permissionsPour(u, true);
+    }
+
+    /**
+     * @param filtrerParModules {@code true} = permissions EFFECTIVES (RBAC ∩ modules actifs du club),
+     *   pour AUTORISER une requête ; {@code false} = permissions RBAC BRUTES (avant filtre
+     *   pack/abonnement), pour la DÉLÉGATION (anti-escalade). Un module désactivé ne doit pas
+     *   empêcher un président d'attribuer un rôle : la permission reste seulement dormante à l'usage
+     *   (et filtrée pareil chez le destinataire → aucune escalade réelle).
+     */
+    public Set<String> permissionsPour(Utilisateur u, boolean filtrerParModules) {
         if (u.getRole() == Role.SUPER_ADMIN) {
             return Arrays.stream(Permission.values()).map(Permission::getCode).collect(Collectors.toSet());
         }
@@ -60,9 +75,32 @@ public class PermissionResolver {
         if (roleIds.isEmpty()) {
             return Set.of();
         }
-        return rolePermissions.findByRoleIdIn(roleIds).stream()
+        Set<String> perms = rolePermissions.findByRoleIdIn(roleIds).stream()
                 .map(RolePermission::getPermission)
                 .collect(Collectors.toSet());
+
+        if (!filtrerParModules) {
+            return perms;   // droits RBAC bruts (délégation) : indépendants de l'abonnement
+        }
+
+        // Filtrage par MODULES actifs du club : un module désactivé (pack/abonnement) retire
+        // toutes ses permissions → les endpoints correspondants renvoient 403 sans toucher aux
+        // contrôleurs, et le front masque les écrans. Aucune donnée n'est supprimée.
+        Set<String> modulesActifs = clubModulesService.modulesActifs(clubActif);
+        return perms.stream()
+                .filter(code -> {
+                    Permission p = Permission.parCode(code);
+                    // Permission conservée si un module qui la déverrouille est actif (une permission
+                    // partagée comme predictions:read est gardée si GPS OU Prépa physique est actif).
+                    return p == null || FeatureModule.modulesDe(p).stream()
+                            .anyMatch(m -> modulesActifs.contains(m.getCode()));
+                })
+                .collect(Collectors.toSet());
+    }
+
+    /** Club actif de l'utilisateur pour le contexte courant (en-têtes X-Contexte-*). */
+    public UUID clubActif(Utilisateur u) {
+        return clubActif(u, ContexteActifHolder.get());
     }
 
     /** Une affectation couvre-t-elle le contexte actif ? (équipe précise, ou club entier) */

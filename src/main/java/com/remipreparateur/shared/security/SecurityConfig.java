@@ -97,9 +97,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/saisons/**").hasAuthority("saison:read")
                         .requestMatchers("/api/saisons/**").hasAuthority("saison:manage")
 
-                        // Catalogue types de séance : cibles paramétrables (écriture) ; lecture + prédictions IA
+                        // Catalogue types de séance : cibles paramétrables (écriture) ; la LECTURE
+                        // relève du Planning (socle) — nécessaire au calendrier et à la création de
+                        // séance — donc gardée par seances:read (et NON predictions:read, sinon un club
+                        // sans module Prépa physique ne pourrait plus créer de séance).
                         .requestMatchers(HttpMethod.PUT, "/api/type-seances/**").hasAuthority("typeseances:write")
-                        .requestMatchers(HttpMethod.GET, "/api/type-seances/**", "/api/predictions/**").hasAuthority("predictions:read")
+                        .requestMatchers(HttpMethod.GET, "/api/type-seances/**").hasAuthority("seances:read")
+                        // Prédictions / charge IA : module Prépa physique OU GPS (voir FeatureModule).
+                        .requestMatchers(HttpMethod.GET, "/api/predictions/**").hasAuthority("predictions:read")
 
                         // Joueurs (effectif) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/joueurs/**").hasAuthority("joueurs:read")

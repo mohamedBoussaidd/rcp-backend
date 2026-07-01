@@ -273,7 +273,9 @@ public class RoleAdminService {
 
     /** Anti-escalade : on n'accorde que des permissions que l'acteur détient lui-même. */
     private void verifieNonEscalade(Utilisateur acteur, List<String> perms) {
-        Set<String> miennes = permissionResolver.permissionsPour(acteur);
+        // Droits RBAC BRUTS (avant filtre modules) : l'abonnement du club ne doit pas restreindre
+        // la délégation — un module off rend la permission dormante, pas interdite à attribuer.
+        Set<String> miennes = permissionResolver.permissionsPour(acteur, false);
         for (String p : perms) {
             if (!miennes.contains(p)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN,
