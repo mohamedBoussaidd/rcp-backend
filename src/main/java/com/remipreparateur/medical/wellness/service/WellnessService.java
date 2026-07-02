@@ -10,6 +10,7 @@ import com.remipreparateur.notification.service.NotificationProducer;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
+import com.remipreparateur.shared.time.Horloge;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,15 +35,25 @@ public class WellnessService {
     private final ScopeResolver scopeResolver;
     private final CurrentUserProvider currentUser;
     private final NotificationProducer notificationProducer;
+    private final Horloge horloge;
 
     public WellnessService(WellnessQuotidienRepository repository, JoueurRepository joueurRepository,
                            ScopeResolver scopeResolver, CurrentUserProvider currentUser,
-                           NotificationProducer notificationProducer) {
+                           NotificationProducer notificationProducer, Horloge horloge) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
         this.currentUser = currentUser;
         this.notificationProducer = notificationProducer;
+        this.horloge = horloge;
+    }
+
+    /**
+     * Filtre « voyage dans la saison » : en date simulée (super-admin), on masque les saisies
+     * postérieures à la date simulée. Hors simulation, tout passe (comportement inchangé).
+     */
+    private boolean visibleADateSimulee(LocalDate date) {
+        return !horloge.estSimulee() || date == null || !date.isAfter(horloge.today());
     }
 
     public WellnessResponse enregistrer(UUID joueurId, WellnessRequest req) {
@@ -83,7 +94,8 @@ public class WellnessService {
     public List<WellnessResponse> listerPourJoueur(UUID joueurId) {
         List<WellnessQuotidien> rows = repository.findByJoueurIdOrderByDateDesc(joueurId);
         Joueur joueur = joueurRepository.findById(joueurId).orElse(null);
-        return rows.stream().map(w -> toResponse(w, joueur)).toList();
+        return rows.stream().filter(w -> visibleADateSimulee(w.getDate()))
+                .map(w -> toResponse(w, joueur)).toList();
     }
 
     public List<WellnessResponse> listerPourStaff(UUID joueurId) {
@@ -101,7 +113,8 @@ public class WellnessService {
         Map<UUID, Joueur> joueurs = joueurRepository.findAllById(
                         rows.stream().map(WellnessQuotidien::getJoueurId).distinct().toList())
                 .stream().collect(Collectors.toMap(Joueur::getId, Function.identity()));
-        return rows.stream().map(w -> toResponse(w, joueurs.get(w.getJoueurId()))).toList();
+        return rows.stream().filter(w -> visibleADateSimulee(w.getDate()))
+                .map(w -> toResponse(w, joueurs.get(w.getJoueurId()))).toList();
     }
 
     /**

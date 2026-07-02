@@ -5,7 +5,6 @@ import com.remipreparateur.saison.service.SaisonService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,16 +26,12 @@ public class SaisonController {
 
     /**
      * Saison EN_COURS de l'équipe active + période courante (bandeau dashboard). null si aucune.
-     * En-tête optionnel {@code X-Date-Simulee} (yyyy-MM-dd) : calcule la période contre une date
-     * simulée (test de la temporalité : préparation, trêve…).
+     * La période est calculée contre l'{@link com.remipreparateur.shared.time.Horloge} : un SUPER_ADMIN
+     * peut voyager dans la saison via l'en-tête {@code X-Date-Simulee} (honoré uniquement pour lui).
      */
     @GetMapping("/courante")
-    public SaisonDto courante(@RequestHeader(value = "X-Date-Simulee", required = false) String dateSimulee) {
-        LocalDate ref = null;
-        if (dateSimulee != null && !dateSimulee.isBlank()) {
-            try { ref = LocalDate.parse(dateSimulee.trim()); } catch (Exception ignored) {}
-        }
-        return service.courante(ref);
+    public SaisonDto courante() {
+        return service.courante();
     }
 
     @GetMapping("/{id}")

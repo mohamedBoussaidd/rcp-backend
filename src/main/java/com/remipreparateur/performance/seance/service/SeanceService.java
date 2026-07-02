@@ -12,6 +12,7 @@ import com.remipreparateur.tactical.exercice.entity.Exercice;
 import com.remipreparateur.tactical.exercice.repository.ExerciceRepository;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
+import com.remipreparateur.shared.time.Horloge;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,7 @@ public class SeanceService {
     private final DonneeGpsRepository donneeGpsRepository;
     private final ExerciceRepository exerciceRepository;
     private final ScopeResolver scopeResolver;
+    private final Horloge horloge;
 
     public List<Seance> findAll() {
         Scope s = scopeResolver.resolve();
@@ -45,6 +47,11 @@ public class SeanceService {
     }
 
     public List<Seance> findByPeriode(LocalDate debut, LocalDate fin) {
+        // Hybride « voyage dans la saison » : en date simulée (super-admin), on masque le futur en
+        // capant la borne haute à la date simulée. Hors simulation, comportement inchangé — le
+        // calendrier continue d'afficher les séances futures planifiées.
+        if (horloge.estSimulee() && fin != null && fin.isAfter(horloge.today())) fin = horloge.today();
+        if (debut != null && fin != null && fin.isBefore(debut)) return List.of();
         Scope s = scopeResolver.resolve();
         if (s.all()) return seanceRepository.findByDateBetweenOrderByDateAscHeureDebutAsc(debut, fin);
         if (s.none()) return List.of();

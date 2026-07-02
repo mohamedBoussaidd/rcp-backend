@@ -16,6 +16,7 @@ import com.remipreparateur.saison.repository.PeriodeSaisonRepository;
 import com.remipreparateur.saison.repository.SaisonRepository;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
+import com.remipreparateur.shared.time.Horloge;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,7 @@ public class SaisonService {
     private final SeanceRepository seanceRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final ScopeResolver scopeResolver;
+    private final Horloge horloge;
 
     // ══════════ Lecture ══════════
 
@@ -70,12 +72,12 @@ public class SaisonService {
         else if (s.all())      saisons = saisonRepository.findAll().stream()
                 .sorted(Comparator.comparing(Saison::getDateDebut).reversed()).toList();
         else                   return List.of();
-        LocalDate now = LocalDate.now();
+        LocalDate now = horloge.today();
         return saisons.stream().map(x -> toDto(x, now, equipeId)).collect(Collectors.toList());
     }
 
     public SaisonDto get(UUID id) {
-        return toDto(charge(id), LocalDate.now(), equipeActiveOuNull());
+        return toDto(charge(id), horloge.today(), equipeActiveOuNull());
     }
 
     /** Saison EN_COURS du club actif (pour le bandeau de période). null si aucune. */
@@ -90,7 +92,7 @@ public class SaisonService {
     public SaisonDto courante(LocalDate dateRef) {
         UUID club = clubActifOuNull();
         if (club == null) return null;
-        LocalDate ref = dateRef != null ? dateRef : LocalDate.now();
+        LocalDate ref = dateRef != null ? dateRef : horloge.today();
         UUID equipeId = equipeActiveOuNull();
         return saisonRepository.findFirstByClubIdAndStatut(club, "EN_COURS")
                 .map(s -> toDto(s, ref, equipeId)).orElse(null);
@@ -127,7 +129,7 @@ public class SaisonService {
         if (req.genererPeriodes() && equipeId != null) {
             for (PeriodeSaison p : genererPeriodesDefaut(s, equipeId)) periodeRepository.save(p);
         }
-        return toDto(charge(s.getId()), LocalDate.now(), equipeId);
+        return toDto(charge(s.getId()), horloge.today(), equipeId);
     }
 
     @Transactional
@@ -147,14 +149,14 @@ public class SaisonService {
             }
             s.setStatut(nv);
         }
-        return toDto(saisonRepository.save(s), LocalDate.now(), equipeActiveOuNull());
+        return toDto(saisonRepository.save(s), horloge.today(), equipeActiveOuNull());
     }
 
     @Transactional
     public SaisonDto cloturer(UUID id) {
         Saison s = charge(id);
         s.setStatut("CLOTUREE");   // ne touche pas aux blessures : elles suivent le joueur
-        return toDto(saisonRepository.save(s), LocalDate.now(), equipeActiveOuNull());
+        return toDto(saisonRepository.save(s), horloge.today(), equipeActiveOuNull());
     }
 
     @Transactional
@@ -173,7 +175,7 @@ public class SaisonService {
         UUID equipeId = scopeResolver.equipeActiveUnique();
         periodeRepository.deleteBySaisonIdAndEquipeId(s.getId(), equipeId);
         for (PeriodeSaison p : genererPeriodesDefaut(s, equipeId)) periodeRepository.save(p);
-        return toDto(charge(id), LocalDate.now(), equipeId);
+        return toDto(charge(id), horloge.today(), equipeId);
     }
 
     @Transactional
@@ -202,7 +204,7 @@ public class SaisonService {
                 ordre++;
             }
         }
-        return toDto(charge(id), LocalDate.now(), equipeId);
+        return toDto(charge(id), horloge.today(), equipeId);
     }
 
     // ══════════ Effectif (par équipe) ══════════

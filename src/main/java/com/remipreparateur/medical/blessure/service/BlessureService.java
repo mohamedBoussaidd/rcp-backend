@@ -8,6 +8,7 @@ import com.remipreparateur.medical.blessure.repository.BlessureRepository;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
+import com.remipreparateur.shared.time.Horloge;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -25,12 +26,14 @@ public class BlessureService {
     private final BlessureRepository blessureRepository;
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
+    private final Horloge horloge;
 
     public BlessureService(BlessureRepository blessureRepository, JoueurRepository joueurRepository,
-                           ScopeResolver scopeResolver) {
+                           ScopeResolver scopeResolver, Horloge horloge) {
         this.blessureRepository = blessureRepository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
+        this.horloge = horloge;
     }
 
     public List<BlessureResponse> lister(UUID joueurId) {
@@ -48,7 +51,12 @@ public class BlessureService {
                         blessures.stream().map(Blessure::getJoueurId).distinct().toList())
                 .stream().collect(Collectors.toMap(Joueur::getId, Function.identity()));
 
-        return blessures.stream().map(b -> toResponse(b, joueurs.get(b.getJoueurId()))).toList();
+        // Hybride « voyage » : en date simulée (super-admin), on masque les blessures survenues APRÈS
+        // la date simulée. Hors simulation, tout est listé (comportement inchangé).
+        return blessures.stream()
+                .filter(b -> !horloge.estSimulee() || b.getDateBlessure() == null
+                        || !b.getDateBlessure().isAfter(horloge.today()))
+                .map(b -> toResponse(b, joueurs.get(b.getJoueurId()))).toList();
     }
 
     public BlessureResponse creer(BlessureRequest req) {

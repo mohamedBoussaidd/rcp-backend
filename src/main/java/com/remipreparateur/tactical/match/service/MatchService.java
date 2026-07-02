@@ -18,6 +18,7 @@ import com.remipreparateur.medical.blessure.repository.BlessureRepository;
 import com.remipreparateur.notification.service.NotificationProducer;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
+import com.remipreparateur.shared.time.Horloge;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +56,7 @@ public class MatchService {
     private final CurrentUserProvider currentUser;
     private final ScopeResolver scopeResolver;
     private final PermissionResolver permissionResolver;
+    private final Horloge horloge;
 
     public MatchService(MatchPrepaRepository matchRepository,
                         MatchSchemaRepository schemaRepository,
@@ -70,7 +72,8 @@ public class MatchService {
                         NotificationProducer notificationProducer,
                         CurrentUserProvider currentUser,
                         ScopeResolver scopeResolver,
-                        PermissionResolver permissionResolver) {
+                        PermissionResolver permissionResolver,
+                        Horloge horloge) {
         this.matchRepository = matchRepository;
         this.schemaRepository = schemaRepository;
         this.compoRepository = compoRepository;
@@ -86,6 +89,7 @@ public class MatchService {
         this.currentUser = currentUser;
         this.scopeResolver = scopeResolver;
         this.permissionResolver = permissionResolver;
+        this.horloge = horloge;
     }
 
     // ── Liste / création ──
@@ -93,8 +97,13 @@ public class MatchService {
     @Transactional(readOnly = true)
     public List<MatchResume> lister() {
         UUID equipeId = scopeResolver.equipeActiveUnique();
+        // Hybride « voyage » : en date simulée (super-admin), on masque les matchs postérieurs à la
+        // date simulée. Hors simulation, tout est listé (comportement inchangé).
         return matchRepository.findByEquipeIdOrderByDateMatchDescCreatedAtDesc(equipeId)
-                .stream().map(this::toResume).toList();
+                .stream()
+                .filter(m -> !horloge.estSimulee() || m.getDateMatch() == null
+                        || !m.getDateMatch().isAfter(horloge.today()))
+                .map(this::toResume).toList();
     }
 
     @Transactional

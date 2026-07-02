@@ -16,6 +16,7 @@ import com.remipreparateur.saison.entity.Saison;
 import com.remipreparateur.saison.repository.EffectifSaisonRepository;
 import com.remipreparateur.saison.repository.SaisonRepository;
 import com.remipreparateur.shared.security.ScopeResolver;
+import com.remipreparateur.shared.time.Horloge;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ public class PresenceService {
     private final EffectifSaisonRepository effectifRepository;
     private final NotificationProducer notificationProducer;
     private final ScopeResolver scopeResolver;
+    private final Horloge horloge;
 
     /**
      * Retourne la feuille d'appel d'une séance : l'effectif de la saison active de l'équipe, chaque
@@ -186,7 +188,7 @@ public class PresenceService {
     private AssiduiteJoueur assiduiteSurFenetre(Joueur joueur, Fenetre f) {
         UUID joueurId = joueur.getId();
         UUID equipeId = joueur.getEquipeId();
-        LocalDate today = LocalDate.now();
+        LocalDate today = horloge.today();
 
         Map<UUID, Seance> parId = new HashMap<>();
         if (equipeId != null) {
@@ -232,7 +234,7 @@ public class PresenceService {
                 ? joueurRepository.findAll()
                 : joueurRepository.findByEquipeIdIn(scope.equipeIds());
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = horloge.today();
         LocalDate recentDepuis = today.minusDays(14);
         List<AssiduiteResume> out = new ArrayList<>();
 
@@ -336,7 +338,7 @@ public class PresenceService {
      * les auto-déclarations PWA et doivent rester comptabilisées.
      */
     private Fenetre resoudreFenetre(UUID equipeId, UUID saisonId, LocalDate du, LocalDate au) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = horloge.today();
         if (du != null || au != null) {
             LocalDate debut = du != null ? du : today.minusMonths(12);
             LocalDate fin   = au != null ? au : today;
@@ -346,7 +348,12 @@ public class PresenceService {
                 ? saisonRepository.findById(saisonId).orElse(null)
                 : saisonActive(equipeId);
         if (saison != null) {
-            return new Fenetre(saison.getDateDebut(), saison.getDateFin(), saison.getId(), saison.getLibelle());
+            // Hybride « voyage » : en date simulée, on ne compte pas les séances postérieures à la
+            // date simulée (sinon les auto-déclarations futures « fuiteraient »). Hors simulation, on
+            // garde la saison entière (les futures portent des auto-déclarations à comptabiliser).
+            LocalDate fin = saison.getDateFin();
+            if (horloge.estSimulee() && fin.isAfter(today)) fin = today;
+            return new Fenetre(saison.getDateDebut(), fin, saison.getId(), saison.getLibelle());
         }
         return new Fenetre(today.minusMonths(12), today, null, null);
     }
