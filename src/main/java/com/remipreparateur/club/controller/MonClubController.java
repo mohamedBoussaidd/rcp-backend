@@ -72,6 +72,11 @@ public class MonClubController {
         return gestion.modifierMembre(currentUser.current(), id, req);
     }
 
+    @PatchMapping("/membres/{id}/identifiants")
+    public MembreResponse modifierIdentifiants(@PathVariable UUID id, @Valid @RequestBody IdentifiantsUpdateRequest req) {
+        return gestion.modifierIdentifiants(currentUser.current(), id, req);
+    }
+
     @DeleteMapping("/membres/{id}")
     public ResponseEntity<Void> supprimerMembre(@PathVariable UUID id) {
         gestion.supprimerMembre(currentUser.current(), id);

@@ -37,6 +37,14 @@ public class Club {
     @Column(name = "pack_code")
     private String packCode;
 
+    /** Couleur d'accent du club (hex #RRGGBB). {@code null} = thème par défaut (vert). */
+    @Column(name = "couleur_accent", length = 7)
+    private String couleurAccent;
+
+    /** Barre de navigation teintée aux couleurs du club. */
+    @Column(name = "nav_teintee", nullable = false)
+    private boolean navTeintee = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

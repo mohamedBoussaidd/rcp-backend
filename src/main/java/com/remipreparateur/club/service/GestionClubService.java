@@ -213,6 +213,63 @@ public class GestionClubService {
         return toMembreResponse(m);
     }
 
+    // ── Theme visuel du club ──
+
+    /** Theme du club de l'utilisateur (tous roles, joueur inclus). Sans club (super-admin hors contexte) : defaut. */
+    public ThemeResponse theme(Utilisateur acteur) {
+        UUID clubId = acteur.getClubId();
+        if (clubId == null && acteur.getRole() == Role.SUPER_ADMIN) {
+            ContexteActif ctx = ContexteActifHolder.get();
+            clubId = ctx != null ? ctx.clubId() : null;
+        }
+        if (clubId == null) return new ThemeResponse(null, false);
+        Club club = clubRepository.findById(clubId).orElse(null);
+        if (club == null) return new ThemeResponse(null, false);
+        return new ThemeResponse(club.getCouleurAccent(), club.isNavTeintee());
+    }
+
+    /** Definit le theme du club (president via club:manage, super-admin via contexte). */
+    @Transactional
+    public ThemeResponse definirTheme(Utilisateur acteur, ThemeRequest req) {
+        UUID clubId = exigeClub(acteur);
+        Club club = clubRepository.findById(clubId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Club introuvable"));
+        if (req.couleurAccent() != null && !req.couleurAccent().isBlank()) {
+            if (!req.couleurAccent().matches("#[0-9a-fA-F]{6}")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Couleur invalide (attendu : #RRGGBB)");
+            }
+            club.setCouleurAccent(req.couleurAccent().toUpperCase());
+        } else {
+            club.setCouleurAccent(null);
+        }
+        if (req.navTeintee() != null) club.setNavTeintee(req.navTeintee());
+        club = clubRepository.save(club);
+        return new ThemeResponse(club.getCouleurAccent(), club.isNavTeintee());
+    }
+
+    /** Change l'email et/ou le mot de passe d'un membre (président sur son club, super-admin via contexte). */
+    @Transactional
+    public MembreResponse modifierIdentifiants(Utilisateur acteur, UUID membreId, IdentifiantsUpdateRequest req) {
+        Utilisateur m = chargeMembreDuClub(acteur, membreId);
+        verifiePeutGerer(acteur, niveauDe(m, m.getClubId()), m.getEquipeId(), m.getClubId());
+
+        if (req.email() != null && !req.email().isBlank()) {
+            String email = req.email().trim();
+            if (!email.equalsIgnoreCase(m.getEmail())
+                    && utilisateurRepository.existsByEmailIgnoreCase(email)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email deja utilise");
+            }
+            m.setEmail(email);
+        }
+        if (req.nouveauMotDePasse() != null && !req.nouveauMotDePasse().isBlank()) {
+            if (req.nouveauMotDePasse().length() < 8) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mot de passe : 8 caracteres minimum");
+            }
+            m.setMotDePasse(passwordEncoder.encode(req.nouveauMotDePasse()));
+        }
+        return toMembreResponse(utilisateurRepository.save(m));
+    }
+
     @Transactional
     public void supprimerMembre(Utilisateur president, UUID membreId) {
         Utilisateur m = chargeMembreDuClub(president, membreId);

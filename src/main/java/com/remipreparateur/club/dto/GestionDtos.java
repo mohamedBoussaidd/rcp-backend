@@ -41,6 +41,11 @@ public final class GestionDtos {
             UUID equipeId,
             Boolean actif) {}
 
+    /** Modification des identifiants de connexion d'un membre (email et/ou mot de passe, champs optionnels). */
+    public record IdentifiantsUpdateRequest(
+            @Email String email,
+            String nouveauMotDePasse) {}
+
     /** Liaison d'un compte JOUEUR à une fiche joueur existante (posée a posteriori). */
     public record LierFicheRequest(
             @NotNull UUID joueurId) {}
@@ -55,6 +60,16 @@ public final class GestionDtos {
             UUID equipeId,
             UUID joueurId,
             boolean actif) {}
+
+    // ── Theme visuel du club ──
+    /** {@code couleurAccent} hex #RRGGBB, ou {@code null} pour revenir au theme par defaut. */
+    public record ThemeRequest(
+            String couleurAccent,
+            Boolean navTeintee) {}
+
+    public record ThemeResponse(
+            String couleurAccent,
+            boolean navTeintee) {}
 
     // ── Vue agregee "mon club" ──
     public record MonClubResponse(
