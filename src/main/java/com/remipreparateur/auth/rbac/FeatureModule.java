@@ -52,7 +52,9 @@ public enum FeatureModule {
     MEDICAL("medical", "Médical",
             "Blessures, infirmerie, protocoles de reprise, documents médicaux et gênes", false, 19),
     NOTIFICATIONS("notifications", "Notifications",
-            "Notifications in-app et push (Web Push)", false, 20);
+            "Notifications in-app et push (Web Push)", false, 20),
+    SUIVI_INDIVIDUEL("suivi_individuel", "Suivi individuel",
+            "Axes de travail, entretiens individuels et auto-évaluations du joueur", false, 21);
 
     private final String code;
     private final String libelle;
@@ -119,6 +121,7 @@ public enum FeatureModule {
             case BLESSURES_READ, BLESSURES_WRITE, DOCUMENTS_READ, DOCUMENTS_WRITE,
                  WELLNESS_TREAT, WELLNESS_REOPEN -> MEDICAL;
             case NOTIFICATIONS_CONFIG -> NOTIFICATIONS;
+            case ENTRETIEN_READ, ENTRETIEN_WRITE, ENTRETIEN_MANAGE, AXE_READ, AXE_WRITE -> SUIVI_INDIVIDUEL;
         };
     }
 

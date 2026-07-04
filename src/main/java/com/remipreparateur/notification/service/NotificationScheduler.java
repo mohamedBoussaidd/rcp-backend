@@ -5,6 +5,7 @@ import com.remipreparateur.auth.repository.UtilisateurRepository;
 import com.remipreparateur.club.entity.Equipe;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.auth.entity.Role;
+import com.remipreparateur.entretien.service.EntretienService;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.medical.blessure.entity.Blessure;
@@ -49,6 +50,7 @@ public class NotificationScheduler {
     private final UtilisateurRepository utilisateurRepository;
     private final NotificationRepository notificationRepository;
     private final BlessureService blessureService;
+    private final EntretienService entretienService;
 
     public NotificationScheduler(EquipeRepository equipeRepository, NotifConfigService configService,
                                  DigestService digestService, NotificationDispatcher dispatcher,
@@ -57,7 +59,8 @@ public class NotificationScheduler {
                                  SeanceRepository seanceRepository, RpeSeanceRepository rpeRepository,
                                  UtilisateurRepository utilisateurRepository,
                                  NotificationRepository notificationRepository,
-                                 BlessureService blessureService) {
+                                 BlessureService blessureService,
+                                 EntretienService entretienService) {
         this.equipeRepository = equipeRepository;
         this.configService = configService;
         this.digestService = digestService;
@@ -69,6 +72,7 @@ public class NotificationScheduler {
         this.utilisateurRepository = utilisateurRepository;
         this.notificationRepository = notificationRepository;
         this.blessureService = blessureService;
+        this.entretienService = entretienService;
     }
 
     /**
@@ -137,6 +141,44 @@ public class NotificationScheduler {
                 && estLHeure(now, HEURE_VERIF_SEMAINE)) {
             verifSemaine(equipeId);
         }
+        // Alerte staff : lundi matin, digest des joueurs sans entretien récent.
+        if (LocalDate.now().getDayOfWeek() == java.time.DayOfWeek.MONDAY
+                && estLHeure(now, HEURE_ALERTE_ENTRETIEN)) {
+            alerteEntretiens(equipeId, cfg);
+        }
+    }
+
+    /** Heure du digest staff « joueurs sans entretien récent » (lundi matin). */
+    private static final LocalTime HEURE_ALERTE_ENTRETIEN = LocalTime.of(8, 0);
+
+    /**
+     * Digest hebdomadaire (lundi) : liste les joueurs de l'effectif sans entretien depuis plus du
+     * seuil configuré par l'équipe. Une seule notification par équipe, aux Entraîneur / Préparateur /
+     * Président. Anti-doublon : rien de neuf tant qu'une alerte a été émise il y a moins de 3 semaines.
+     */
+    private void alerteEntretiens(UUID equipeId, NotifConfigEquipe cfg) {
+        if (!cfg.isEntretienAlerteActive()) return;
+        if (notificationRepository.existsByEquipeIdAndTypeAndCreatedAtAfter(
+                equipeId, TypeNotification.ALERTE_ENTRETIEN, LocalDateTime.now().minusWeeks(3))) {
+            return;
+        }
+        List<Joueur> sans = entretienService.joueursSansEntretienRecent(equipeId, cfg.getEntretienSeuilJours());
+        if (sans.isEmpty()) return;
+
+        int semaines = Math.round(cfg.getEntretienSeuilJours() / 7f);
+        String noms = sans.stream().limit(8)
+                .map(j -> (orVide(j.getPrenom()) + " " + orVide(j.getNom())).trim())
+                .filter(s -> !s.isBlank())
+                .collect(java.util.stream.Collectors.joining(", "));
+        boolean pluriel = sans.size() > 1;
+        String titre = sans.size() + (pluriel ? " joueurs sans entretien récent" : " joueur sans entretien récent");
+        String corps = sans.size() + (pluriel ? " joueurs n'ont" : " joueur n'a")
+                + " pas eu d'entretien depuis plus de " + semaines + " semaines : " + noms
+                + (sans.size() > 8 ? "…" : ".");
+
+        dispatcher.versStaffRoles(equipeId,
+                List.of(Role.ENTRAINEUR, Role.PREPARATEUR, Role.PRESIDENT),
+                TypeNotification.ALERTE_ENTRETIEN, titre, corps, "/suivi-entretiens", Priorite.NORMALE);
     }
 
     /**

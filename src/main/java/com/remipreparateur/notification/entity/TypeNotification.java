@@ -21,6 +21,7 @@ public enum TypeNotification {
     DOC_MEDICAL(Categorie.INFO, false),
     GENE_SUIVI(Categorie.INFO, false),
     MATCH_PARTAGE(Categorie.INFO, false),
+    ENTRETIEN_PARTAGE(Categorie.INFO, false),
 
     // ── Messages humains ──
     MESSAGE_STAFF(Categorie.MESSAGE, false),
@@ -33,6 +34,7 @@ public enum TypeNotification {
     ALERTE_POIDS(Categorie.ALERTE, true),
     ALERTE_COMPLETION(Categorie.ALERTE, true),
     ALERTE_STATUT(Categorie.ALERTE, false),
+    ALERTE_ENTRETIEN(Categorie.ALERTE, true),   // digest hebdo : joueurs sans entretien récent (staff)
     ALERTE_GENE(Categorie.ALERTE, false),   // urgent, unitaire immédiat (médical)
     RETOUR_BLESSURE_A_CONFIRMER(Categorie.ALERTE, false),  // retour soldé auto → staff confirme/prolonge
     DIGEST(Categorie.ALERTE, false),

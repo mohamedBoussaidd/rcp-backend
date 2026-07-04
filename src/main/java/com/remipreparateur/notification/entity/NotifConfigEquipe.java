@@ -93,6 +93,13 @@ public class NotifConfigEquipe {
     @Column(name = "rappel_seance_actif", nullable = false)
     private boolean rappelSeanceActif = true;
 
+    // ── Alerte staff « joueur sans entretien récent » (digest hebdo) ──
+    @Column(name = "entretien_alerte_active", nullable = false)
+    private boolean entretienAlerteActive = true;
+
+    @Column(name = "entretien_seuil_jours", nullable = false)
+    private short entretienSeuilJours = 42;   // 6 semaines
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 

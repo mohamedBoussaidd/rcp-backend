@@ -39,6 +39,22 @@ public class NotificationProducer {
                 null, null, false));
     }
 
+    /**
+     * Entretien passé en PARTAGE_JOUEUR → info au joueur. Renvoie {@code true} si une notification
+     * a effectivement été délivrée (compte lié), {@code false} sinon (fiche sans compte : aucun envoi,
+     * aucune erreur — le partage reste valable, le joueur le verra à l'activation de son compte).
+     */
+    public boolean entretienPartage(UUID equipeId, UUID joueurId) {
+        if (equipeId == null || joueurId == null) return false;
+        try {
+            return dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.ENTRETIEN_PARTAGE,
+                    "Entretien partagé", "Le staff a partagé un entretien individuel avec toi.",
+                    "/joueur/entretiens", Priorite.NORMALE, null, null, false);
+        } catch (Exception ignore) {
+            return false;
+        }
+    }
+
     /** Séance créée/modifiée/annulée → info aux joueurs de l'équipe. */
     public void seanceModifiee(UUID equipeId, String resume) {
         if (equipeId == null) return;

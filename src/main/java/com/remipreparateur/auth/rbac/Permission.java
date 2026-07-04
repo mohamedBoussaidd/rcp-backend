@@ -60,6 +60,13 @@ public enum Permission {
     DIAPORAMA_WRITE("diaporama:write", "Tactique & Match", "Créer / éditer ses diaporamas"),
     DIAPORAMA_MANAGE("diaporama:manage", "Tactique & Match", "Supprimer / modérer toute diapo du club"),
 
+    // ── Suivi individuel ────────────────────────────────────────────
+    ENTRETIEN_READ("entretien:read", "Suivi individuel", "Voir les entretiens & la progression"),
+    ENTRETIEN_WRITE("entretien:write", "Suivi individuel", "Mener / éditer ses entretiens"),
+    ENTRETIEN_MANAGE("entretien:manage", "Suivi individuel", "Supprimer / modérer les entretiens du club"),
+    AXE_READ("axe:read", "Suivi individuel", "Voir les axes de travail"),
+    AXE_WRITE("axe:write", "Suivi individuel", "Créer / éditer les axes de travail"),
+
     // ── Paramètres & Notifications ──────────────────────────────────
     CONFIGURATION_READ("configuration:read", "Paramètres & Notifications", "Voir la configuration"),
     CONFIGURATION_WRITE("configuration:write", "Paramètres & Notifications", "Modifier la configuration"),

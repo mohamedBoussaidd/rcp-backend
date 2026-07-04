@@ -136,6 +136,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/conseils/**").hasAuthority("conseils:read")
                         .requestMatchers("/api/conseils/**").hasAuthority("conseils:write")
 
+                        // Suivi individuel — axes de travail & entretiens (staff). Le joueur passe par /api/moi/**.
+                        // Suppression d'entretien élargie au modérateur (règle auteur/manage dans le service).
+                        .requestMatchers(HttpMethod.GET, "/api/axes/**").hasAuthority("axe:read")
+                        .requestMatchers("/api/axes/**").hasAuthority("axe:write")
+                        .requestMatchers(HttpMethod.GET, "/api/entretiens/**").hasAuthority("entretien:read")
+                        .requestMatchers(HttpMethod.DELETE, "/api/entretiens/**").hasAnyAuthority("entretien:write", "entretien:manage")
+                        .requestMatchers("/api/entretiens/**").hasAuthority("entretien:write")
+
                         // Espace personnel du joueur : reserve au role JOUEUR (donnees scopees par token)
                         .requestMatchers("/api/moi/**").hasRole("JOUEUR")
 
