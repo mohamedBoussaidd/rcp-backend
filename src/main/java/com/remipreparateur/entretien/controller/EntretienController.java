@@ -45,6 +45,14 @@ public class EntretienController {
         return service.vueEquipe();
     }
 
+    /** Agenda calendrier : entretiens (RDV planifiés + comptes-rendus) de la période, portée équipe. */
+    @GetMapping("/agenda")
+    public List<AgendaEntretien> agenda(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        return service.agendaEquipe(debut, fin);
+    }
+
     @PostMapping
     public EntretienResponse creer(@Valid @RequestBody EntretienRequest req) {
         return service.creerEntretien(req);

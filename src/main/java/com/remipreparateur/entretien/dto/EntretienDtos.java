@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,11 +55,17 @@ public final class EntretienDtos {
             @Size(max = 12) String tendance,
             String commentaire) {}
 
-    /** Création d'un entretien avec ses lignes d'axes, en une requête. */
+    /**
+     * Création / modification d'un entretien avec ses lignes d'axes, en une requête.
+     * {@code statut} : PLANIFIE (rendez-vous à venir) | REALISE (compte-rendu) ; null = REALISE.
+     * {@code heure} facultative (jour seul possible). Transition PLANIFIE → REALISE via PUT.
+     */
     public record EntretienRequest(
             @NotNull UUID joueurId,
             @NotBlank @Size(max = 12) String type,
             @NotNull LocalDate dateEntretien,
+            @Size(max = 12) String statut,
+            LocalTime heure,
             String notes,
             @Size(max = 500) String videoUrl,
             UUID seanceId,
@@ -81,6 +88,8 @@ public final class EntretienDtos {
             UUID joueurId,
             String type,
             LocalDate dateEntretien,
+            LocalTime heure,
+            String statut,
             UUID menePar,
             String meneParNom,
             String notes,
@@ -118,18 +127,34 @@ public final class EntretienDtos {
 
     public record SyntheseResponse(UUID joueurId, List<SyntheseAxe> axes) {}
 
-    /** Ligne de la vue équipe « Suivi des entretiens » (un joueur de l'effectif). */
+    /** Ligne de la vue équipe « Suivi des entretiens » (un joueur de l'effectif). Agrégats sur REALISE ;
+     *  {@code prochainRdv} = date du prochain entretien PLANIFIE (null si aucun). */
     public record EquipeLigne(
             UUID joueurId,
             String nom,
             String prenom,
             String postePrincipal,
             LocalDate dernierEntretien,
+            LocalDate prochainRdv,
             int nb30j,
             int nb90j,
             int nbVideo,
             int nbTerrain,
             int nbDiscussion) {}
+
+    // ──────────────────────────── Agenda (calendrier) ────────────────────────────
+
+    /** Événement « entretien » pour le calendrier (staff : effectif de la portée ; joueur : les siens,
+     *  sans notes — visibilité agenda ≠ visibilité contenu). */
+    public record AgendaEntretien(
+            UUID id,
+            UUID joueurId,
+            String joueurNom,
+            String joueurPrenom,
+            String type,
+            LocalDate dateEntretien,
+            LocalTime heure,
+            String statut) {}
 
     // ──────────────────────────── Espace joueur ────────────────────────────
 

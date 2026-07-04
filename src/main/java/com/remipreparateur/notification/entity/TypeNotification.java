@@ -22,6 +22,7 @@ public enum TypeNotification {
     GENE_SUIVI(Categorie.INFO, false),
     MATCH_PARTAGE(Categorie.INFO, false),
     ENTRETIEN_PARTAGE(Categorie.INFO, false),
+    ENTRETIEN_PLANIFIE(Categorie.INFO, false),  // RDV d'entretien planifié/déplacé → info joueur
 
     // ── Messages humains ──
     MESSAGE_STAFF(Categorie.MESSAGE, false),

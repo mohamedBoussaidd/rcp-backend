@@ -4,6 +4,10 @@ import com.remipreparateur.notification.entity.Priorite;
 import com.remipreparateur.notification.entity.TypeNotification;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -49,6 +53,28 @@ public class NotificationProducer {
         try {
             return dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.ENTRETIEN_PARTAGE,
                     "Entretien partagé", "Le staff a partagé un entretien individuel avec toi.",
+                    "/joueur/entretiens", Priorite.NORMALE, null, null, false);
+        } catch (Exception ignore) {
+            return false;
+        }
+    }
+
+    /**
+     * Rendez-vous d'entretien planifié (ou déplacé si {@code modifie}) → info au joueur.
+     * Visibilité agenda ≠ visibilité contenu : on annonce le créneau, jamais les notes.
+     * Best-effort comme {@link #entretienPartage} (fiche sans compte : aucun envoi, aucune erreur).
+     */
+    public boolean entretienPlanifie(UUID equipeId, UUID joueurId, String typeLabel,
+                                     LocalDate date, LocalTime heure, boolean modifie) {
+        if (equipeId == null || joueurId == null || date == null) return false;
+        String quand = date.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH))
+                + (heure != null ? " à " + heure.format(DateTimeFormatter.ofPattern("HH'h'mm")) : "");
+        String corps = modifie
+                ? "Ton entretien " + typeLabel + " a été déplacé : " + quand + "."
+                : "Un entretien " + typeLabel + " est prévu avec toi " + quand + ".";
+        try {
+            return dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.ENTRETIEN_PLANIFIE,
+                    modifie ? "Entretien déplacé" : "Entretien planifié", corps,
                     "/joueur/entretiens", Priorite.NORMALE, null, null, false);
         } catch (Exception ignore) {
             return false;

@@ -7,11 +7,13 @@ import com.remipreparateur.entretien.dto.EntretienDtos.*;
 import com.remipreparateur.entretien.service.EntretienService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,6 +51,15 @@ public class MesEntretiensController {
     public List<MonEntretienResponse> mesEntretiens() {
         exigeModule();
         return service.mesEntretiens(monJoueurId());
+    }
+
+    /** Mes rendez-vous d'entretien PLANIFIE de la période (type/date/heure — jamais les notes). */
+    @GetMapping("/entretiens/agenda")
+    public List<AgendaEntretien> monAgenda(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        exigeModule();
+        return service.agendaJoueur(monJoueurId(), debut, fin);
     }
 
     @GetMapping("/auto-evaluations")
