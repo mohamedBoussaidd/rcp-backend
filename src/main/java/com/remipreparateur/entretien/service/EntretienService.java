@@ -19,6 +19,7 @@ import com.remipreparateur.saison.entity.Saison;
 import com.remipreparateur.saison.repository.EffectifSaisonRepository;
 import com.remipreparateur.saison.repository.SaisonRepository;
 import com.remipreparateur.saison.entity.EffectifSaison;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.shared.time.Horloge;
@@ -68,13 +69,15 @@ public class EntretienService {
     private final CurrentUserProvider currentUser;
     private final Horloge horloge;
     private final NotificationProducer notifications;
+    private final AppartenanceService appartenance;
 
     public EntretienService(AxeTravailRepository axeRepository, EntretienRepository entretienRepository,
                             EntretienAxeRepository entretienAxeRepository, AutoEvaluationRepository autoEvalRepository,
                             JoueurRepository joueurRepository, UtilisateurRepository utilisateurRepository,
                             EquipeRepository equipeRepository, SaisonRepository saisonRepository,
                             EffectifSaisonRepository effectifRepository, ScopeResolver scopeResolver,
-                            CurrentUserProvider currentUser, Horloge horloge, NotificationProducer notifications) {
+                            CurrentUserProvider currentUser, Horloge horloge, NotificationProducer notifications,
+                            AppartenanceService appartenance) {
         this.axeRepository = axeRepository;
         this.entretienRepository = entretienRepository;
         this.entretienAxeRepository = entretienAxeRepository;
@@ -88,6 +91,7 @@ public class EntretienService {
         this.currentUser = currentUser;
         this.horloge = horloge;
         this.notifications = notifications;
+        this.appartenance = appartenance;
     }
 
     // ════════════════════════════ Axes (staff) ════════════════════════════
@@ -163,7 +167,7 @@ public class EntretienService {
         Entretien e = new Entretien();
         e.setJoueurId(joueur.getId());
         e.setClubId(clubDeJoueur(joueur));
-        e.setEquipeId(joueur.getEquipeId());
+        e.setEquipeId(appartenance.equipePrincipale(joueur.getId()));
         e.setType(req.type());
         e.setDateEntretien(req.dateEntretien());
         e.setHeure(req.heure());
@@ -586,13 +590,13 @@ public class EntretienService {
                 if (!ids.isEmpty()) return joueurRepository.findAllById(ids);
             }
         }
-        return joueurRepository.findByEquipeIdIn(List.of(equipeId));
+        return List.of();   // Phase 4 : plus de repli sur le cache joueur.equipe_id (aucun effectif = vide)
     }
 
     private Joueur joueurChecke(UUID joueurId) {
         Joueur joueur = joueurRepository.findById(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Joueur introuvable"));
-        scopeResolver.verifieAcces(joueur.getEquipeId());
+        scopeResolver.verifieAccesPersonne(joueur.getId(), joueur.getClubId());
         return joueur;
     }
 
@@ -623,11 +627,8 @@ public class EntretienService {
     }
 
     private UUID clubDeJoueur(Joueur joueur) {
-        if (joueur.getEquipeId() != null) {
-            UUID club = equipeRepository.findById(joueur.getEquipeId()).map(Equipe::getClubId).orElse(null);
-            if (club != null) return club;
-        }
-        return scopeResolver.clubActif();
+        // Phase 4 : le club est porté directement par la fiche (plus de dérivation via l'équipe).
+        return joueur.getClubId() != null ? joueur.getClubId() : scopeResolver.clubActif();
     }
 
     private static String orVide(String s) { return s == null ? "" : s; }

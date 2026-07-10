@@ -187,6 +187,23 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/configuration/**").hasAuthority("configuration:read")
                         .requestMatchers("/api/configuration/**").hasAuthority("configuration:write")
 
+                        // Catégories d'âge : accessible depuis Paramètres (configuration:*) OU depuis
+                        // Licences & documents (docadmin:*) — Administratif n'a pas configuration:write
+                        // (il ne doit pas éditer les paramètres GPS) mais gère ses catégories d'âge
+                        // depuis l'écran documents-admin, qu'il détient déjà via docadmin:configure.
+                        .requestMatchers(HttpMethod.GET, "/api/categories-age/**").hasAnyAuthority("configuration:read", "docadmin:read")
+                        .requestMatchers("/api/categories-age/**").hasAnyAuthority("configuration:write", "docadmin:configure")
+
+                        // Licences & documents administratifs : référentiel / lecture / validation / dépôt.
+                        // Le joueur dépose et consulte SES documents via /api/moi/**.
+                        .requestMatchers(HttpMethod.GET, "/api/documents-admin/conformite", "/api/documents-admin/conformite/**",
+                                "/api/documents-admin/conformite-staff").hasAuthority("docadmin:read")
+                        .requestMatchers(HttpMethod.GET, "/api/documents-admin/*/fichier").hasAuthority("docadmin:read")
+                        .requestMatchers("/api/documents-admin/types/**").hasAuthority("docadmin:configure")
+                        .requestMatchers(HttpMethod.POST, "/api/documents-admin/*/valider", "/api/documents-admin/*/refuser")
+                                .hasAuthority("docadmin:validate")
+                        .requestMatchers(HttpMethod.POST, "/api/documents-admin/joueurs/**").hasAuthority("docadmin:upload")
+
                         // Clubs / mon-club / equipes / membres : deja proteges par @PreAuthorize.
                         // Tout le reste exige juste un token valide.
                         .anyRequest().authenticated())

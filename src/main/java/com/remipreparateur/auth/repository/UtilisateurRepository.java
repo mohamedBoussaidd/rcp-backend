@@ -14,6 +14,8 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, UUID> 
     List<Utilisateur> findByClubId(UUID clubId);
     List<Utilisateur> findByEquipeId(UUID equipeId);
     List<Utilisateur> findByEquipeIdAndRoleIn(UUID equipeId, List<com.remipreparateur.auth.entity.Role> roles);
+    /** Comptes rattachés au CLUB (pas à une équipe précise) — Président/Administratif. */
+    List<Utilisateur> findByClubIdAndRoleIn(UUID clubId, List<com.remipreparateur.auth.entity.Role> roles);
     Optional<Utilisateur> findByJoueurId(UUID joueurId);
     /** Une fiche joueur ne peut être reliée qu'à un seul compte. */
     boolean existsByJoueurId(UUID joueurId);

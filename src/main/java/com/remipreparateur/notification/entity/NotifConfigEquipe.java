@@ -36,22 +36,22 @@ public class NotifConfigEquipe {
     @Column(name = "seuil_readiness_min", nullable = false)
     private BigDecimal seuilReadinessMin = new BigDecimal("50.0");
 
-    // ── Seuils wellness (Hooper, 5 items sur 1..5 ; convention app : 1 = bon … 5 = mauvais
+    // ── Seuils wellness (Hooper, 5 items sur 1..10 ; convention app : 1 = bon … 10 = mauvais
     //    pour TOUS les items). Alerte si valeur >= seuil. ──
     @Column(name = "seuil_wellness_fatigue", nullable = false)
-    private short seuilWellnessFatigue = 4;
+    private short seuilWellnessFatigue = 8;
 
     @Column(name = "seuil_wellness_douleur", nullable = false)
-    private short seuilWellnessDouleur = 4;
+    private short seuilWellnessDouleur = 8;
 
     @Column(name = "seuil_wellness_stress", nullable = false)
-    private short seuilWellnessStress = 4;
+    private short seuilWellnessStress = 8;
 
     @Column(name = "seuil_wellness_sommeil", nullable = false)
-    private short seuilWellnessSommeil = 4;
+    private short seuilWellnessSommeil = 8;
 
     @Column(name = "seuil_wellness_humeur", nullable = false)
-    private short seuilWellnessHumeur = 4;
+    private short seuilWellnessHumeur = 8;
 
     // ── Seuils de poids (kg) ──
     @Column(name = "seuil_poids_court", nullable = false)

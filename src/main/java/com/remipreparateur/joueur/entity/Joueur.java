@@ -53,6 +53,13 @@ public class Joueur {
     @Column(name = "date_arrivee_club")
     private LocalDate dateArriveeClub;
 
-    @Column(name = "equipe_id")
-    private UUID equipeId;
+    /**
+     * Club de rattachement de la fiche (source de vérité du niveau club). Une fiche existe au
+     * niveau du club, indépendamment de son appartenance à une équipe (gérée par effectif_saison).
+     */
+    @Column(name = "club_id")
+    private UUID clubId;
+
+    // Phase 4 : le cache legacy `equipe_id` a été supprimé (V51). L'appartenance d'équipe — multiple
+    // et par saison — est portée exclusivement par {@code effectif_saison} (cf. AppartenanceService).
 }

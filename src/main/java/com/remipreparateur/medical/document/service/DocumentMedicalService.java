@@ -5,6 +5,7 @@ import com.remipreparateur.medical.document.entity.DocumentMedical;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.medical.document.repository.DocumentMedicalRepository;
 import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
@@ -56,17 +57,20 @@ public class DocumentMedicalService {
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
     private final CurrentUserProvider currentUser;
+    private final AppartenanceService appartenance;
     private final Path uploadDir;
 
     public DocumentMedicalService(DocumentMedicalRepository repository,
                                   JoueurRepository joueurRepository,
                                   ScopeResolver scopeResolver,
                                   CurrentUserProvider currentUser,
+                                  AppartenanceService appartenance,
                                   @Value("${app.medical.upload-dir}") String uploadDir) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
         this.currentUser = currentUser;
+        this.appartenance = appartenance;
         this.uploadDir = Paths.get(uploadDir).toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.uploadDir);
@@ -113,7 +117,7 @@ public class DocumentMedicalService {
 
         DocumentMedical d = new DocumentMedical();
         d.setJoueurId(joueurId);
-        d.setEquipeId(joueur.getEquipeId());
+        d.setEquipeId(appartenance.equipePrincipale(joueurId));
         d.setNomOriginal(nettoyerNom(fichier.getOriginalFilename(), ext));
         d.setTypeMime(mime);
         d.setTailleOctets(fichier.getSize());

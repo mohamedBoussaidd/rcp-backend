@@ -2,6 +2,8 @@ package com.remipreparateur.saison.service;
 
 import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
+import com.remipreparateur.club.entity.Equipe;
+import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.medical.blessure.entity.Blessure;
@@ -57,14 +59,17 @@ public class SaisonService {
     private final BlessureRepository blessureRepository;
     private final SeanceRepository seanceRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final EquipeRepository equipeRepository;
     private final ScopeResolver scopeResolver;
     private final Horloge horloge;
 
     // ══════════ Lecture ══════════
 
     public List<SaisonDto> findAll() {
+        // resolve() valide le contexte (403 si hors périmètre). On ne bail PLUS sur s.none() : un
+        // président/administratif d'un club sans équipe doit voir les saisons de SON club (la saison
+        // est au niveau club, pas équipe).
         Scope s = scopeResolver.resolve();
-        if (s.none()) return List.of();
         UUID equipeId = equipeActiveOuNull();
         UUID club = clubActifOuNull();
         List<Saison> saisons;
@@ -247,6 +252,45 @@ public class SaisonService {
         return effectifDto(s.getId(), equipeId);
     }
 
+    /**
+     * Annuaire : inscrit UNE personne à l'effectif de la saison EN_COURS d'UNE équipe (assignation
+     * unitaire, sans remplacement de l'effectif). Réactive l'accès PWA du compte joueur lié.
+     */
+    @Transactional
+    public void inscrireAEquipe(UUID joueurId, UUID equipeId) {
+        scopeResolver.verifieAcces(equipeId);
+        Joueur j = joueurRepository.findById(joueurId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche introuvable"));
+        UUID club = equipeRepository.findById(equipeId).map(Equipe::getClubId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Equipe introuvable"));
+        if (j.getClubId() != null && !j.getClubId().equals(club)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Fiche hors du club de l'equipe");
+        }
+        Saison s = saisonRepository.findFirstByClubIdAndStatut(club, "EN_COURS")
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Aucune saison en cours"));
+        if (!effectifRepository.existsBySaisonIdAndEquipeIdAndJoueurId(s.getId(), equipeId, joueurId)) {
+            ajouterMembre(s, equipeId, joueurId);
+        }
+        reactiverComptePwa(joueurId);
+    }
+
+    /**
+     * Annuaire : retire UNE personne de l'effectif de la saison EN_COURS d'UNE équipe. Si elle n'est
+     * plus dans AUCUN effectif de la saison en cours, son accès PWA est coupé (cohérent definirEffectif).
+     */
+    @Transactional
+    public void retirerDeEquipe(UUID joueurId, UUID equipeId) {
+        scopeResolver.verifieAcces(equipeId);
+        UUID club = equipeRepository.findById(equipeId).map(Equipe::getClubId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Equipe introuvable"));
+        Saison s = saisonRepository.findFirstByClubIdAndStatut(club, "EN_COURS")
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Aucune saison en cours"));
+        effectifRepository.deleteBySaisonIdAndEquipeIdAndJoueurId(s.getId(), equipeId, joueurId);
+        if (!effectifRepository.existsBySaisonIdAndJoueurId(s.getId(), joueurId)) {
+            desactiverComptePwa(joueurId);
+        }
+    }
+
     /** Proposition de reconduction : joueurs de la saison précédente (même équipe), cochés par défaut. */
     public ReconductionProposition propositionReconduction(UUID id) {
         Saison s = charge(id);
@@ -369,13 +413,20 @@ public class SaisonService {
     }
 
     private void ajouterMembre(Saison s, UUID equipeId, UUID joueurId) {
-        if (joueurRepository.findById(joueurId).isEmpty()) return;   // ignore les ids inconnus
+        Joueur j = joueurRepository.findById(joueurId).orElse(null);
+        if (j == null) return;   // ignore les ids inconnus
         EffectifSaison m = new EffectifSaison();
         m.setSaisonId(s.getId());
         m.setEquipeId(equipeId);
         m.setJoueurId(joueurId);
         m.setDateEntree(s.getDateDebut());
         effectifRepository.save(m);
+        // Phase 4 : plus de cache joueur.equipe_id à maintenir. Une fiche sans club adopte le club
+        // de la saison (rattachement au niveau club, source de vérité pour l'accès).
+        if (j.getClubId() == null) {
+            j.setClubId(s.getClubId());
+            joueurRepository.save(j);
+        }
     }
 
     /** Coupe l'accès PWA du joueur (compte désactivé). Retourne 1 si un compte actif a été coupé. */

@@ -141,7 +141,7 @@ public class NotifPreferenceService {
     private Utilisateur compteJoueurChecke(UUID joueurId) {
         Joueur j = joueurRepository.findById(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Joueur introuvable"));
-        scopeResolver.verifieAcces(j.getEquipeId());
+        scopeResolver.verifieAccesPersonne(j.getId(), j.getClubId());
         return utilisateurRepository.findByJoueurId(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "Ce joueur n'a pas de compte relié"));

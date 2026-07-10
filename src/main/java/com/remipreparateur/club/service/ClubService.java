@@ -7,8 +7,13 @@ import com.remipreparateur.club.entity.Club;
 import com.remipreparateur.club.entity.Equipe;
 import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
+import com.remipreparateur.auth.rbac.AffectationRole;
+import com.remipreparateur.auth.rbac.AffectationRoleRepository;
+import com.remipreparateur.auth.rbac.RoleApplicatifRepository;
 import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.club.repository.EquipeRepository;
+import com.remipreparateur.documentadmin.service.ReferentielDocumentAdminSeeder;
+import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
 import org.springframework.http.HttpStatus;
@@ -28,17 +33,26 @@ public class ClubService {
     private final UtilisateurRepository utilisateurRepository;
     private final JoueurRepository joueurRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RoleApplicatifRepository roleRepository;
+    private final AffectationRoleRepository affectationRepository;
+    private final ReferentielDocumentAdminSeeder referentielSeeder;
 
     public ClubService(ClubRepository clubRepository,
                        EquipeRepository equipeRepository,
                        UtilisateurRepository utilisateurRepository,
                        JoueurRepository joueurRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       RoleApplicatifRepository roleRepository,
+                       AffectationRoleRepository affectationRepository,
+                       ReferentielDocumentAdminSeeder referentielSeeder) {
         this.clubRepository = clubRepository;
         this.equipeRepository = equipeRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.joueurRepository = joueurRepository;
         this.passwordEncoder = passwordEncoder;
+        this.roleRepository = roleRepository;
+        this.affectationRepository = affectationRepository;
+        this.referentielSeeder = referentielSeeder;
     }
 
     /** Cree le club ET son president (en une transaction). */
@@ -53,6 +67,11 @@ public class ClubService {
         club.setLogo(req.logo());
         club = clubRepository.save(club);
 
+        // Référentiel documentaire par défaut (catégories d'âge + types de documents JOUEUR/STAFF).
+        // Les seeds V47/V49 ne visent que les clubs préexistants : pour un club neuf, c'est ici le
+        // seul endroit qui pose le référentiel (même contenu). Reste dans la transaction courante.
+        referentielSeeder.seederReferentielParDefaut(club.getId());
+
         Utilisateur president = new Utilisateur();
         president.setEmail(req.president().email());
         president.setMotDePasse(passwordEncoder.encode(req.president().motDePasse()));
@@ -62,10 +81,38 @@ public class ClubService {
         president.setClubId(club.getId());
         president = utilisateurRepository.save(president);
 
+        // Conformité documentaire (Phase 3) : le président obtient une fiche `personne` au niveau
+        // club (licence dirigeant, honorabilité...). Fiche non assignée → hors listes joueurs (Phase 2).
+        Joueur fiche = new Joueur();
+        fiche.setNom(president.getNom() != null && !president.getNom().isBlank() ? president.getNom() : "—");
+        fiche.setPrenom(president.getPrenom() != null && !president.getPrenom().isBlank() ? president.getPrenom() : "—");
+        fiche.setClubId(club.getId());
+        fiche.setStatut("actif");
+        fiche = joueurRepository.save(fiche);
+        president.setJoueurId(fiche.getId());
+        president = utilisateurRepository.save(president);
+
         club.setPresidentId(president.getId());
         club = clubRepository.save(club);
 
+        // Affectation RBAC club-wide vers le rôle système PRESIDENT : sans elle, le président
+        // n'aurait AUCUNE permission (PermissionResolver ne special-case que le super-admin, cf.
+        // le bug corrigé en V48). equipe_id NULL = tout le club.
+        creerAffectationPresident(president.getId(), club.getId());
+
         return toResponse(club);
+    }
+
+    /** Pose l'affectation club-wide du président vers le rôle système PRESIDENT (idempotent en pratique). */
+    private void creerAffectationPresident(UUID presidentId, UUID clubId) {
+        roleRepository.findBySystemeTrueAndCode(Role.PRESIDENT.name()).ifPresent(role -> {
+            AffectationRole a = new AffectationRole();
+            a.setUserId(presidentId);
+            a.setClubId(clubId);
+            a.setEquipeId(null);
+            a.setRoleId(role.getId());
+            affectationRepository.save(a);
+        });
     }
 
     public List<ClubResponse> listerClubs() {

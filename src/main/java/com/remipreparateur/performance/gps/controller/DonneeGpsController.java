@@ -60,9 +60,8 @@ public class DonneeGpsController {
 
     /** 404 si le joueur ciblé est hors du périmètre (équipe) de l'utilisateur — anti-IDOR. */
     private void verifieAccesJoueur(UUID joueurId) {
-        scopeResolver.verifieAcces(
-                joueurService.findById(joueurId)
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Joueur introuvable"))
-                        .getEquipeId());
+        var j = joueurService.findById(joueurId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Joueur introuvable"));
+        scopeResolver.verifieAccesPersonne(j.getId(), j.getClubId());   // Phase 4 : dérivé de l'effectif
     }
 }

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -79,6 +80,50 @@ public class NotificationProducer {
         } catch (Exception ignore) {
             return false;
         }
+    }
+
+    /** Document administratif validé/refusé par le staff → info au joueur. Best-effort. */
+    public void documentAdminStatutChange(UUID equipeId, UUID joueurId, String typeLibelle,
+                                          boolean valide, String motif) {
+        if (equipeId == null || joueurId == null) return;
+        String titre = valide ? "Document validé" : "Document refusé";
+        String corps = valide
+                ? "Ton document « " + typeLibelle + " » a été validé."
+                : "Ton document « " + typeLibelle + " » a été refusé"
+                        + (motif != null && !motif.isBlank() ? " : " + motif : ".");
+        safe(() -> dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.DOCUMENT_ADMIN_STATUT,
+                titre, corps, "/joueur/documents-administratifs", Priorite.NORMALE, null, null, false));
+    }
+
+    /** Document administratif arrivé à expiration (job quotidien) → info au joueur. Best-effort. */
+    public void documentAdminExpire(UUID equipeId, UUID joueurId, String typeLibelle) {
+        if (equipeId == null || joueurId == null) return;
+        safe(() -> dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.DOCUMENT_ADMIN_EXPIRE,
+                "Document expiré", "Ton document « " + typeLibelle + " » a expiré, pense à le renouveler.",
+                "/joueur/documents-administratifs", Priorite.NORMALE, null, null, false));
+    }
+
+    /** Relance hebdo : document(s) manquant(s)/refusé(s) → info au joueur. Best-effort. */
+    public void relanceDocumentsAdmin(UUID equipeId, UUID joueurId, int nbManquants) {
+        if (equipeId == null || joueurId == null || nbManquants <= 0) return;
+        String corps = nbManquants == 1
+                ? "Il te manque un document administratif — dépose-le dès que possible."
+                : "Il te manque " + nbManquants + " documents administratifs — dépose-les dès que possible.";
+        safe(() -> dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.RAPPEL_DOCUMENT_ADMIN,
+                "Documents à compléter", corps, "/joueur/documents-administratifs", Priorite.NORMALE,
+                null, null, false));
+    }
+
+    /** Digest hebdo club-wide (Président/Administratif) : conformité documentaire de l'effectif. */
+    public void digestConformiteDocuments(UUID clubId, UUID equipeAncre, int incomplets, int aValider, int expirentSous30j) {
+        if (clubId == null || equipeAncre == null) return;
+        if (incomplets == 0 && aValider == 0 && expirentSous30j == 0) return;
+        String corps = incomplets + " joueur(s) incomplet(s), " + aValider + " document(s) à valider, "
+                + expirentSous30j + " document(s) expirant sous 30 jours.";
+        safe(() -> dispatcher.versStaffRolesClub(clubId, equipeAncre,
+                List.of(com.remipreparateur.auth.entity.Role.PRESIDENT, com.remipreparateur.auth.entity.Role.ADMINISTRATIF),
+                TypeNotification.ALERTE_CONFORMITE_DOCUMENTS, "Conformité documentaire", corps,
+                "/documents-admin", Priorite.NORMALE));
     }
 
     /** Séance créée/modifiée/annulée → info aux joueurs de l'équipe. */

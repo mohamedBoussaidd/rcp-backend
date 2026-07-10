@@ -32,7 +32,7 @@ public class HistoriquePoidsController {
     /** Historique de pesées d'un joueur (du plus récent au plus ancien) */
     @GetMapping
     public List<HistoriquePoidsDto> getByJoueur(@RequestParam UUID joueurId) {
-        joueurRepo.findById(joueurId).ifPresent(j -> scopeResolver.verifieAcces(j.getEquipeId()));
+        joueurRepo.findById(joueurId).ifPresent(j -> scopeResolver.verifieAccesPersonne(j.getId(), j.getClubId()));
         return poidsRepo.findByJoueurIdOrderByDateDesc(joueurId)
                 .stream()
                 .map(this::toDto)
@@ -77,7 +77,7 @@ public class HistoriquePoidsController {
     public ResponseEntity<HistoriquePoidsDto> upsert(@RequestBody PeseeRequest req) {
         Optional<Joueur> joueurOpt = joueurRepo.findById(req.joueurId());
         if (joueurOpt.isEmpty()) return ResponseEntity.notFound().build();
-        scopeResolver.verifieAcces(joueurOpt.get().getEquipeId());
+        scopeResolver.verifieAccesPersonne(joueurOpt.get().getId(), joueurOpt.get().getClubId());
 
         HistoriquePoids pesee = poidsRepo
                 .findByJoueurIdOrderByDateDesc(req.joueurId())
@@ -108,7 +108,8 @@ public class HistoriquePoidsController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         Optional<HistoriquePoids> peseeOpt = poidsRepo.findById(id);
         if (peseeOpt.isEmpty()) return ResponseEntity.notFound().build();
-        scopeResolver.verifieAcces(peseeOpt.get().getJoueur().getEquipeId());
+        Joueur j = peseeOpt.get().getJoueur();
+        scopeResolver.verifieAccesPersonne(j.getId(), j.getClubId());
         poidsRepo.deleteById(id);
         return ResponseEntity.noContent().build();
     }

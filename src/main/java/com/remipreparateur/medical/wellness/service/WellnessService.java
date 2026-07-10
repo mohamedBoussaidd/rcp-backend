@@ -7,6 +7,7 @@ import com.remipreparateur.medical.wellness.entity.WellnessQuotidien;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.medical.wellness.repository.WellnessQuotidienRepository;
 import com.remipreparateur.notification.service.NotificationProducer;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
@@ -35,16 +36,19 @@ public class WellnessService {
     private final ScopeResolver scopeResolver;
     private final CurrentUserProvider currentUser;
     private final NotificationProducer notificationProducer;
+    private final AppartenanceService appartenance;
     private final Horloge horloge;
 
     public WellnessService(WellnessQuotidienRepository repository, JoueurRepository joueurRepository,
                            ScopeResolver scopeResolver, CurrentUserProvider currentUser,
-                           NotificationProducer notificationProducer, Horloge horloge) {
+                           NotificationProducer notificationProducer, AppartenanceService appartenance,
+                           Horloge horloge) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
         this.currentUser = currentUser;
         this.notificationProducer = notificationProducer;
+        this.appartenance = appartenance;
         this.horloge = horloge;
     }
 
@@ -61,10 +65,11 @@ public class WellnessService {
         Joueur joueur = joueurRepository.findById(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Fiche joueur introuvable"));
 
+        UUID equipe = appartenance.equipePrincipale(joueurId);  // équipe dérivée de l'effectif (Phase 4)
         WellnessQuotidien w = repository.findByJoueurIdAndDate(joueurId, date)
                 .orElseGet(WellnessQuotidien::new);
         w.setJoueurId(joueurId);
-        w.setEquipeId(joueur.getEquipeId());
+        w.setEquipeId(equipe);
         w.setDate(date);
         w.setSommeil(req.sommeil());
         w.setFatigue(req.fatigue());
@@ -85,7 +90,7 @@ public class WellnessService {
         WellnessQuotidien saved = repository.save(w);
         // Gêne signalée → alerte URGENTE au staff médical (best-effort, n'interrompt pas la saisie).
         if (zone != null) {
-            notificationProducer.geneDeclaree(joueur.getEquipeId(), joueurId,
+            notificationProducer.geneDeclaree(equipe, joueurId,
                     (joueur.getPrenom() + " " + joueur.getNom()).trim(), zone, w.getGeneIntensite());
         }
         return toResponse(saved, joueur);
@@ -159,13 +164,13 @@ public class WellnessService {
 
     /**
      * Score de bien-être 0..100. Convention Hooper uniforme : pour les 5 items,
-     * 1 = bon → 5 = mauvais. On inverse donc chaque item ({@code 6 - valeur}) pour que
-     * « plus haut = mieux », puis on ramène la moyenne (1..5) sur 100.
+     * 1 = bon → 10 = mauvais. On inverse donc chaque item ({@code 11 - valeur}) pour que
+     * « plus haut = mieux », puis on ramène la moyenne (1..10) sur 100.
      */
     private int scoreBienEtre(WellnessQuotidien w) {
-        int somme = (6 - w.getSommeil()) + (6 - w.getHumeur())
-                + (6 - w.getFatigue()) + (6 - w.getDouleur()) + (6 - w.getStress());
-        return Math.round(somme / 5f * 20f);
+        int somme = (11 - w.getSommeil()) + (11 - w.getHumeur())
+                + (11 - w.getFatigue()) + (11 - w.getDouleur()) + (11 - w.getStress());
+        return Math.round(somme / 5f * 10f);
     }
 
     private String videEnNull(String s) {

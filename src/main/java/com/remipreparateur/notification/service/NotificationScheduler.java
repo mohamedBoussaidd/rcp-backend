@@ -2,9 +2,17 @@ package com.remipreparateur.notification.service;
 
 import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
+import com.remipreparateur.auth.rbac.FeatureModule;
+import com.remipreparateur.club.entity.Club;
 import com.remipreparateur.club.entity.Equipe;
+import com.remipreparateur.club.pack.ClubModulesService;
+import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.auth.entity.Role;
+import com.remipreparateur.documentadmin.entity.DocumentJoueur;
+import com.remipreparateur.documentadmin.entity.TypeDocumentRequis;
+import com.remipreparateur.documentadmin.repository.TypeDocumentRequisRepository;
+import com.remipreparateur.documentadmin.service.DocumentAdminService;
 import com.remipreparateur.entretien.service.EntretienService;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
@@ -18,6 +26,7 @@ import com.remipreparateur.notification.repository.NotificationRepository;
 import com.remipreparateur.performance.rpe.repository.RpeSeanceRepository;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,6 +36,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -51,6 +61,12 @@ public class NotificationScheduler {
     private final NotificationRepository notificationRepository;
     private final BlessureService blessureService;
     private final EntretienService entretienService;
+    private final ClubRepository clubRepository;
+    private final ClubModulesService clubModulesService;
+    private final DocumentAdminService documentAdminService;
+    private final TypeDocumentRequisRepository typeDocumentRequisRepository;
+    private final NotificationProducer notifications;
+    private final AppartenanceService appartenance;
 
     public NotificationScheduler(EquipeRepository equipeRepository, NotifConfigService configService,
                                  DigestService digestService, NotificationDispatcher dispatcher,
@@ -60,7 +76,13 @@ public class NotificationScheduler {
                                  UtilisateurRepository utilisateurRepository,
                                  NotificationRepository notificationRepository,
                                  BlessureService blessureService,
-                                 EntretienService entretienService) {
+                                 EntretienService entretienService,
+                                 ClubRepository clubRepository,
+                                 ClubModulesService clubModulesService,
+                                 DocumentAdminService documentAdminService,
+                                 TypeDocumentRequisRepository typeDocumentRequisRepository,
+                                 NotificationProducer notifications,
+                                 AppartenanceService appartenance) {
         this.equipeRepository = equipeRepository;
         this.configService = configService;
         this.digestService = digestService;
@@ -73,6 +95,66 @@ public class NotificationScheduler {
         this.notificationRepository = notificationRepository;
         this.blessureService = blessureService;
         this.entretienService = entretienService;
+        this.clubRepository = clubRepository;
+        this.clubModulesService = clubModulesService;
+        this.documentAdminService = documentAdminService;
+        this.typeDocumentRequisRepository = typeDocumentRequisRepository;
+        this.notifications = notifications;
+        this.appartenance = appartenance;
+    }
+
+    /**
+     * Quotidien (07:30) : documents administratifs VALIDE dont l'expiration est dépassée →
+     * EXPIRE, notifie le joueur concerné. Heure réelle (jamais l'Horloge simulée), cf.
+     * {@link DocumentAdminService#expirerDepasses()}.
+     */
+    @Scheduled(cron = "0 30 7 * * *")
+    public void expirerDocumentsAdmin() {
+        try {
+            for (DocumentJoueur d : documentAdminService.expirerDepasses()) {
+                Joueur j = joueurRepository.findById(d.getJoueurId()).orElse(null);
+                if (j == null) continue;
+                UUID eq = appartenance.equipePrincipale(j.getId());
+                if (eq == null) continue;
+                TypeDocumentRequis type = typeDocumentRequisRepository.findById(d.getTypeDocumentRequisId()).orElse(null);
+                notifications.documentAdminExpire(eq, j.getId(),
+                        type != null ? type.getLibelle() : "Document");
+            }
+        } catch (Exception e) {
+            log.warn("Expiration documents administratifs : {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Hebdomadaire (lundi 08:15) : relance chaque joueur incomplet (document manquant/refusé) +
+     * UN digest de conformité par club aux Président/Administratif. Boucle par CLUB (pas par
+     * équipe comme {@link #tick}) : ce domaine est piloté au niveau club, pas équipe.
+     */
+    @Scheduled(cron = "0 15 8 * * MON")
+    public void relanceEtDigestDocumentsAdmin() {
+        for (Club club : clubRepository.findAll()) {
+            try {
+                traiterDocumentsAdminClub(club.getId());
+            } catch (Exception e) {
+                log.warn("Relance/digest documents administratifs — club {} : {}", club.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private void traiterDocumentsAdminClub(UUID clubId) {
+        if (!clubModulesService.modulesActifs(clubId).contains(FeatureModule.DOCUMENTS_ADMIN.getCode())) return;
+        for (Map.Entry<Joueur, Integer> entry : documentAdminService.joueursIncomplets(clubId).entrySet()) {
+            Joueur j = entry.getKey();
+            UUID eq = appartenance.equipePrincipale(j.getId());
+            if (eq == null) continue;
+            notifications.relanceDocumentsAdmin(eq, j.getId(), entry.getValue());
+        }
+        List<Equipe> equipes = equipeRepository.findByClubId(clubId);
+        if (equipes.isEmpty()) return; // pas d'équipe = pas d'ancrage possible pour le digest club-wide
+        UUID ancre = equipes.get(0).getId();
+        DocumentAdminService.ResumeConformiteClub resume = documentAdminService.resumeConformite(clubId);
+        notifications.digestConformiteDocuments(clubId, ancre,
+                resume.incomplets(), resume.aValider(), resume.expirentSous30j());
     }
 
     /**

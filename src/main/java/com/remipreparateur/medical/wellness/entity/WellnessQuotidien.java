@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Ressenti quotidien du joueur (indice de Hooper, 5 items sur 1..5).
+ * Ressenti quotidien du joueur (indice de Hooper, 5 items sur 1..10).
  * Une saisie par jour (unique joueur_id + date), modifiable dans la journée.
  */
 @Entity

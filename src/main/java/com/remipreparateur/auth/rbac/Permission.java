@@ -67,6 +67,12 @@ public enum Permission {
     AXE_READ("axe:read", "Suivi individuel", "Voir les axes de travail"),
     AXE_WRITE("axe:write", "Suivi individuel", "Créer / éditer les axes de travail"),
 
+    // ── Administration du club ──────────────────────────────────────
+    DOCADMIN_CONFIGURE("docadmin:configure", "Administration du club", "Gérer le référentiel des documents requis"),
+    DOCADMIN_READ("docadmin:read", "Administration du club", "Voir la conformité documentaire de l'effectif"),
+    DOCADMIN_VALIDATE("docadmin:validate", "Administration du club", "Valider / refuser un document déposé"),
+    DOCADMIN_UPLOAD("docadmin:upload", "Administration du club", "Déposer un document pour un joueur"),
+
     // ── Paramètres & Notifications ──────────────────────────────────
     CONFIGURATION_READ("configuration:read", "Paramètres & Notifications", "Voir la configuration"),
     CONFIGURATION_WRITE("configuration:write", "Paramètres & Notifications", "Modifier la configuration"),

@@ -54,7 +54,9 @@ public enum FeatureModule {
     NOTIFICATIONS("notifications", "Notifications",
             "Notifications in-app et push (Web Push)", false, 20),
     SUIVI_INDIVIDUEL("suivi_individuel", "Suivi individuel",
-            "Axes de travail, entretiens individuels et auto-évaluations du joueur", false, 21);
+            "Axes de travail, entretiens individuels et auto-évaluations du joueur", false, 21),
+    DOCUMENTS_ADMIN("documents_admin", "Licences & documents",
+            "Référentiel des documents requis, conformité de l'effectif et relances", false, 22);
 
     private final String code;
     private final String libelle;
@@ -122,6 +124,7 @@ public enum FeatureModule {
                  WELLNESS_TREAT, WELLNESS_REOPEN -> MEDICAL;
             case NOTIFICATIONS_CONFIG -> NOTIFICATIONS;
             case ENTRETIEN_READ, ENTRETIEN_WRITE, ENTRETIEN_MANAGE, AXE_READ, AXE_WRITE -> SUIVI_INDIVIDUEL;
+            case DOCADMIN_CONFIGURE, DOCADMIN_READ, DOCADMIN_VALIDATE, DOCADMIN_UPLOAD -> DOCUMENTS_ADMIN;
         };
     }
 

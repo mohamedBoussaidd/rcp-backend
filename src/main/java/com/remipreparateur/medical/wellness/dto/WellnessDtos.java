@@ -13,18 +13,18 @@ public final class WellnessDtos {
 
     private WellnessDtos() {}
 
-    /** Saisie du jour ; date optionnelle (défaut = aujourd'hui). Items sur 1..5. */
+    /** Saisie du jour ; date optionnelle (défaut = aujourd'hui). Items sur 1..10. */
     public record WellnessRequest(
             LocalDate date,
-            @NotNull @Min(1) @Max(5) Short sommeil,
-            @NotNull @Min(1) @Max(5) Short fatigue,
-            @NotNull @Min(1) @Max(5) Short douleur,
-            @NotNull @Min(1) @Max(5) Short stress,
-            @NotNull @Min(1) @Max(5) Short humeur,
+            @NotNull @Min(1) @Max(10) Short sommeil,
+            @NotNull @Min(1) @Max(10) Short fatigue,
+            @NotNull @Min(1) @Max(10) Short douleur,
+            @NotNull @Min(1) @Max(10) Short stress,
+            @NotNull @Min(1) @Max(10) Short humeur,
             String commentaire,
             // Signalement de gêne optionnel (zone null = pas de gêne).
             String geneZone,
-            @Min(1) @Max(5) Short geneIntensite,
+            @Min(1) @Max(10) Short geneIntensite,
             String geneMoment) {}
 
     public record WellnessResponse(

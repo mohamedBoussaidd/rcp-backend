@@ -17,9 +17,12 @@ public interface DonneeGpsRepository extends JpaRepository<DonneeGps, UUID> {
     List<DonneeGps> findByJoueurIdOrderBySeanceDateDesc(UUID joueurId);
     java.util.Optional<DonneeGps> findByJoueurIdAndSeanceId(UUID joueurId, UUID seanceId);
 
-    /** Fiche vitesse par joueur (record + moyenne des vitesses max GPS), limitée aux équipes données. */
+    /** Fiche vitesse par joueur (record + moyenne des vitesses max GPS), limitée aux équipes données.
+     *  Phase 4 : l'appartenance d'équipe est dérivée de l'effectif de la saison EN_COURS (plus de cache). */
     @Query("select g.joueur.id as joueurId, max(g.vitesseMaxKmh) as vmax, avg(g.vitesseMaxKmh) as vmoy " +
-           "from DonneeGps g where g.vitesseMaxKmh is not null and g.joueur.equipeId in :equipeIds " +
+           "from DonneeGps g, EffectifSaison es, Saison s " +
+           "where g.vitesseMaxKmh is not null and es.joueurId = g.joueur.id " +
+           "and s.id = es.saisonId and s.statut = 'EN_COURS' and es.equipeId in :equipeIds " +
            "group by g.joueur.id")
     List<VitesseAgg> aggregerVitesses(java.util.Collection<UUID> equipeIds);
 

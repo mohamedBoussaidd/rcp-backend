@@ -15,6 +15,7 @@ import com.remipreparateur.saison.entity.EffectifSaison;
 import com.remipreparateur.saison.entity.Saison;
 import com.remipreparateur.saison.repository.EffectifSaisonRepository;
 import com.remipreparateur.saison.repository.SaisonRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.shared.time.Horloge;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,7 @@ public class PresenceService {
     private final EffectifSaisonRepository effectifRepository;
     private final NotificationProducer notificationProducer;
     private final ScopeResolver scopeResolver;
+    private final AppartenanceService appartenance;
     private final Horloge horloge;
 
     /**
@@ -168,8 +170,8 @@ public class PresenceService {
     @Transactional(readOnly = true)
     public AssiduiteJoueur assiduite(UUID joueurId) {
         Joueur joueur = joueurRequis(joueurId);
-        scopeResolver.verifieAcces(joueur.getEquipeId());
-        return assiduiteSurFenetre(joueur, resoudreFenetre(joueur.getEquipeId(), null, null, null));
+        scopeResolver.verifieAccesPersonne(joueur.getId(), joueur.getClubId());
+        return assiduiteSurFenetre(joueur, resoudreFenetre(appartenance.equipePrincipale(joueur.getId()), null, null, null));
     }
 
     /**
@@ -180,14 +182,14 @@ public class PresenceService {
     @Transactional(readOnly = true)
     public AssiduiteJoueur historiqueJoueur(UUID joueurId, UUID saisonId, LocalDate du, LocalDate au) {
         Joueur joueur = joueurRequis(joueurId);
-        scopeResolver.verifieAcces(joueur.getEquipeId());
-        return assiduiteSurFenetre(joueur, resoudreFenetre(joueur.getEquipeId(), saisonId, du, au));
+        scopeResolver.verifieAccesPersonne(joueur.getId(), joueur.getClubId());
+        return assiduiteSurFenetre(joueur, resoudreFenetre(appartenance.equipePrincipale(joueur.getId()), saisonId, du, au));
     }
 
     /** Cœur du calcul d'assiduité d'un joueur sur une fenêtre déjà résolue. */
     private AssiduiteJoueur assiduiteSurFenetre(Joueur joueur, Fenetre f) {
         UUID joueurId = joueur.getId();
-        UUID equipeId = joueur.getEquipeId();
+        UUID equipeId = appartenance.equipePrincipale(joueurId);   // équipe dérivée de l'effectif (Phase 4)
         LocalDate today = horloge.today();
 
         Map<UUID, Seance> parId = new HashMap<>();
@@ -238,9 +240,12 @@ public class PresenceService {
         LocalDate recentDepuis = today.minusDays(14);
         List<AssiduiteResume> out = new ArrayList<>();
 
-        Map<UUID, List<Joueur>> parEquipe = joueurs.stream()
-                .filter(j -> j.getEquipeId() != null)
-                .collect(Collectors.groupingBy(Joueur::getEquipeId));
+        // Regroupement par équipe dérivée de l'effectif (Phase 4, plus de cache joueur.equipe_id).
+        Map<UUID, List<Joueur>> parEquipe = new HashMap<>();
+        for (Joueur j : joueurs) {
+            UUID eq = appartenance.equipePrincipale(j.getId());
+            if (eq != null) parEquipe.computeIfAbsent(eq, k -> new ArrayList<>()).add(j);
+        }
 
         for (Map.Entry<UUID, List<Joueur>> e : parEquipe.entrySet()) {
             UUID equipeId = e.getKey();

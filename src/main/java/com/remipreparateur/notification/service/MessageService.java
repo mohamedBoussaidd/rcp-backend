@@ -11,6 +11,7 @@ import com.remipreparateur.notification.entity.NiveauEnvoi;
 import com.remipreparateur.notification.entity.Priorite;
 import com.remipreparateur.notification.entity.TypeNotification;
 import com.remipreparateur.notification.repository.NotificationRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
 import org.springframework.data.domain.PageRequest;
@@ -36,13 +37,16 @@ public class MessageService {
     private final NotifConfigService configService;
     private final JoueurRepository joueurRepository;
     private final NotificationRepository notificationRepository;
+    private final AppartenanceService appartenance;
 
     public MessageService(CurrentUserProvider currentUser, ScopeResolver scopeResolver,
                           NotificationDispatcher dispatcher, NotifConfigService configService,
-                          JoueurRepository joueurRepository, NotificationRepository notificationRepository) {
+                          JoueurRepository joueurRepository, NotificationRepository notificationRepository,
+                          AppartenanceService appartenance) {
         this.currentUser = currentUser;
         this.scopeResolver = scopeResolver;
         this.dispatcher = dispatcher;
+        this.appartenance = appartenance;
         this.configService = configService;
         this.joueurRepository = joueurRepository;
         this.notificationRepository = notificationRepository;
@@ -131,7 +135,7 @@ public class MessageService {
         for (UUID joueurId : cibles) {
             Joueur j = joueurRepository.findById(joueurId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Joueur introuvable"));
-            if (equipe == null || !equipe.equals(j.getEquipeId())) {
+            if (equipe == null || !appartenance.equipesDe(j.getId()).contains(equipe)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Destinataire hors équipe");
             }
             if (dispatcher.versJoueurFiche(equipe, joueurId, type, titre, corps, "/joueur",

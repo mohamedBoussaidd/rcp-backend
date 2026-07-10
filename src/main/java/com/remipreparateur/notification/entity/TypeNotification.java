@@ -23,6 +23,9 @@ public enum TypeNotification {
     MATCH_PARTAGE(Categorie.INFO, false),
     ENTRETIEN_PARTAGE(Categorie.INFO, false),
     ENTRETIEN_PLANIFIE(Categorie.INFO, false),  // RDV d'entretien planifié/déplacé → info joueur
+    DOCUMENT_ADMIN_STATUT(Categorie.INFO, false),   // document validé/refusé → info joueur
+    DOCUMENT_ADMIN_EXPIRE(Categorie.INFO, false),   // document expiré (job quotidien) → info joueur
+    RAPPEL_DOCUMENT_ADMIN(Categorie.RAPPEL, false), // relance hebdo : document manquant/refusé
 
     // ── Messages humains ──
     MESSAGE_STAFF(Categorie.MESSAGE, false),
@@ -36,6 +39,7 @@ public enum TypeNotification {
     ALERTE_COMPLETION(Categorie.ALERTE, true),
     ALERTE_STATUT(Categorie.ALERTE, false),
     ALERTE_ENTRETIEN(Categorie.ALERTE, true),   // digest hebdo : joueurs sans entretien récent (staff)
+    ALERTE_CONFORMITE_DOCUMENTS(Categorie.ALERTE, false),  // digest club-wide : conformité documentaire (staff)
     ALERTE_GENE(Categorie.ALERTE, false),   // urgent, unitaire immédiat (médical)
     RETOUR_BLESSURE_A_CONFIRMER(Categorie.ALERTE, false),  // retour soldé auto → staff confirme/prolonge
     DIGEST(Categorie.ALERTE, false),

@@ -6,6 +6,7 @@ import com.remipreparateur.medical.blessure.entity.Blessure;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.medical.blessure.repository.BlessureRepository;
 import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.shared.time.Horloge;
@@ -26,13 +27,15 @@ public class BlessureService {
     private final BlessureRepository blessureRepository;
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
+    private final AppartenanceService appartenance;
     private final Horloge horloge;
 
     public BlessureService(BlessureRepository blessureRepository, JoueurRepository joueurRepository,
-                           ScopeResolver scopeResolver, Horloge horloge) {
+                           ScopeResolver scopeResolver, AppartenanceService appartenance, Horloge horloge) {
         this.blessureRepository = blessureRepository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
+        this.appartenance = appartenance;
         this.horloge = horloge;
     }
 
@@ -64,7 +67,7 @@ public class BlessureService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Joueur introuvable"));
         Blessure b = new Blessure();
         appliquer(b, req);
-        b.setEquipeId(joueur.getEquipeId()); // rattache la blessure a l'equipe du joueur
+        b.setEquipeId(appartenance.equipePrincipale(joueur.getId())); // équipe dérivée de l'effectif (Phase 4)
         BlessureResponse res = toResponse(blessureRepository.save(b), joueur);
         synchroniserStatutJoueur(joueur);
         return res;

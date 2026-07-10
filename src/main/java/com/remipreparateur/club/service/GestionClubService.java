@@ -15,6 +15,8 @@ import com.remipreparateur.auth.rbac.RoleApplicatifRepository;
 import com.remipreparateur.auth.rbac.RolePermissionRepository;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.saison.repository.EffectifSaisonRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.ContexteActif;
 import com.remipreparateur.shared.security.ContexteActifHolder;
 import org.springframework.http.HttpStatus;
@@ -44,6 +46,8 @@ public class GestionClubService {
     private final UtilisateurRepository utilisateurRepository;
     private final ClubRepository clubRepository;
     private final JoueurRepository joueurRepository;
+    private final EffectifSaisonRepository effectifRepository;
+    private final AppartenanceService appartenance;
     private final PasswordEncoder passwordEncoder;
     private final RoleApplicatifRepository roleRepository;
     private final AffectationRoleRepository affectationRepository;
@@ -53,6 +57,8 @@ public class GestionClubService {
                               UtilisateurRepository utilisateurRepository,
                               ClubRepository clubRepository,
                               JoueurRepository joueurRepository,
+                              EffectifSaisonRepository effectifRepository,
+                              AppartenanceService appartenance,
                               PasswordEncoder passwordEncoder,
                               RoleApplicatifRepository roleRepository,
                               AffectationRoleRepository affectationRepository,
@@ -61,6 +67,8 @@ public class GestionClubService {
         this.utilisateurRepository = utilisateurRepository;
         this.clubRepository = clubRepository;
         this.joueurRepository = joueurRepository;
+        this.effectifRepository = effectifRepository;
+        this.appartenance = appartenance;
         this.passwordEncoder = passwordEncoder;
         this.roleRepository = roleRepository;
         this.affectationRepository = affectationRepository;
@@ -157,12 +165,13 @@ public class GestionClubService {
             }
             Joueur fiche = joueurRepository.findById(req.joueurId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche joueur introuvable"));
-            if (fiche.getEquipeId() != null) verifieEquipeDuClub(fiche.getEquipeId(), clubId);
+            UUID ficheEquipe = appartenance.equipePrincipale(fiche.getId());   // équipe dérivée (Phase 4)
+            if (ficheEquipe != null) verifieEquipeDuClub(ficheEquipe, clubId);
             if (utilisateurRepository.existsByJoueurId(req.joueurId())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Fiche deja reliee a un autre compte");
             }
             m.setJoueurId(req.joueurId());
-            if (fiche.getEquipeId() != null) m.setEquipeId(fiche.getEquipeId());
+            if (ficheEquipe != null) m.setEquipeId(ficheEquipe);
         }
 
         // Hiérarchie + périmètre : on ne crée qu'un membre de rang inférieur, dans son équipe.
@@ -170,6 +179,16 @@ public class GestionClubService {
 
         m = utilisateurRepository.save(m);
         synchroniserAffectationPrincipale(m, clubId);
+
+        // Conformité documentaire du staff (Phase 3) : un membre encadrant obtient une fiche
+        // `personne` au niveau club (support des documents : licence dirigeant, diplôme,
+        // honorabilité...). La fiche reste hors des listes joueurs (Phase 2). Les comptes JOUEUR
+        // sont exclus : leur fiche est la fiche d'effectif, gérée séparément (lien explicite).
+        if (ROLES_STAFF.contains(role) && m.getJoueurId() == null) {
+            Joueur fiche = creerFicheStaff(m, clubId);
+            m.setJoueurId(fiche.getId());
+            m = utilisateurRepository.save(m);
+        }
         return toMembreResponse(m);
     }
 
@@ -274,7 +293,29 @@ public class GestionClubService {
     public void supprimerMembre(Utilisateur president, UUID membreId) {
         Utilisateur m = chargeMembreDuClub(president, membreId);
         verifiePeutGerer(president, niveauDe(m, m.getClubId()), m.getEquipeId(), m.getClubId());
+        UUID ficheStaff = (ROLES_STAFF.contains(m.getRole()) && m.getJoueurId() != null)
+                ? m.getJoueurId() : null;
         utilisateurRepository.deleteById(m.getId());
+        // Nettoyage de la fiche staff auto-créée (Phase 3) pour éviter une fiche fantôme qui
+        // redeviendrait un « joueur » au sens de la Phase 2 (plus de compte, aucun effectif).
+        // Garde : on ne supprime jamais une fiche présente dans un effectif (vrai joueur / cumul).
+        if (ficheStaff != null && !effectifRepository.existsByJoueurId(ficheStaff)) {
+            joueurRepository.deleteById(ficheStaff); // cascade → document_joueur (V47)
+        }
+    }
+
+    /**
+     * Crée une fiche `personne` au niveau club pour un membre STAFF (support de la conformité
+     * documentaire — Phase 3). Champs sportifs à null, aucune équipe (fiche non assignée) :
+     * elle reste hors des listes joueurs (Phase 2, dérivation par appartenance).
+     */
+    private Joueur creerFicheStaff(Utilisateur membre, UUID clubId) {
+        Joueur f = new Joueur();
+        f.setNom(membre.getNom() != null && !membre.getNom().isBlank() ? membre.getNom() : "—");
+        f.setPrenom(membre.getPrenom() != null && !membre.getPrenom().isBlank() ? membre.getPrenom() : "—");
+        f.setClubId(clubId);
+        f.setStatut("actif");
+        return joueurRepository.save(f);
     }
 
     // ── Liaison compte JOUEUR ↔ fiche (posée a posteriori) ──
@@ -287,17 +328,27 @@ public class GestionClubService {
         UUID clubId = exigeClub(acteur);
         Joueur fiche = joueurRepository.findById(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche joueur introuvable"));
-        if (fiche.getEquipeId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fiche sans equipe");
+        // La fiche appartient au CLUB (niveau club) ; son équipe est OPTIONNELLE (fiche non
+        // assignée). On vérifie l'appartenance au club, pas la présence d'une équipe.
+        UUID ficheClub = clubDeFiche(fiche);
+        if (ficheClub == null || !ficheClub.equals(clubId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche hors de votre club");
         }
-        verifieEquipeDuClub(fiche.getEquipeId(), clubId);
-        // La fiche (donc l'équipe résultante du compte) doit être dans le périmètre de l'acteur.
-        verifiePeutGerer(acteur, niveauRole(Role.JOUEUR), fiche.getEquipeId(), clubId);
+        UUID ficheEquipe = appartenance.equipePrincipale(fiche.getId());   // équipe dérivée (Phase 4)
+        if (ficheEquipe != null) {
+            verifieEquipeDuClub(ficheEquipe, clubId);
+        }
+        // Contrôle hiérarchie/périmètre : sur l'équipe de la fiche si elle en a une, sinon au
+        // niveau club (les rôles équipe-scopés ne peuvent lier qu'une fiche de leur équipe).
+        verifiePeutGerer(acteur, niveauRole(Role.JOUEUR), ficheEquipe, clubId);
         if (utilisateurRepository.existsByJoueurIdAndIdNot(joueurId, membreId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Fiche deja reliee a un autre compte");
         }
         m.setJoueurId(joueurId);
-        m.setEquipeId(fiche.getEquipeId()); // on aligne l'equipe du compte sur celle de la fiche
+        // Aligne l'équipe du compte sur celle de la fiche UNIQUEMENT si la fiche en a une.
+        if (ficheEquipe != null) {
+            m.setEquipeId(ficheEquipe);
+        }
         return toMembreResponse(utilisateurRepository.save(m));
     }
 
@@ -342,6 +393,11 @@ public class GestionClubService {
         if (!e.getClubId().equals(clubId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Equipe hors de votre club");
         }
+    }
+
+    /** Club d'une fiche : son {@code club_id} direct, sinon dérivé de son équipe (fiches legacy). */
+    private UUID clubDeFiche(Joueur fiche) {
+        return fiche.getClubId();   // Phase 4 : le club est porté par la fiche (plus de dérivation via l'équipe)
     }
 
     // ── Hiérarchie & périmètre de gestion des membres ──
@@ -448,14 +504,21 @@ public class GestionClubService {
      */
     private void synchroniserAffectationPrincipale(Utilisateur membre, UUID clubId) {
         affectationRepository.deleteByUserIdAndClubId(membre.getId(), clubId);
-        if (!ROLES_STAFF.contains(membre.getRole()) || membre.getEquipeId() == null) {
-            return; // joueur (self-scope) ou membre sans équipe → pas d'affectation
+        if (!ROLES_STAFF.contains(membre.getRole())) {
+            return; // joueur (self-scope) → pas d'affectation
+        }
+        // L'ADMINISTRATIF pilote le club ENTIER → affectation club-wide (equipe_id NULL), même
+        // sans équipe (c'est son cas normal). Les autres rôles staff restent scopés à leur équipe
+        // (et sans équipe → pas d'affectation, comportement historique).
+        boolean clubWide = membre.getRole() == Role.ADMINISTRATIF;
+        if (!clubWide && membre.getEquipeId() == null) {
+            return;
         }
         roleRepository.findBySystemeTrueAndCode(membre.getRole().name()).ifPresent(role -> {
             AffectationRole a = new AffectationRole();
             a.setUserId(membre.getId());
             a.setClubId(clubId);
-            a.setEquipeId(membre.getEquipeId());
+            a.setEquipeId(clubWide ? null : membre.getEquipeId());
             a.setRoleId(role.getId());
             affectationRepository.save(a);
         });

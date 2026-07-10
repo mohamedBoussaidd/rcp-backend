@@ -16,6 +16,7 @@ import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.auth.rbac.PermissionResolver;
 import com.remipreparateur.medical.blessure.repository.BlessureRepository;
 import com.remipreparateur.notification.service.NotificationProducer;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.shared.time.Horloge;
@@ -57,6 +58,7 @@ public class MatchService {
     private final ScopeResolver scopeResolver;
     private final PermissionResolver permissionResolver;
     private final Horloge horloge;
+    private final AppartenanceService appartenance;
 
     public MatchService(MatchPrepaRepository matchRepository,
                         MatchSchemaRepository schemaRepository,
@@ -73,7 +75,8 @@ public class MatchService {
                         CurrentUserProvider currentUser,
                         ScopeResolver scopeResolver,
                         PermissionResolver permissionResolver,
-                        Horloge horloge) {
+                        Horloge horloge,
+                        AppartenanceService appartenance) {
         this.matchRepository = matchRepository;
         this.schemaRepository = schemaRepository;
         this.compoRepository = compoRepository;
@@ -90,6 +93,7 @@ public class MatchService {
         this.scopeResolver = scopeResolver;
         this.permissionResolver = permissionResolver;
         this.horloge = horloge;
+        this.appartenance = appartenance;
     }
 
     // ── Liste / création ──
@@ -431,12 +435,11 @@ public class MatchService {
     }
 
     private UUID equipeDuJoueur(UUID joueurId) {
-        Joueur j = joueurRepository.findById(joueurId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fiche joueur introuvable"));
-        if (j.getEquipeId() == null) {
+        UUID eq = appartenance.equipePrincipale(joueurId);   // équipe dérivée de l'effectif (Phase 4)
+        if (eq == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Joueur sans équipe");
         }
-        return j.getEquipeId();
+        return eq;
     }
 
     // ── Helpers de chargement / périmètre ──

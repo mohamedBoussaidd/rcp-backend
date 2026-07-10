@@ -6,6 +6,7 @@ import com.remipreparateur.medical.conseil.dto.ConseilDtos.ConseilRequest;
 import com.remipreparateur.medical.conseil.dto.ConseilDtos.ConseilResponse;
 import com.remipreparateur.medical.conseil.entity.ConseilStaff;
 import com.remipreparateur.medical.conseil.repository.ConseilStaffRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
 import org.springframework.http.HttpStatus;
@@ -28,13 +29,16 @@ public class ConseilService {
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
     private final CurrentUserProvider currentUser;
+    private final AppartenanceService appartenance;
 
     public ConseilService(ConseilStaffRepository repository, JoueurRepository joueurRepository,
-                          ScopeResolver scopeResolver, CurrentUserProvider currentUser) {
+                          ScopeResolver scopeResolver, CurrentUserProvider currentUser,
+                          AppartenanceService appartenance) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.scopeResolver = scopeResolver;
         this.currentUser = currentUser;
+        this.appartenance = appartenance;
     }
 
     // ──────────────────────────── Staff ────────────────────────────
@@ -47,7 +51,7 @@ public class ConseilService {
         if (joueurId != null) {
             Joueur joueur = joueurChecke(joueurId);
             return repository.findByEquipeIdAndJoueurIdIsNullOrJoueurIdOrderByCreatedAtDesc(
-                            joueur.getEquipeId(), joueurId).stream()
+                            appartenance.equipePrincipale(joueurId), joueurId).stream()
                     .map(c -> toResponse(c, joueur))
                     .toList();
         }
@@ -88,7 +92,7 @@ public class ConseilService {
         Joueur joueur = joueurRepository.findById(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Fiche joueur introuvable"));
         return repository.findByEquipeIdAndJoueurIdIsNullOrJoueurIdOrderByCreatedAtDesc(
-                        joueur.getEquipeId(), joueurId).stream()
+                        appartenance.equipePrincipale(joueurId), joueurId).stream()
                 .map(c -> toResponse(c, joueur))
                 .toList();
     }
@@ -101,7 +105,7 @@ public class ConseilService {
         if (req.joueurId() != null) {
             joueur = joueurChecke(req.joueurId());
             c.setJoueurId(joueur.getId());
-            c.setEquipeId(joueur.getEquipeId());
+            c.setEquipeId(appartenance.equipePrincipale(joueur.getId()));
         } else {
             c.setJoueurId(null);
             c.setEquipeId(scopeResolver.equipeActiveUnique());
@@ -116,7 +120,7 @@ public class ConseilService {
     private Joueur joueurChecke(UUID joueurId) {
         Joueur joueur = joueurRepository.findById(joueurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Joueur introuvable"));
-        scopeResolver.verifieAcces(joueur.getEquipeId());
+        scopeResolver.verifieAccesPersonne(joueur.getId(), joueur.getClubId());
         return joueur;
     }
 

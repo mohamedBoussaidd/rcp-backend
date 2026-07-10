@@ -8,6 +8,7 @@ import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.performance.rpe.repository.RpeSeanceRepository;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
 import org.springframework.http.HttpStatus;
@@ -17,7 +18,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -37,14 +37,16 @@ public class RpeService {
     private final JoueurRepository joueurRepository;
     private final SeanceRepository seanceRepository;
     private final ScopeResolver scopeResolver;
+    private final AppartenanceService appartenance;
 
     public RpeService(RpeSeanceRepository repository, JoueurRepository joueurRepository,
                       SeanceRepository seanceRepository,
-                      ScopeResolver scopeResolver) {
+                      ScopeResolver scopeResolver, AppartenanceService appartenance) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
         this.seanceRepository = seanceRepository;
         this.scopeResolver = scopeResolver;
+        this.appartenance = appartenance;
     }
 
     public RpeResponse enregistrer(UUID joueurId, RpeRequest req) {
@@ -62,8 +64,8 @@ public class RpeService {
         UUID equipeSeance = s.getEquipeId();
         Short duree = req.dureeMinutes() != null ? req.dureeMinutes() : s.getDureeMinutes();
 
-        // Le joueur ne peut noter qu'une séance de sa propre équipe.
-        if (joueur.getEquipeId() == null || !Objects.equals(joueur.getEquipeId(), equipeSeance)) {
+        // Le joueur ne peut noter qu'une séance d'UNE de ses équipes (effectif EN_COURS, Phase 4).
+        if (equipeSeance == null || !appartenance.equipesDe(joueur.getId()).contains(equipeSeance)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance hors de votre équipe");
         }
 

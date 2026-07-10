@@ -59,6 +59,24 @@ public class NotificationDispatcher {
         return n;
     }
 
+    /**
+     * Diffuse à des rôles staff rattachés au CLUB (Président/Administratif), pas à une équipe
+     * précise. La table {@code notification} exige une équipe (contrainte technique de fan-out
+     * par équipe) : {@code equipeAncre} — n'importe quelle équipe du club — sert d'ancrage sans
+     * aucun impact pour le destinataire, qui ne voit ses notifications que par son propre
+     * identifiant (cf. {@code NotificationController}), jamais filtrées par équipe.
+     */
+    public int versStaffRolesClub(UUID clubId, UUID equipeAncre, List<Role> roles, TypeNotification type,
+                                  String titre, String corps, String lien, Priorite priorite) {
+        if (roles == null || roles.isEmpty() || equipeAncre == null) return 0;
+        int n = 0;
+        for (Utilisateur u : utilisateurRepository.findByClubIdAndRoleIn(clubId, roles)) {
+            Notification notif = base(equipeAncre, u.getId(), type, titre, corps, lien, priorite);
+            if (notificationService.delivrer(notif).isPresent()) n++;
+        }
+        return n;
+    }
+
     /** Notifie un joueur (via son compte) ; no-op si la fiche n'est reliée à aucun compte. */
     public boolean versJoueurFiche(UUID equipeId, UUID joueurId, TypeNotification type,
                                    String titre, String corps, String lien, Priorite priorite,

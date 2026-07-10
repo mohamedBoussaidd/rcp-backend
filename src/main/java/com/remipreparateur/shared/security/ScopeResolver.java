@@ -1,8 +1,10 @@
 package com.remipreparateur.shared.security;
 
 import com.remipreparateur.club.entity.Equipe;
+import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.club.repository.EquipeRepository;
+import com.remipreparateur.saison.service.AppartenanceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,10 +21,13 @@ public class ScopeResolver {
 
     private final CurrentUserProvider currentUser;
     private final EquipeRepository equipeRepository;
+    private final AppartenanceService appartenance;
 
-    public ScopeResolver(CurrentUserProvider currentUser, EquipeRepository equipeRepository) {
+    public ScopeResolver(CurrentUserProvider currentUser, EquipeRepository equipeRepository,
+                         AppartenanceService appartenance) {
         this.currentUser = currentUser;
         this.equipeRepository = equipeRepository;
+        this.appartenance = appartenance;
     }
 
     /**
@@ -64,7 +69,11 @@ public class ScopeResolver {
         Utilisateur u = currentUser.current();
         return switch (u.getRole()) {
             case SUPER_ADMIN -> Scope.tout();
-            case PRESIDENT -> {
+            // PRESIDENT et ADMINISTRATIF pilotent le CLUB entier, pas une équipe précise : leur
+            // portée = toutes les équipes du club. ADMINISTRATIF n'obtient aucune donnée sportive/
+            // médicale pour autant — le filtre par Permission (hasAuthority) reste seul décisif ;
+            // il ne détient aujourd'hui QUE les permissions docadmin:* (cf. V47).
+            case PRESIDENT, ADMINISTRATIF -> {
                 if (u.getClubId() == null) yield Scope.aucun();
                 List<UUID> ids = equipeRepository.findByClubId(u.getClubId())
                         .stream().map(Equipe::getId).toList();
@@ -72,13 +81,31 @@ public class ScopeResolver {
             }
             case ENTRAINEUR, PREPARATEUR, MEDICAL, JOUEUR ->
                     u.getEquipeId() != null ? Scope.equipes(List.of(u.getEquipeId())) : Scope.aucun();
-            default -> Scope.aucun(); // ADMINISTRATIF : pas d'acces aux donnees
+            default -> Scope.aucun();
         };
     }
 
     /** Equipe a poser sur une donnee creee (l'equipe du staff connecte ; null pour super-admin). */
     public UUID equipePourEcriture() {
         return currentUser.current().getEquipeId();
+    }
+
+    /**
+     * Club dont l'utilisateur gère l'INTÉGRALITÉ des fiches (y compris celles non assignées à une
+     * équipe) : président / administratif → leur club ; super-admin → club du contexte actif.
+     * {@code null} pour les rôles scopés équipe (ils ne voient que les fiches de leurs équipes) et
+     * pour le super-admin hors contexte (il voit tout, géré en amont via {@link Scope#all()}).
+     */
+    public UUID clubEntierPourGestion() {
+        Utilisateur u = currentUser.current();
+        return switch (u.getRole()) {
+            case PRESIDENT, ADMINISTRATIF -> u.getClubId();
+            case SUPER_ADMIN -> {
+                ContexteActif ctx = ContexteActifHolder.get();
+                yield ctx != null ? ctx.clubId() : null;
+            }
+            default -> null;
+        };
     }
 
     /**
@@ -131,9 +158,55 @@ public class ScopeResolver {
         }
     }
 
-    /** Le club donne est-il dans la portee de l'utilisateur (une de ses equipes y appartient) ? */
+    /**
+     * Vérifie l'accès à une FICHE (personne), qui peut être assignée à une équipe OU au niveau club
+     * (non assignée). Fiche assignée → contrôle d'équipe strict. Fiche non assignée → réservée au
+     * super-admin et aux rôles gérant le club entier (président / administratif de CE club).
+     */
+    public void verifieAccesFiche(UUID equipeId, UUID clubId) {
+        if (equipeId != null) {
+            verifieAcces(equipeId);
+            return;
+        }
+        Utilisateur u = currentUser.current();
+        if (u.getRole() == Role.SUPER_ADMIN) return;
+        UUID clubGere = clubEntierPourGestion();
+        if (clubGere != null && clubGere.equals(clubId)) return;
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ressource hors de votre perimetre");
+    }
+
+    /**
+     * Vérifie l'accès à une PERSONNE (fiche) sans dépendre du cache {@code joueur.equipe_id} : son
+     * appartenance est dérivée de l'effectif (Phase 4). Fiche assignée → OK si AU MOINS une de ses
+     * équipes est dans la portée ; fiche « pool » (aucune équipe) ou hors portée → réservée au
+     * super-admin et aux rôles gérant le club entier de CE club (comportement {@link #verifieAccesFiche}).
+     */
+    public void verifieAccesPersonne(UUID joueurId, UUID clubId) {
+        for (UUID equipeId : appartenance.equipesDe(joueurId)) {
+            if (peutAcceder(equipeId)) return;
+        }
+        Utilisateur u = currentUser.current();
+        if (u.getRole() == Role.SUPER_ADMIN) return;
+        UUID clubGere = clubEntierPourGestion();
+        if (clubGere != null && clubGere.equals(clubId)) return;
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ressource hors de votre perimetre");
+    }
+
+    /**
+     * Le club donné est-il accessible à l'utilisateur ? Accès au niveau CLUB (indépendant des
+     * équipes) : un président/administratif accède à SON club même s'il n'a encore aucune équipe
+     * (club neuf) ; un super-admin accède au club de son contexte ; un staff équipe-scopé accède
+     * au club d'une de ses équipes.
+     */
     public boolean peutAccederClub(UUID clubId) {
         if (clubId == null) return false;
+        Utilisateur u = currentUser.current();
+        if (u.getRole() == Role.SUPER_ADMIN) {
+            ContexteActif ctx = ContexteActifHolder.get();
+            return ctx == null || ctx.clubId() == null || clubId.equals(ctx.clubId());
+        }
+        // Club de rattachement (président/administratif) : accessible même sans équipe.
+        if (clubId.equals(u.getClubId())) return true;
         Scope s = resolve();
         if (s.all()) return true;
         if (s.none()) return false;

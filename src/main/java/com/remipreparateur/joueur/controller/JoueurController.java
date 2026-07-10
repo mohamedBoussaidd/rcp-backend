@@ -5,9 +5,11 @@ import com.remipreparateur.performance.gps.dto.VitesseJoueurDto;
 import com.remipreparateur.performance.seance.dto.PresenceDtos.AssiduiteJoueur;
 import com.remipreparateur.performance.seance.dto.PresenceDtos.AssiduiteResume;
 import com.remipreparateur.performance.seance.service.PresenceService;
+import com.remipreparateur.joueur.dto.AnnuaireJoueurDto;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.joueur.service.JoueurService;
+import com.remipreparateur.saison.service.SaisonService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,10 +25,31 @@ public class JoueurController {
     private final JoueurService joueurService;
     private final PresenceService presenceService;
     private final ScopeResolver scopeResolver;
+    private final SaisonService saisonService;
 
     @GetMapping
     public List<Joueur> getAll() {
         return joueurService.findAll();
+    }
+
+    /** Annuaire club : personnes + équipes d'appartenance (effectif EN_COURS) + pool des non-assignés. */
+    @GetMapping("/annuaire")
+    public List<AnnuaireJoueurDto> annuaire() {
+        return joueurService.annuaire();
+    }
+
+    /** Assigne une personne à l'effectif d'une équipe (saison EN_COURS). */
+    @PostMapping("/{id}/equipes/{equipeId}")
+    public ResponseEntity<Void> assigner(@PathVariable UUID id, @PathVariable UUID equipeId) {
+        saisonService.inscrireAEquipe(id, equipeId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Retire une personne de l'effectif d'une équipe (saison EN_COURS). */
+    @DeleteMapping("/{id}/equipes/{equipeId}")
+    public ResponseEntity<Void> desassigner(@PathVariable UUID id, @PathVariable UUID equipeId) {
+        saisonService.retirerDeEquipe(id, equipeId);
+        return ResponseEntity.noContent().build();
     }
 
     /** Assiduité (résumé léger) de tout l'effectif du périmètre — colonne triable de l'effectif. */
@@ -44,21 +67,22 @@ public class JoueurController {
     @GetMapping("/{id}")
     public ResponseEntity<Joueur> getById(@PathVariable UUID id) {
         return joueurService.findById(id)
-                .map(j -> { scopeResolver.verifieAcces(j.getEquipeId()); return ResponseEntity.ok(j); })
+                .map(j -> { scopeResolver.verifieAccesPersonne(j.getId(), j.getClubId()); return ResponseEntity.ok(j); })
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public Joueur create(@Valid @RequestBody Joueur joueur) {
-        return joueurService.create(joueur);
+    public Joueur create(@Valid @RequestBody Joueur joueur,
+                         @RequestParam(required = false) UUID equipeId) {
+        return joueurService.create(joueur, equipeId);   // equipeId (optionnel) = inscription à l'effectif
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Joueur> update(@PathVariable UUID id, @Valid @RequestBody Joueur joueur) {
         return joueurService.findById(id).map(existing -> {
-            scopeResolver.verifieAcces(existing.getEquipeId());
+            scopeResolver.verifieAccesPersonne(existing.getId(), existing.getClubId());
             joueur.setId(id);
-            joueur.setEquipeId(existing.getEquipeId()); // on ne change pas l'equipe via update
+            joueur.setClubId(existing.getClubId());     // on préserve le club de rattachement
             return ResponseEntity.ok(joueurService.save(joueur));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -77,7 +101,7 @@ public class JoueurController {
     @GetMapping("/{id}/gps")
     public ResponseEntity<List<GpsHistoriqueDto>> getHistoriqueGps(@PathVariable UUID id) {
         return joueurService.findById(id).map(j -> {
-            scopeResolver.verifieAcces(j.getEquipeId());
+            scopeResolver.verifieAccesPersonne(j.getId(), j.getClubId());
             return ResponseEntity.ok(joueurService.getHistoriqueGps(id));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -85,7 +109,7 @@ public class JoueurController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         return joueurService.findById(id).map(j -> {
-            scopeResolver.verifieAcces(j.getEquipeId());
+            scopeResolver.verifieAccesPersonne(j.getId(), j.getClubId());
             joueurService.deleteById(id);
             return ResponseEntity.noContent().<Void>build();
         }).orElse(ResponseEntity.notFound().build());
