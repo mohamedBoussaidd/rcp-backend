@@ -36,4 +36,16 @@ public interface DonneeGpsRepository extends JpaRepository<DonneeGps, UUID> {
         BigDecimal getVmax();
         Double getVmoy();
     }
+
+    /** Habitudes de volume par joueur (contrôle « donnée aberrante » à l'import). */
+    @Query("select g.joueur.id as joueurId, count(g) as nb, avg(g.distanceTotaleM) as distanceMoyenne " +
+           "from DonneeGps g where g.joueur.id in :joueurIds and g.distanceTotaleM > 0 " +
+           "group by g.joueur.id")
+    List<DistanceAgg> aggregerDistances(java.util.Collection<UUID> joueurIds);
+
+    interface DistanceAgg {
+        UUID getJoueurId();
+        Long getNb();
+        Double getDistanceMoyenne();
+    }
 }

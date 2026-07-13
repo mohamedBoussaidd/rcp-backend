@@ -4,7 +4,8 @@ import lombok.Data;
 
 @Data
 public class ResolutionImportDto {
-    private String prenomFichier;
+    /** Identité telle que lue dans le fichier (clé de rattachement aux lignes). */
+    private String identiteFichier;
     private String action; // CREATE, MERGE, IGNORE
     private String joueurExistantId;
     private String prenom;

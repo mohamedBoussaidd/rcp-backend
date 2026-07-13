@@ -16,7 +16,9 @@ import com.remipreparateur.saison.repository.SaisonRepository;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -48,7 +50,9 @@ public class JoueurService {
         UUID club = scopeResolver.clubEntierPourGestion();
         if (club != null) return joueurRepository.findJoueursActifsByClub(club);
         Scope s = scopeResolver.resolve();
-        if (s.all()) return joueurRepository.findByStatutNot("inactif");
+        // Super-admin SANS contexte club : on ne liste jamais toute la plateforme (une page
+        // d'effectif afficherait les fiches de tous les clubs mélangées) → il doit choisir un club.
+        if (s.all()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Sélectionnez un club");
         if (s.none()) return List.of();
         return joueurRepository.findByStatutNotAndEquipeIdIn("inactif", s.equipeIds());
     }
@@ -103,7 +107,8 @@ public class JoueurService {
         UUID club = scopeResolver.clubEntierPourGestion();
         if (club != null) return joueurRepository.findJoueursByClub(club);
         Scope s = scopeResolver.resolve();
-        if (s.all()) return joueurRepository.findAll();
+        // Même garde que findAll() : jamais la plateforme entière pour un super-admin hors contexte.
+        if (s.all()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Sélectionnez un club");
         if (s.none()) return List.of();
         return joueurRepository.findByEquipeIdIn(s.equipeIds());
     }
