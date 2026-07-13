@@ -93,6 +93,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/modeles-semaine/**").hasAuthority("seances:read")
                         .requestMatchers("/api/modeles-semaine/**").hasAuthority("seances:write")
 
+                        // Bibliothèque de séances-modèles (espace Coaching) : gardée par sa permission
+                        // dédiée seances_modeles:access, portée par le module « Bibliothèque de séances »
+                        // (pack Prépa+). Module off → permission retirée → 403, même en appel direct.
+                        // Semée aux mêmes rôles que coaching:access (Président/Entraîneur/chef, V55).
+                        // Édition/suppression restreintes au créateur dans le service.
+                        .requestMatchers("/api/seances-modeles/**").hasAuthority("seances_modeles:access")
+
                         // Saisons (cadre temporel) + périodes + effectif de saison
                         .requestMatchers(HttpMethod.GET, "/api/saisons/**").hasAuthority("saison:read")
                         .requestMatchers("/api/saisons/**").hasAuthority("saison:manage")

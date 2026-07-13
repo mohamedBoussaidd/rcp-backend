@@ -56,7 +56,9 @@ public enum FeatureModule {
     SUIVI_INDIVIDUEL("suivi_individuel", "Suivi individuel",
             "Axes de travail, entretiens individuels et auto-évaluations du joueur", false, 21),
     DOCUMENTS_ADMIN("documents_admin", "Licences & documents",
-            "Référentiel des documents requis, conformité de l'effectif et relances", false, 22);
+            "Référentiel des documents requis, conformité de l'effectif et relances", false, 22),
+    SEANCES_MODELES("seances_modeles", "Bibliothèque de séances",
+            "Séances-modèles réutilisables (gabarits planifiables dans le calendrier)", false, 23);
 
     private final String code;
     private final String libelle;
@@ -100,6 +102,13 @@ public enum FeatureModule {
         if (p == Permission.PREDICTIONS_READ) {
             return Set.of(PREPA_PHYSIQUE, GPS);
         }
+        if (p == Permission.COACHING_ACCESS) {
+            // Accès à l'espace Coaching = conteneur multi-modules (tactique / match / diaporama) PLUS la
+            // bibliothèque de séances (socle Planning). En incluant le socle PLANNING (toujours actif),
+            // la clé survit TOUJOURS au filtrage pack : le menu Coaching reste ouvert et chaque
+            // sous-écran se gate ensuite sur son propre module.
+            return Set.of(PLANNING, TACTIQUE, MATCH, DIAPORAMA);
+        }
         return Set.of(of(p));
     }
 
@@ -117,8 +126,9 @@ public enum FeatureModule {
             case PREDICTIONS_READ -> PREPA_PHYSIQUE;
             case PESEES_READ, PESEES_WRITE -> PESEES;
             case GPS_IMPORT -> GPS;
-            case EXERCICES_READ, EXERCICES_WRITE, FORMATIONS_READ, FORMATIONS_WRITE,
+            case COACHING_ACCESS, EXERCICES_READ, EXERCICES_WRITE, FORMATIONS_READ, FORMATIONS_WRITE,
                  SCHEMAS_READ, SCHEMAS_WRITE, PLANDEJEU_READ, PLANDEJEU_WRITE -> TACTIQUE;
+            case SEANCES_MODELES_ACCESS -> SEANCES_MODELES;
             case DIAPORAMA_READ, DIAPORAMA_WRITE, DIAPORAMA_MANAGE -> DIAPORAMA;
             case BLESSURES_READ, BLESSURES_WRITE, DOCUMENTS_READ, DOCUMENTS_WRITE,
                  WELLNESS_TREAT, WELLNESS_REOPEN -> MEDICAL;

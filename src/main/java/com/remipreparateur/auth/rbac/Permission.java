@@ -46,6 +46,8 @@ public enum Permission {
     CONSEILS_WRITE("conseils:write", "Médical", "Écrire des conseils au joueur"),
 
     // ── Tactique & Match ────────────────────────────────────────────
+    COACHING_ACCESS("coaching:access", "Tactique & Match", "Accéder à l'espace Coaching"),
+    SEANCES_MODELES_ACCESS("seances_modeles:access", "Tactique & Match", "Accéder à la bibliothèque de séances-modèles"),
     EXERCICES_READ("exercices:read", "Tactique & Match", "Voir les exercices"),
     EXERCICES_WRITE("exercices:write", "Tactique & Match", "Éditer la bibliothèque d'exercices"),
     FORMATIONS_READ("formations:read", "Tactique & Match", "Voir les formations"),
