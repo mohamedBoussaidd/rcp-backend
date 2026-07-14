@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.joueur.service.JoueurService;
 import com.remipreparateur.performance.gps.entity.DonneeGps;
 import com.remipreparateur.performance.gps.repository.DonneeGpsRepository;
 import com.remipreparateur.performance.importation.dto.*;
@@ -47,6 +48,7 @@ public class ImportGpsService {
     private final SeanceRepository seanceRepository;
     private final EquipeRepository equipeRepository;
     private final JoueurRepository joueurRepository;
+    private final JoueurService joueurService;
     private final DonneeGpsRepository donneeGpsRepository;
     private final ScopeResolver scopeResolver;
     private final ObjectMapper objectMapper;
@@ -168,6 +170,11 @@ public class ImportGpsService {
 
             Joueur joueur = joueurRepository.findById(joueurId).orElse(null);
             if (joueur == null || !clubId.equals(joueur.getClubId())) { ignores++; continue; }
+
+            // Une fiche qui reçoit du GPS doit être dans l'effectif de la saison en cours, sinon
+            // elle reste invisible partout (État de l'effectif, dashboards) : inscription sur
+            // l'équipe de la séance, sauf si le joueur est déjà inscrit dans une autre équipe.
+            joueurService.inscrireEffectifSiHorsSaison(joueur, seance.getEquipeId());
 
             final Joueur finalJoueur = joueur;
             DonneeGps gps = donneeGpsRepository

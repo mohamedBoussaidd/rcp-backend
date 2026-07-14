@@ -64,9 +64,9 @@ public class PermissionResolver {
 
         ContexteActif ctx = ContexteActifHolder.get();
         UUID clubActif = clubActif(u, ctx);
-        Set<UUID> equipesActives = equipesActives(u, ctx, clubActif);
-
         List<AffectationRole> affs = affectations.findByUserId(u.getId());
+        Set<UUID> equipesActives = equipesActives(u, ctx, clubActif, affs);
+
         Set<UUID> roleIds = affs.stream()
                 .filter(a -> couvre(a, clubActif, equipesActives))
                 .map(AffectationRole::getRoleId)
@@ -126,13 +126,23 @@ public class PermissionResolver {
         return null;
     }
 
-    /** Équipes en jeu : contexte explicite, sinon l'équipe du staff, sinon toutes celles du club. */
-    private Set<UUID> equipesActives(Utilisateur u, ContexteActif ctx, UUID clubActif) {
+    /**
+     * Équipes en jeu : contexte explicite, sinon l'union {équipe de rattachement + équipes des
+     * affectations} (staff multi-équipes : chaque rôle « couvre » son équipe), sinon toutes
+     * celles du club (président/administratif, dont les affectations sont club-wide).
+     */
+    private Set<UUID> equipesActives(Utilisateur u, ContexteActif ctx, UUID clubActif,
+                                     List<AffectationRole> affs) {
         if (ctx != null && !ctx.equipeIds().isEmpty()) {
             return new HashSet<>(ctx.equipeIds());
         }
-        if (u.getEquipeId() != null) {
-            return Set.of(u.getEquipeId());
+        Set<UUID> equipes = new HashSet<>();
+        if (u.getEquipeId() != null) equipes.add(u.getEquipeId());
+        for (AffectationRole a : affs) {
+            if (a.getEquipeId() != null) equipes.add(a.getEquipeId());
+        }
+        if (!equipes.isEmpty()) {
+            return equipes;
         }
         if (clubActif != null) {
             return equipeRepository.findByClubId(clubActif).stream()

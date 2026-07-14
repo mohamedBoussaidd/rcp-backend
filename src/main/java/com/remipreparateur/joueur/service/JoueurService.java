@@ -102,6 +102,25 @@ public class JoueurService {
         effectifRepository.save(m);
     }
 
+    /**
+     * Inscrit la fiche à l'effectif (saison EN_COURS du club, équipe donnée) si elle n'appartient
+     * encore à AUCUN effectif de cette saison — une fiche qui reçoit des données doit être visible
+     * dans les écrans pilotés par l'effectif. Ne touche jamais un joueur déjà inscrit dans une
+     * autre équipe (multi-équipes / prêt interne). No-op sans saison ouverte ou sans équipe.
+     */
+    public void inscrireEffectifSiHorsSaison(Joueur joueur, UUID equipeId) {
+        if (equipeId == null || joueur.getClubId() == null) return;
+        Saison saison = saisonRepository.findFirstByClubIdAndStatut(joueur.getClubId(), "EN_COURS").orElse(null);
+        if (saison == null) return;
+        if (effectifRepository.existsBySaisonIdAndJoueurId(saison.getId(), joueur.getId())) return;
+        EffectifSaison m = new EffectifSaison();
+        m.setSaisonId(saison.getId());
+        m.setEquipeId(equipeId);
+        m.setJoueurId(joueur.getId());
+        m.setDateEntree(saison.getDateDebut());
+        effectifRepository.save(m);
+    }
+
     /** Toutes les fiches (y compris inactives), limitées à la portée. Club entier pour les rôles club-wide. */
     public List<Joueur> findAllPlayers() {
         UUID club = scopeResolver.clubEntierPourGestion();

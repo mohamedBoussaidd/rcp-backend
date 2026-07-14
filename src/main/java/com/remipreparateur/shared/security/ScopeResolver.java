@@ -3,13 +3,17 @@ package com.remipreparateur.shared.security;
 import com.remipreparateur.club.entity.Equipe;
 import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
+import com.remipreparateur.auth.rbac.AffectationRole;
+import com.remipreparateur.auth.rbac.AffectationRoleRepository;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.saison.service.AppartenanceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -22,12 +26,14 @@ public class ScopeResolver {
     private final CurrentUserProvider currentUser;
     private final EquipeRepository equipeRepository;
     private final AppartenanceService appartenance;
+    private final AffectationRoleRepository affectationRepository;
 
     public ScopeResolver(CurrentUserProvider currentUser, EquipeRepository equipeRepository,
-                         AppartenanceService appartenance) {
+                         AppartenanceService appartenance, AffectationRoleRepository affectationRepository) {
         this.currentUser = currentUser;
         this.equipeRepository = equipeRepository;
         this.appartenance = appartenance;
+        this.affectationRepository = affectationRepository;
     }
 
     /**
@@ -64,6 +70,14 @@ public class ScopeResolver {
         return demande.isEmpty() ? autorise : Scope.equipes(demande);
     }
 
+    /**
+     * Portée AUTORISÉE par la seule identité, sans réduction de contexte — sert au sélecteur
+     * d'équipe du front (il doit proposer TOUTES les équipes accessibles, pas celle déjà ciblée).
+     */
+    public Scope scopeAutorise() {
+        return scopeIdentite();
+    }
+
     /** Portée brute déduite de la seule identité (rôle + rattachements), sans contexte. */
     private Scope scopeIdentite() {
         Utilisateur u = currentUser.current();
@@ -79,14 +93,37 @@ public class ScopeResolver {
                         .stream().map(Equipe::getId).toList();
                 yield Scope.equipes(ids);
             }
-            case ENTRAINEUR, PREPARATEUR, MEDICAL, JOUEUR ->
+            // Staff multi-équipes : la portée = l'UNION des équipes de ses affectations de rôle
+            // (une affectation club-wide ouvre toutes les équipes de ce club), plus l'équipe de
+            // rattachement du compte en repli (comptes historiques sans affectation).
+            case ENTRAINEUR, PREPARATEUR, MEDICAL -> {
+                Set<UUID> equipes = new LinkedHashSet<>();
+                if (u.getEquipeId() != null) equipes.add(u.getEquipeId());
+                for (AffectationRole a : affectationRepository.findByUserId(u.getId())) {
+                    if (a.getEquipeId() != null) {
+                        equipes.add(a.getEquipeId());
+                    } else if (a.getClubId() != null) {
+                        equipeRepository.findByClubId(a.getClubId()).forEach(e -> equipes.add(e.getId()));
+                    }
+                }
+                yield equipes.isEmpty() ? Scope.aucun() : Scope.equipes(List.copyOf(equipes));
+            }
+            case JOUEUR ->
                     u.getEquipeId() != null ? Scope.equipes(List.of(u.getEquipeId())) : Scope.aucun();
             default -> Scope.aucun();
         };
     }
 
-    /** Equipe a poser sur une donnee creee (l'equipe du staff connecte ; null pour super-admin). */
+    /**
+     * Equipe a poser sur une donnee creee : l'équipe UNIQUE du périmètre effectif (contexte
+     * compris — un staff multi-équipes qui a ciblé une équipe écrit dans CETTE équipe), sinon
+     * l'équipe de rattachement du compte (null pour super-admin/président hors contexte).
+     */
     public UUID equipePourEcriture() {
+        Scope s = resolve();
+        if (!s.all() && s.equipeIds().size() == 1) {
+            return s.equipeIds().get(0);
+        }
         return currentUser.current().getEquipeId();
     }
 

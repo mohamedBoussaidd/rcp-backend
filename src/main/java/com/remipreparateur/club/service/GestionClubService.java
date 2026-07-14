@@ -227,7 +227,7 @@ public class GestionClubService {
             synchroniserAffectationPrincipale(m, clubId);
         } else if (!java.util.Objects.equals(m.getEquipeId(), ancienneEquipe)) {
             // Le membre change d'équipe : on repointe ses affectations d'équipe sur la nouvelle.
-            repointerAffectationsSurEquipe(m, clubId);
+            repointerAffectationsSurEquipe(m, clubId, ancienneEquipe);
         }
         return toMembreResponse(m);
     }
@@ -524,10 +524,15 @@ public class GestionClubService {
         });
     }
 
-    /** Repointe les affectations scopées équipe du membre sur sa nouvelle équipe (cumul préservé). */
-    private void repointerAffectationsSurEquipe(Utilisateur membre, UUID clubId) {
+    /**
+     * Repointe sur la nouvelle équipe les affectations qui suivaient l'ANCIENNE équipe de
+     * rattachement (cumul préservé). Les affectations posées sur d'AUTRES équipes (staff
+     * multi-équipes, ex. adjoint équipe A + entraîneur équipe B) ne bougent pas.
+     */
+    private void repointerAffectationsSurEquipe(Utilisateur membre, UUID clubId, UUID ancienneEquipe) {
+        if (ancienneEquipe == null) return;
         for (AffectationRole a : affectationRepository.findByUserIdAndClubId(membre.getId(), clubId)) {
-            if (a.getEquipeId() != null) {
+            if (ancienneEquipe.equals(a.getEquipeId())) {
                 a.setEquipeId(membre.getEquipeId());
                 affectationRepository.save(a);
             }
