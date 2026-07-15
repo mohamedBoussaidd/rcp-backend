@@ -10,7 +10,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,12 +18,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Espace joueur — ses documents administratifs (self-scope par joueurId du token). Réservé au
- * rôle JOUEUR ; l'accès est aussi conditionné à l'activation du module « Licences & documents ».
+ * Mes documents administratifs (self-scope par joueurId du token — la fiche personne).
+ * Deux montages : {@code /api/moi} (joueur, JOUEUR-only via SecurityConfig) et {@code /api/membre}
+ * (tout compte authentifié relié à une fiche — utilisé par l'espace staff, V58). Le self-scope
+ * rend l'ouverture sûre : chacun ne voit que les documents de SA fiche. L'accès reste conditionné
+ * à l'activation du module « Licences & documents ».
  */
 @RestController
-@RequestMapping("/api/moi")
-@PreAuthorize("hasRole('JOUEUR')")
+@RequestMapping({"/api/moi", "/api/membre"})
 public class MesDocumentsAdminController {
 
     private final DocumentAdminService service;

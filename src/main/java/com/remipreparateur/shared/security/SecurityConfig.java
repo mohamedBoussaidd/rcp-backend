@@ -211,6 +211,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/categories-age/**").hasAnyAuthority("configuration:read", "docadmin:read")
                         .requestMatchers("/api/categories-age/**").hasAnyAuthority("configuration:write", "docadmin:configure")
 
+                        // Contrats & fiches de paye : confidentiel — gestion réservée à contrats:manage
+                        // (Président/Administratif). La personne consulte les SIENS via /api/membre/**
+                        // (self-scope, authenticated).
+                        .requestMatchers("/api/contrats/**").hasAuthority("contrats:manage")
+                        .requestMatchers("/api/bulletins-paie/**").hasAuthority("contrats:manage")
+
                         // Licences & documents administratifs : référentiel / lecture / validation / dépôt.
                         // Le joueur dépose et consulte SES documents via /api/moi/**.
                         .requestMatchers(HttpMethod.GET, "/api/documents-admin/conformite", "/api/documents-admin/conformite/**",

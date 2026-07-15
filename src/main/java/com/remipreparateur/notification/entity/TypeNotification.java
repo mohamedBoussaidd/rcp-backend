@@ -25,6 +25,8 @@ public enum TypeNotification {
     ENTRETIEN_PLANIFIE(Categorie.INFO, false),  // RDV d'entretien planifié/déplacé → info joueur
     DOCUMENT_ADMIN_STATUT(Categorie.INFO, false),   // document validé/refusé → info joueur
     DOCUMENT_ADMIN_EXPIRE(Categorie.INFO, false),   // document expiré (job quotidien) → info joueur
+    BULLETIN_DISPONIBLE(Categorie.INFO, false),     // fiche de paye distribuée → info à la personne
+    CONTRAT_ECHEANCE(Categorie.INFO, false),        // contrat J-90/J-30 → personne + Président/Administratif
     RAPPEL_DOCUMENT_ADMIN(Categorie.RAPPEL, false), // relance hebdo : document manquant/refusé
 
     // ── Messages humains ──

@@ -58,7 +58,11 @@ public enum FeatureModule {
     DOCUMENTS_ADMIN("documents_admin", "Licences & documents",
             "Référentiel des documents requis, conformité de l'effectif et relances", false, 22),
     SEANCES_MODELES("seances_modeles", "Bibliothèque de séances",
-            "Séances-modèles réutilisables (gabarits planifiables dans le calendrier)", false, 23);
+            "Séances-modèles réutilisables (gabarits planifiables dans le calendrier)", false, 23),
+    ESPACE_STAFF("espace_staff", "Espace staff (application)",
+            "Application mobile staff : agenda, appel, effectif, messagerie, documents et notifications push", false, 24),
+    CONTRATS("contrats", "Contrats & paie",
+            "Contrats des joueurs et du staff (échéances, PDF signés) et distribution des fiches de paye", false, 25);
 
     private final String code;
     private final String libelle;
@@ -129,6 +133,8 @@ public enum FeatureModule {
             case COACHING_ACCESS, EXERCICES_READ, EXERCICES_WRITE, FORMATIONS_READ, FORMATIONS_WRITE,
                  SCHEMAS_READ, SCHEMAS_WRITE, PLANDEJEU_READ, PLANDEJEU_WRITE -> TACTIQUE;
             case SEANCES_MODELES_ACCESS -> SEANCES_MODELES;
+            case ESPACE_STAFF_ACCESS -> ESPACE_STAFF;
+            case CONTRATS_MANAGE -> CONTRATS;
             case DIAPORAMA_READ, DIAPORAMA_WRITE, DIAPORAMA_MANAGE -> DIAPORAMA;
             case BLESSURES_READ, BLESSURES_WRITE, BLESSURES_QUALIFY, DOCUMENTS_READ, DOCUMENTS_WRITE,
                  WELLNESS_TREAT, WELLNESS_REOPEN -> MEDICAL;

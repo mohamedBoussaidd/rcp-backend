@@ -75,6 +75,7 @@ public enum Permission {
     DOCADMIN_READ("docadmin:read", "Administration du club", "Voir la conformité documentaire de l'effectif"),
     DOCADMIN_VALIDATE("docadmin:validate", "Administration du club", "Valider / refuser un document déposé"),
     DOCADMIN_UPLOAD("docadmin:upload", "Administration du club", "Déposer un document pour un joueur"),
+    CONTRATS_MANAGE("contrats:manage", "Administration du club", "Gérer les contrats et distribuer les fiches de paye"),
 
     // ── Paramètres & Notifications ──────────────────────────────────
     CONFIGURATION_READ("configuration:read", "Paramètres & Notifications", "Voir la configuration"),
@@ -87,7 +88,10 @@ public enum Permission {
 
     // ── Gestion du club ─────────────────────────────────────────────
     MEMBRES_MANAGE("membres:manage", "Gestion du club", "Gérer les comptes (staff & joueurs) de son périmètre"),
-    CLUB_MANAGE("club:manage", "Gestion du club", "Gérer le club (équipes, rôles, tous les membres)");
+    CLUB_MANAGE("club:manage", "Gestion du club", "Gérer le club (équipes, rôles, tous les membres)"),
+
+    // ── Espace staff (application mobile) ───────────────────────────
+    ESPACE_STAFF_ACCESS("espace_staff:access", "Espace staff", "Accéder à l'application mobile staff");
 
     private final String code;
     private final String module;

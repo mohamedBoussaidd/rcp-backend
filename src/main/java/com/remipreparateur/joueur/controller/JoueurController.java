@@ -32,6 +32,12 @@ public class JoueurController {
         return joueurService.findAll();
     }
 
+    /** Effectif (saison EN_COURS) de l'équipe active uniquement — écrans strictement équipe (compo de match…). */
+    @GetMapping("/equipe")
+    public List<Joueur> getEffectifEquipe() {
+        return joueurService.findEffectifEquipeActive();
+    }
+
     /** Annuaire club : personnes + équipes d'appartenance (effectif EN_COURS) + pool des non-assignés. */
     @GetMapping("/annuaire")
     public List<AnnuaireJoueurDto> annuaire() {

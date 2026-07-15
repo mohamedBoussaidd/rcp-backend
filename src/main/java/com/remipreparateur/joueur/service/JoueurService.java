@@ -57,6 +57,28 @@ public class JoueurService {
         return joueurRepository.findByStatutNotAndEquipeIdIn("inactif", s.equipeIds());
     }
 
+    /**
+     * Joueurs de l'équipe active : l'effectif de la saison EN_COURS de CETTE équipe uniquement —
+     * pour les écrans strictement « équipe » (compo de match…) où les rôles club-entier ne doivent
+     * pas voir tout le club ni le pool. Sans saison ouverte : liste vide. 409 si le périmètre ne
+     * cible pas une équipe unique.
+     */
+    public List<Joueur> findEffectifEquipeActive() {
+        UUID equipeId = scopeResolver.equipeActiveUnique();
+        UUID club = scopeResolver.clubActif();
+        return saisonRepository.findFirstByClubIdAndStatut(club, "EN_COURS")
+                .map(saison -> effectifRepository.findBySaisonIdAndEquipeId(saison.getId(), equipeId).stream()
+                        .map(EffectifSaison::getJoueurId)
+                        .distinct()
+                        .toList())
+                .map(ids -> joueurRepository.findAllById(ids).stream()
+                        .filter(j -> !"inactif".equals(j.getStatut()))
+                        .sorted(Comparator.comparing(Joueur::getNom, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                                .thenComparing(Joueur::getPrenom, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                        .toList())
+                .orElse(List.of());
+    }
+
     public Optional<Joueur> findById(UUID id) {
         return joueurRepository.findById(id);
     }

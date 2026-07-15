@@ -114,6 +114,41 @@ public class NotificationProducer {
                 null, null, false));
     }
 
+    /** Fiche de paye distribuée → info à la personne (fiche joueur OU staff). Best-effort. */
+    public boolean bulletinDisponible(UUID equipeId, UUID joueurId, String periodeLabel, String lien) {
+        if (joueurId == null) return false;
+        try {
+            return dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.BULLETIN_DISPONIBLE,
+                    "Fiche de paye disponible", "Ta fiche de paye de " + periodeLabel + " est disponible.",
+                    lien, Priorite.NORMALE, null, null, false);
+        } catch (Exception ignore) {
+            return false;
+        }
+    }
+
+    /** Contrat proche de l'échéance (J-90 / J-30) → Président + Administratif du club. */
+    public void contratEcheanceStaff(UUID clubId, UUID equipeAncre, String nomPersonne,
+                                     LocalDate dateFin, long joursRestants) {
+        if (clubId == null || equipeAncre == null) return;
+        String corps = "Le contrat de " + nomPersonne + " expire le "
+                + dateFin.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                + " (J-" + joursRestants + ").";
+        safe(() -> dispatcher.versStaffRolesClub(clubId, equipeAncre,
+                List.of(com.remipreparateur.auth.entity.Role.PRESIDENT, com.remipreparateur.auth.entity.Role.ADMINISTRATIF),
+                TypeNotification.CONTRAT_ECHEANCE, "Contrat proche de l'échéance", corps,
+                "/contrats", Priorite.NORMALE));
+    }
+
+    /** Contrat proche de l'échéance → info à la personne concernée. Best-effort. */
+    public void contratEcheancePersonne(UUID equipeId, UUID joueurId, LocalDate dateFin, long joursRestants) {
+        if (joueurId == null) return;
+        safe(() -> dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.CONTRAT_ECHEANCE,
+                "Ton contrat arrive à échéance",
+                "Ton contrat expire le " + dateFin.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                        + " (dans " + joursRestants + " jours).",
+                null, Priorite.NORMALE, null, null, false));
+    }
+
     /** Digest hebdo club-wide (Président/Administratif) : conformité documentaire de l'effectif. */
     public void digestConformiteDocuments(UUID clubId, UUID equipeAncre, int incomplets, int aValider, int expirentSous30j) {
         if (clubId == null || equipeAncre == null) return;
