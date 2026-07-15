@@ -1,5 +1,7 @@
 package com.remipreparateur.medical.document.service;
 
+import com.remipreparateur.medical.blessure.entity.Blessure;
+import com.remipreparateur.medical.blessure.repository.BlessureRepository;
 import com.remipreparateur.medical.document.dto.DocumentMedicalDtos.DocumentMedicalResponse;
 import com.remipreparateur.medical.document.entity.DocumentMedical;
 import com.remipreparateur.joueur.entity.Joueur;
@@ -43,7 +45,12 @@ public class DocumentMedicalService {
 
     private static final long TAILLE_MAX = 10L * 1024 * 1024; // 10 Mo
     private static final Set<String> CATEGORIES =
-            Set.of("irm", "radio", "echographie", "bilan_sanguin", "certificat", "ordonnance", "autre");
+            Set.of("irm", "radio", "echographie", "bilan_sanguin", "certificat", "ordonnance",
+                    "arret_travail", "accident_travail", "autre");
+    /** Catégories admissibles comme déclaration rattachée à une blessure. */
+    private static final Set<String> CATEGORIES_DECLARATION = Set.of("arret_travail", "accident_travail");
+    /** Rôles voyant les déclarations en plus du médical (cf. blessures:qualify). */
+    private static final String PARTAGE_DECLARATION = "PRESIDENT,ADMINISTRATIF";
     /** Roles que le joueur peut ajouter au partage (le medical/super-admin voient toujours). */
     private static final Set<String> ROLES_PARTAGEABLES =
             Set.of("ENTRAINEUR", "PREPARATEUR", "PRESIDENT");
@@ -55,6 +62,7 @@ public class DocumentMedicalService {
 
     private final DocumentMedicalRepository repository;
     private final JoueurRepository joueurRepository;
+    private final BlessureRepository blessureRepository;
     private final ScopeResolver scopeResolver;
     private final CurrentUserProvider currentUser;
     private final AppartenanceService appartenance;
@@ -62,12 +70,14 @@ public class DocumentMedicalService {
 
     public DocumentMedicalService(DocumentMedicalRepository repository,
                                   JoueurRepository joueurRepository,
+                                  BlessureRepository blessureRepository,
                                   ScopeResolver scopeResolver,
                                   CurrentUserProvider currentUser,
                                   AppartenanceService appartenance,
                                   @Value("${app.medical.upload-dir}") String uploadDir) {
         this.repository = repository;
         this.joueurRepository = joueurRepository;
+        this.blessureRepository = blessureRepository;
         this.scopeResolver = scopeResolver;
         this.currentUser = currentUser;
         this.appartenance = appartenance;
@@ -82,11 +92,11 @@ public class DocumentMedicalService {
     /** Fichier pret au telechargement (resource + nom d'origine + type MIME). */
     public record FichierDocument(Resource resource, String nomOriginal, String typeMime) {}
 
-    // ──────────────────────────── Joueur ────────────────────────────
+    /** Resultat du stockage physique d'un upload. */
+    private record Stockage(String nomPhysique, String mime, String ext) {}
 
-    public DocumentMedicalResponse deposer(UUID joueurId, MultipartFile fichier,
-                                           String categorie, String description,
-                                           List<String> partageRoles) {
+    /** Valide (taille, MIME) et ecrit le fichier sous un nom genere (anti-traversal). */
+    private Stockage stockerFichier(MultipartFile fichier) {
         if (fichier == null || fichier.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fichier manquant");
         }
@@ -98,12 +108,6 @@ public class DocumentMedicalService {
         if (ext == null) {
             throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Type de fichier non autorise (PDF, JPG, PNG)");
         }
-        String cat = normaliserCategorie(categorie);
-
-        Joueur joueur = joueurRepository.findById(joueurId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Fiche joueur introuvable"));
-
-        // Nom physique genere (anti-traversal : aucun nom fourni par le client n'est utilise).
         String nomPhysique = UUID.randomUUID() + "." + ext;
         Path cible = uploadDir.resolve(nomPhysique).normalize();
         if (!cible.startsWith(uploadDir)) {
@@ -114,14 +118,28 @@ public class DocumentMedicalService {
         } catch (IOException e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Echec de l'enregistrement du fichier", e);
         }
+        return new Stockage(nomPhysique, mime, ext);
+    }
+
+    // ──────────────────────────── Joueur ────────────────────────────
+
+    public DocumentMedicalResponse deposer(UUID joueurId, MultipartFile fichier,
+                                           String categorie, String description,
+                                           List<String> partageRoles) {
+        String cat = normaliserCategorie(categorie);
+
+        Joueur joueur = joueurRepository.findById(joueurId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Fiche joueur introuvable"));
+
+        Stockage s = stockerFichier(fichier);
 
         DocumentMedical d = new DocumentMedical();
         d.setJoueurId(joueurId);
         d.setEquipeId(appartenance.equipePrincipale(joueurId));
-        d.setNomOriginal(nettoyerNom(fichier.getOriginalFilename(), ext));
-        d.setTypeMime(mime);
+        d.setNomOriginal(nettoyerNom(fichier.getOriginalFilename(), s.ext()));
+        d.setTypeMime(s.mime());
         d.setTailleOctets(fichier.getSize());
-        d.setCheminStockage(nomPhysique);
+        d.setCheminStockage(s.nomPhysique());
         d.setCategorie(cat);
         d.setDescription(videEnNull(description));
         d.setPartageRoles(serialiserRoles(partageRoles));
@@ -198,6 +216,70 @@ public class DocumentMedicalService {
         DocumentMedical d = getOuErreur(id);
         scopeResolver.verifieAcces(d.getEquipeId());
         supprimerPhysiqueEtBase(d);
+    }
+
+    // ──────────────────── Déclarations (arrêt / accident de travail) ────────────────────
+    // Rattachées à une blessure, accessibles via /api/blessures/{id}/declarations, gardées par
+    // blessures:qualify (MEDICAL + PRESIDENT + ADMINISTRATIF — cf. SecurityConfig).
+
+    public DocumentMedicalResponse deposerDeclaration(UUID blessureId, MultipartFile fichier,
+                                                      String categorie, String description) {
+        Blessure b = blessureChecke(blessureId);
+        String cat = categorie == null ? "" : categorie.trim().toLowerCase();
+        if (!CATEGORIES_DECLARATION.contains(cat)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Categorie de declaration invalide (arret_travail | accident_travail)");
+        }
+        Joueur joueur = joueurRepository.findById(b.getJoueurId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Fiche joueur introuvable"));
+
+        Stockage s = stockerFichier(fichier);
+
+        DocumentMedical d = new DocumentMedical();
+        d.setJoueurId(b.getJoueurId());
+        d.setEquipeId(b.getEquipeId());
+        d.setBlessureId(blessureId);
+        d.setNomOriginal(nettoyerNom(fichier.getOriginalFilename(), s.ext()));
+        d.setTypeMime(s.mime());
+        d.setTailleOctets(fichier.getSize());
+        d.setCheminStockage(s.nomPhysique());
+        d.setCategorie(cat);
+        d.setDescription(videEnNull(description));
+        d.setPartageRoles(PARTAGE_DECLARATION);
+        d.setDeposePar(currentUser.current().getId());
+        return toResponse(repository.save(d), joueur);
+    }
+
+    public List<DocumentMedicalResponse> listerDeclarations(UUID blessureId) {
+        Blessure b = blessureChecke(blessureId);
+        Joueur joueur = joueurRepository.findById(b.getJoueurId()).orElse(null);
+        return repository.findByBlessureIdOrderByDateDepotDesc(blessureId).stream()
+                .map(d -> toResponse(d, joueur)).toList();
+    }
+
+    public FichierDocument chargerDeclaration(UUID blessureId, UUID id) {
+        blessureChecke(blessureId);
+        return charger(declarationChecke(blessureId, id));
+    }
+
+    public void supprimerDeclaration(UUID blessureId, UUID id) {
+        blessureChecke(blessureId);
+        supprimerPhysiqueEtBase(declarationChecke(blessureId, id));
+    }
+
+    private DocumentMedical declarationChecke(UUID blessureId, UUID id) {
+        DocumentMedical d = getOuErreur(id);
+        if (!blessureId.equals(d.getBlessureId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Document introuvable");
+        }
+        return d;
+    }
+
+    private Blessure blessureChecke(UUID blessureId) {
+        Blessure b = blessureRepository.findById(blessureId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable"));
+        scopeResolver.verifieAcces(b.getEquipeId());
+        return b;
     }
 
     // ──────────────────────────── Helpers ────────────────────────────
@@ -281,6 +363,7 @@ public class DocumentMedicalService {
                 d.getId(), d.getJoueurId(),
                 j != null ? j.getNom() : null,
                 j != null ? j.getPrenom() : null,
+                d.getBlessureId(),
                 d.getNomOriginal(), d.getTypeMime(), d.getTailleOctets(),
                 d.getCategorie(), d.getDescription(),
                 deserialiserRoles(d.getPartageRoles()),

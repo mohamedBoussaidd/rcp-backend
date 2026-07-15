@@ -13,6 +13,7 @@ import com.remipreparateur.auth.rbac.RoleApplicatifRepository;
 import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.documentadmin.service.ReferentielDocumentAdminSeeder;
+import com.remipreparateur.medical.protocole.service.ProtocoleModeleSeeder;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.auth.repository.UtilisateurRepository;
@@ -36,6 +37,7 @@ public class ClubService {
     private final RoleApplicatifRepository roleRepository;
     private final AffectationRoleRepository affectationRepository;
     private final ReferentielDocumentAdminSeeder referentielSeeder;
+    private final ProtocoleModeleSeeder protocoleSeeder;
 
     public ClubService(ClubRepository clubRepository,
                        EquipeRepository equipeRepository,
@@ -44,7 +46,8 @@ public class ClubService {
                        PasswordEncoder passwordEncoder,
                        RoleApplicatifRepository roleRepository,
                        AffectationRoleRepository affectationRepository,
-                       ReferentielDocumentAdminSeeder referentielSeeder) {
+                       ReferentielDocumentAdminSeeder referentielSeeder,
+                       ProtocoleModeleSeeder protocoleSeeder) {
         this.clubRepository = clubRepository;
         this.equipeRepository = equipeRepository;
         this.utilisateurRepository = utilisateurRepository;
@@ -53,6 +56,7 @@ public class ClubService {
         this.roleRepository = roleRepository;
         this.affectationRepository = affectationRepository;
         this.referentielSeeder = referentielSeeder;
+        this.protocoleSeeder = protocoleSeeder;
     }
 
     /** Cree le club ET son president (en une transaction). */
@@ -71,6 +75,10 @@ public class ClubService {
         // Les seeds V47/V49 ne visent que les clubs préexistants : pour un club neuf, c'est ici le
         // seul endroit qui pose le référentiel (même contenu). Reste dans la transaction courante.
         referentielSeeder.seederReferentielParDefaut(club.getId());
+
+        // Bibliothèque de protocoles RTP : « Protocole standard » (le seed V57 ne vise que les
+        // clubs préexistants). Même transaction, idempotent.
+        protocoleSeeder.seederProtocoleStandard(club.getId());
 
         Utilisateur president = new Utilisateur();
         president.setEmail(req.president().email());

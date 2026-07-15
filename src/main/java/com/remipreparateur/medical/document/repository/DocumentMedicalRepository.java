@@ -12,4 +12,5 @@ public interface DocumentMedicalRepository extends JpaRepository<DocumentMedical
     List<DocumentMedical> findByJoueurIdOrderByDateDepotDesc(UUID joueurId);
     List<DocumentMedical> findAllByOrderByDateDepotDesc();
     List<DocumentMedical> findByEquipeIdInOrderByDateDepotDesc(Collection<UUID> equipeIds);
+    List<DocumentMedical> findByBlessureIdOrderByDateDepotDesc(UUID blessureId);
 }

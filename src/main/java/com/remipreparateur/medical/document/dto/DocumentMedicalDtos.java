@@ -17,6 +17,7 @@ public final class DocumentMedicalDtos {
             UUID joueurId,
             String joueurNom,
             String joueurPrenom,
+            UUID blessureId,
             String nomOriginal,
             String typeMime,
             long tailleOctets,

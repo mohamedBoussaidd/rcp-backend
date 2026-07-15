@@ -2,6 +2,7 @@ package com.remipreparateur.medical.blessure.controller;
 
 import com.remipreparateur.medical.blessure.dto.BlessureDtos.BlessureRequest;
 import com.remipreparateur.medical.blessure.dto.BlessureDtos.BlessureResponse;
+import com.remipreparateur.medical.blessure.dto.BlessureDtos.QualificationRequest;
 import com.remipreparateur.medical.blessure.service.BlessureService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -50,5 +51,15 @@ public class BlessureController {
     @PostMapping("/{id}/confirmer-retour")
     public BlessureResponse confirmerRetour(@PathVariable UUID id) {
         return blessureService.confirmerRetour(id);
+    }
+
+    /**
+     * Qualification administrative (Rien / Arrêt maladie / Accident de travail).
+     * Gardée par blessures:qualify (MEDICAL + PRESIDENT + ADMINISTRATIF), cf. SecurityConfig.
+     */
+    @PatchMapping("/{id}/qualification")
+    public BlessureResponse qualifier(@PathVariable UUID id,
+                                      @Valid @RequestBody QualificationRequest req) {
+        return blessureService.qualifier(id, req.qualification());
     }
 }

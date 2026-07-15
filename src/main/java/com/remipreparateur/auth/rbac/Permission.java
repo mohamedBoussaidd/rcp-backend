@@ -37,6 +37,7 @@ public enum Permission {
     // ── Médical ─────────────────────────────────────────────────────
     BLESSURES_READ("blessures:read", "Médical", "Voir les blessures"),
     BLESSURES_WRITE("blessures:write", "Médical", "Créer / éditer les blessures"),
+    BLESSURES_QUALIFY("blessures:qualify", "Médical", "Qualifier arrêt / accident de travail et déposer la déclaration"),
     DOCUMENTS_READ("documents:read", "Médical", "Voir les documents médicaux"),
     DOCUMENTS_WRITE("documents:write", "Médical", "Déposer / supprimer des documents"),
     WELLNESS_READ("wellness:read", "Médical", "Voir wellness & RPE"),

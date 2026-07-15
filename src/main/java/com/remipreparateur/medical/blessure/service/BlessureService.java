@@ -24,6 +24,9 @@ import java.util.stream.Collectors;
 @Service
 public class BlessureService {
 
+    private static final java.util.Set<String> QUALIFICATIONS =
+            java.util.Set.of("AUCUNE", "ARRET_MALADIE", "ACCIDENT_TRAVAIL");
+
     private final BlessureRepository blessureRepository;
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
@@ -105,14 +108,45 @@ public class BlessureService {
             b.setDateRetourEffectif(LocalDate.now());
         }
         b.setTypeBlessure(req.typeBlessure());
+        b.setTypePrecision("autre".equals(req.typeBlessure()) ? videEnNull(req.typePrecision()) : null);
         b.setZoneCorporelle(req.zoneCorporelle());
+        b.setZonePrecision("autre".equals(req.zoneCorporelle()) ? videEnNull(req.zonePrecision()) : null);
         b.setCote(req.cote());
         b.setGravite(req.gravite());
         b.setCauseProbable(req.causeProbable());
         b.setRecidive(Boolean.TRUE.equals(req.recidive()));
         b.setCommentaire(req.commentaire());
         b.setNotesMedicales(req.notesMedicales());
+        if (req.qualificationAdministrative() != null) {
+            b.setQualificationAdministrative(qualificationValide(req.qualificationAdministrative()));
+        }
         b.setRetourConfirme(true);   // toute saisie/édition manuelle vaut confirmation
+    }
+
+    /**
+     * Qualification administrative seule (arrêt maladie / accident de travail) : endpoint dédié
+     * ouvert à blessures:qualify (MEDICAL + PRESIDENT + ADMINISTRATIF), sans toucher au dossier
+     * clinique (réservé à blessures:write).
+     */
+    public BlessureResponse qualifier(UUID id, String qualification) {
+        Blessure b = blessureRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Blessure introuvable"));
+        scopeResolver.verifieAcces(b.getEquipeId());
+        b.setQualificationAdministrative(qualificationValide(qualification));
+        Joueur joueur = joueurRepository.findById(b.getJoueurId()).orElse(null);
+        return toResponse(blessureRepository.save(b), joueur);
+    }
+
+    private String qualificationValide(String qualification) {
+        String q = qualification == null ? "" : qualification.trim().toUpperCase();
+        if (!QUALIFICATIONS.contains(q)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Qualification administrative invalide");
+        }
+        return q;
+    }
+
+    private String videEnNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 
     /**
@@ -170,8 +204,9 @@ public class BlessureService {
                 j != null ? j.getNom() : null,
                 j != null ? j.getPrenom() : null,
                 b.getDateBlessure(), b.getDateRetourEffectif(), b.getDateRetourPrevue(), b.getStatut(),
-                b.getTypeBlessure(), b.getZoneCorporelle(), b.getCote(),
-                b.getGravite(), b.getCauseProbable(), b.isRecidive(),
-                b.getCommentaire(), b.getNotesMedicales(), enCours, b.isRetourConfirme());
+                b.getTypeBlessure(), b.getTypePrecision(), b.getZoneCorporelle(), b.getZonePrecision(),
+                b.getCote(), b.getGravite(), b.getCauseProbable(), b.isRecidive(),
+                b.getCommentaire(), b.getNotesMedicales(), b.getQualificationAdministrative(),
+                enCours, b.isRetourConfirme());
     }
 }

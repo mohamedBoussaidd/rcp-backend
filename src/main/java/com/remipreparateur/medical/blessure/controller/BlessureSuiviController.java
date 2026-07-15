@@ -1,10 +1,15 @@
 package com.remipreparateur.medical.blessure.controller;
 
+import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.EtapeCreateRequest;
 import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.EtapeResponse;
-import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.EtapeStatutRequest;
+import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.EtapeUpdateRequest;
 import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.NoteRequest;
 import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.NoteResponse;
+import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.OrdreRequest;
 import com.remipreparateur.medical.blessure.service.BlessureSuiviService;
+import com.remipreparateur.medical.protocole.dto.ProtocoleModeleDtos.DepuisBlessureRequest;
+import com.remipreparateur.medical.protocole.dto.ProtocoleModeleDtos.ModeleResponse;
+import com.remipreparateur.medical.protocole.service.ProtocoleModeleService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,9 +27,11 @@ import java.util.UUID;
 public class BlessureSuiviController {
 
     private final BlessureSuiviService service;
+    private final ProtocoleModeleService protocoleService;
 
-    public BlessureSuiviController(BlessureSuiviService service) {
+    public BlessureSuiviController(BlessureSuiviService service, ProtocoleModeleService protocoleService) {
         this.service = service;
+        this.protocoleService = protocoleService;
     }
 
     // ── Journal ──
@@ -53,15 +60,49 @@ public class BlessureSuiviController {
         return service.listerRtp(blessureId);
     }
 
+    /** Modèle suggéré selon type/zone/gravité de la blessure ; 204 si aucun modèle éligible. */
+    @GetMapping("/rtp/suggestion")
+    public ResponseEntity<ModeleResponse> suggestion(@PathVariable UUID blessureId) {
+        ModeleResponse m = service.suggestion(blessureId);
+        return m == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(m);
+    }
+
+    /** Initialise le protocole en clonant le modèle demandé (sans modeleId : le modèle suggéré). */
     @PostMapping("/rtp")
-    public ResponseEntity<List<EtapeResponse>> initialiserRtp(@PathVariable UUID blessureId) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.initialiserRtp(blessureId));
+    public ResponseEntity<List<EtapeResponse>> initialiserRtp(@PathVariable UUID blessureId,
+                                                              @RequestParam(required = false) UUID modeleId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.initialiserRtp(blessureId, modeleId));
+    }
+
+    @PostMapping("/rtp/etapes")
+    public ResponseEntity<EtapeResponse> ajouterEtape(@PathVariable UUID blessureId,
+                                                      @Valid @RequestBody EtapeCreateRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.ajouterEtape(blessureId, req));
     }
 
     @PatchMapping("/rtp/{etapeId}")
-    public EtapeResponse majEtape(@PathVariable UUID blessureId, @PathVariable UUID etapeId,
-                                  @Valid @RequestBody EtapeStatutRequest req) {
-        return service.majEtape(blessureId, etapeId, req.statut());
+    public EtapeResponse modifierEtape(@PathVariable UUID blessureId, @PathVariable UUID etapeId,
+                                       @Valid @RequestBody EtapeUpdateRequest req) {
+        return service.modifierEtape(blessureId, etapeId, req);
+    }
+
+    @DeleteMapping("/rtp/{etapeId}")
+    public ResponseEntity<Void> supprimerEtape(@PathVariable UUID blessureId, @PathVariable UUID etapeId) {
+        service.supprimerEtape(blessureId, etapeId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/rtp/ordre")
+    public List<EtapeResponse> reordonner(@PathVariable UUID blessureId, @Valid @RequestBody OrdreRequest req) {
+        return service.reordonner(blessureId, req.etapeIds());
+    }
+
+    /** Capitalise le protocole en cours en nouveau modèle du club (critères pré-remplis). */
+    @PostMapping("/rtp/enregistrer-modele")
+    public ResponseEntity<ModeleResponse> enregistrerModele(@PathVariable UUID blessureId,
+                                                            @Valid @RequestBody DepuisBlessureRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(protocoleService.enregistrerDepuisBlessure(blessureId, req));
     }
 
     @DeleteMapping("/rtp")

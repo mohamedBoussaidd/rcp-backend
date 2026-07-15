@@ -66,7 +66,7 @@ public class MesDocumentsMedicauxController {
         return ResponseEntity.noContent().build();
     }
 
-    static ResponseEntity<Resource> reponseFichier(FichierDocument f) {
+    public static ResponseEntity<Resource> reponseFichier(FichierDocument f) {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(f.typeMime()))
                 .header(HttpHeaders.CONTENT_DISPOSITION,

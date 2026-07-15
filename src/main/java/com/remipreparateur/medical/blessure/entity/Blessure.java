@@ -40,8 +40,16 @@ public class Blessure {
     @Column(name = "type_blessure")
     private String typeBlessure;
 
+    /** Précision libre quand typeBlessure = « autre ». */
+    @Column(name = "type_precision")
+    private String typePrecision;
+
     @Column(name = "zone_corporelle")
     private String zoneCorporelle;
+
+    /** Précision libre quand zoneCorporelle = « autre ». */
+    @Column(name = "zone_precision")
+    private String zonePrecision;
 
     @Column(name = "cote")
     private String cote;
@@ -61,6 +69,10 @@ public class Blessure {
     /** Notes réservées au staff médical (distinct du commentaire général). */
     @Column(name = "notes_medicales")
     private String notesMedicales;
+
+    /** Qualification administrative : AUCUNE | ARRET_MALADIE | ACCIDENT_TRAVAIL. */
+    @Column(name = "qualification_administrative", nullable = false)
+    private String qualificationAdministrative = "AUCUNE";
 
     @Column(name = "equipe_id")
     private UUID equipeId;

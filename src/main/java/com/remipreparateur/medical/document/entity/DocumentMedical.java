@@ -27,6 +27,10 @@ public class DocumentMedical {
     @Column(name = "equipe_id")
     private UUID equipeId;
 
+    /** Renseigné pour une déclaration (arrêt / accident de travail) rattachée à une blessure. */
+    @Column(name = "blessure_id")
+    private UUID blessureId;
+
     @Column(name = "nom_original", nullable = false)
     private String nomOriginal;
 

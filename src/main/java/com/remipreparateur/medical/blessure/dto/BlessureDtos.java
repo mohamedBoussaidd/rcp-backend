@@ -1,5 +1,6 @@
 package com.remipreparateur.medical.blessure.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
@@ -17,13 +18,19 @@ public final class BlessureDtos {
             LocalDate dateRetourPrevue,
             String statut,
             String typeBlessure,
+            String typePrecision,
             String zoneCorporelle,
+            String zonePrecision,
             String cote,
             String gravite,
             String causeProbable,
             Boolean recidive,
             String commentaire,
-            String notesMedicales) {}
+            String notesMedicales,
+            String qualificationAdministrative) {}
+
+    /** Qualification administrative seule (accessible à blessures:qualify, cf. SecurityConfig). */
+    public record QualificationRequest(@NotBlank String qualification) {}
 
     public record BlessureResponse(
             UUID id,
@@ -35,13 +42,16 @@ public final class BlessureDtos {
             LocalDate dateRetourPrevue,
             String statut,
             String typeBlessure,
+            String typePrecision,
             String zoneCorporelle,
+            String zonePrecision,
             String cote,
             String gravite,
             String causeProbable,
             boolean recidive,
             String commentaire,
             String notesMedicales,
+            String qualificationAdministrative,
             boolean enCours,
             boolean retourConfirme) {}
 }

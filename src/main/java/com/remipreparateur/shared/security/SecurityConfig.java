@@ -124,9 +124,19 @@ public class SecurityConfig {
                         // Import Excel / données GPS
                         .requestMatchers("/api/import/**").hasAuthority("gps:import")
 
+                        // Blessures (module médical) : qualification administrative & déclarations
+                        // (arrêt/accident de travail) ouvertes au-delà du médical (Président,
+                        // Administratif) via blessures:qualify — AVANT les règles génériques.
+                        .requestMatchers("/api/blessures/*/qualification",
+                                "/api/blessures/*/declarations",
+                                "/api/blessures/*/declarations/**").hasAuthority("blessures:qualify")
                         // Blessures (module médical) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/blessures/**").hasAuthority("blessures:read")
                         .requestMatchers("/api/blessures/**").hasAuthority("blessures:write")
+
+                        // Bibliothèque de protocoles de reprise (RTP) : mêmes droits que les blessures
+                        .requestMatchers(HttpMethod.GET, "/api/protocoles-modeles/**").hasAuthority("blessures:read")
+                        .requestMatchers("/api/protocoles-modeles/**").hasAuthority("blessures:write")
 
                         // Documents médicaux (staff) : lecture (filtrage fin par visibilité dans le
                         // service) ; dépôt/suppression. Le dépôt par le joueur passe par /api/moi/**.
