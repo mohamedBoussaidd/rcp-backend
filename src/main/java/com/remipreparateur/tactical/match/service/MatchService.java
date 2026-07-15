@@ -19,6 +19,8 @@ import com.remipreparateur.notification.service.NotificationProducer;
 import com.remipreparateur.saison.service.AppartenanceService;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.ScopeResolver;
+import com.remipreparateur.tactical.regles.entity.RegleTactique;
+import com.remipreparateur.tactical.regles.repository.RegleTactiqueRepository;
 import com.remipreparateur.shared.time.Horloge;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -59,6 +61,7 @@ public class MatchService {
     private final PermissionResolver permissionResolver;
     private final Horloge horloge;
     private final AppartenanceService appartenance;
+    private final RegleTactiqueRepository regleTactiqueRepository;
 
     public MatchService(MatchPrepaRepository matchRepository,
                         MatchSchemaRepository schemaRepository,
@@ -76,7 +79,8 @@ public class MatchService {
                         ScopeResolver scopeResolver,
                         PermissionResolver permissionResolver,
                         Horloge horloge,
-                        AppartenanceService appartenance) {
+                        AppartenanceService appartenance,
+                        RegleTactiqueRepository regleTactiqueRepository) {
         this.matchRepository = matchRepository;
         this.schemaRepository = schemaRepository;
         this.compoRepository = compoRepository;
@@ -94,6 +98,7 @@ public class MatchService {
         this.permissionResolver = permissionResolver;
         this.horloge = horloge;
         this.appartenance = appartenance;
+        this.regleTactiqueRepository = regleTactiqueRepository;
     }
 
     // ── Liste / création ──
@@ -300,6 +305,24 @@ public class MatchService {
         return toResponse(touch(m), currentUser.current());
     }
 
+    // ── Profil de règles adverses (moteur tactique) ──
+
+    /** Attache (ou détache : null) un profil de règles ADVERSAIRE au match — référence, pas copie. */
+    @Transactional
+    public MatchResponse definirProfilAdverse(UUID matchId, ProfilAdverseRequest req) {
+        MatchPrepa m = chargerMatch(matchId);
+        if (req.profilAdverseId() != null) {
+            RegleTactique r = regleTactiqueRepository.findById(req.profilAdverseId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profil introuvable"));
+            scopeResolver.verifieAcces(r.getEquipeId());
+            if (!"ADVERSAIRE".equals(r.getType())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Seul un profil ADVERSAIRE peut être attaché à un match");
+            }
+        }
+        m.setProfilAdverseId(req.profilAdverseId());
+        return toResponse(touch(m), currentUser.current());
+    }
+
     /** Séances de l'équipe active, proposées comme sessions GPS à lier. */
     @Transactional(readOnly = true)
     public List<SessionGpsOption> sessionsDisponibles() {
@@ -497,7 +520,7 @@ public class MatchService {
                 m.getConsignes(), m.getLieuRdv(), m.getHeureRdv(), m.getHeureMatch(), m.getCouleurMaillot(), m.getInfosLogistiques(),
                 m.isPublie(), m.getPublieAt(), m.isCompoVisible(),
                 m.getResultat(), m.getScore(), m.getNotesDebrief(),
-                m.getSessionGpsId(), schemas, compo, surveilles, suspendus, m.getUpdatedAt());
+                m.getSessionGpsId(), m.getProfilAdverseId(), schemas, compo, surveilles, suspendus, m.getUpdatedAt());
     }
 
     /** Mappe un placement de compo. Si {@code positions} est faux, masque x/y (compo non visible au joueur). */

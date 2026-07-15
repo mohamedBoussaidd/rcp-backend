@@ -51,6 +51,7 @@ public final class MatchDtos {
             String score,
             String notesDebrief,
             UUID sessionGpsId,
+            UUID profilAdverseId,
             List<SchemaResponse> schemas,
             List<CompoItemResponse> compo,
             List<SurveilleResponse> surveilles,
@@ -142,6 +143,9 @@ public final class MatchDtos {
 
     // ── Lien session GPS ──
     public record SessionGpsRequest(UUID sessionGpsId) {}
+
+    // ── Lien profil de règles adverses (moteur tactique) ──
+    public record ProfilAdverseRequest(UUID profilAdverseId) {}
 
     /** Option du sélecteur de session GPS (séances de l'équipe). */
     public record SessionGpsOption(

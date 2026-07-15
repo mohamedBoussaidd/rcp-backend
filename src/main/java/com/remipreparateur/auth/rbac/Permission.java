@@ -57,6 +57,8 @@ public enum Permission {
     SCHEMAS_WRITE("schemas:write", "Tactique & Match", "Éditer les schémas tactiques"),
     PLANDEJEU_READ("plandejeu:read", "Tactique & Match", "Voir le plan de jeu"),
     PLANDEJEU_WRITE("plandejeu:write", "Tactique & Match", "Éditer le plan de jeu"),
+    REGLES_TACTIQUES_READ("regles_tactiques:read", "Tactique & Match", "Voir les règles de jeu (moteur tactique)"),
+    REGLES_TACTIQUES_WRITE("regles_tactiques:write", "Tactique & Match", "Calibrer les règles de jeu (moteur tactique)"),
     MATCHS_READ("matchs:read", "Tactique & Match", "Voir les matchs"),
     MATCHS_WRITE("matchs:write", "Tactique & Match", "Gérer les matchs"),
     DIAPORAMA_READ("diaporama:read", "Tactique & Match", "Voir les diaporamas"),

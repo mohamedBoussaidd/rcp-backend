@@ -126,6 +126,12 @@ public class MatchController {
         return matchService.definirSessionGps(id, req);
     }
 
+    /** Attache (ou détache : id null) un profil de règles adverses au match (moteur tactique). */
+    @PutMapping("/{id}/profil-adverse")
+    public MatchResponse definirProfilAdverse(@PathVariable UUID id, @RequestBody ProfilAdverseRequest req) {
+        return matchService.definirProfilAdverse(id, req);
+    }
+
     @GetMapping("/{id}/charge-gps")
     public List<ChargeJoueur> chargeGps(@PathVariable UUID id) {
         return matchService.chargeGps(id);

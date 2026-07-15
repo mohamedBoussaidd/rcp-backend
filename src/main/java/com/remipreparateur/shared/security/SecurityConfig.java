@@ -191,6 +191,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/plan-de-jeu/**").hasAuthority("plandejeu:read")
                         .requestMatchers("/api/plan-de-jeu/**").hasAuthority("plandejeu:write")
 
+                        // Règles de jeu du moteur tactique (équipe) : lecture / écriture
+                        .requestMatchers(HttpMethod.GET, "/api/regles-tactiques/**").hasAuthority("regles_tactiques:read")
+                        .requestMatchers("/api/regles-tactiques/**").hasAuthority("regles_tactiques:write")
+
                         // Match (cycle de vie avant/après, équipe) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/matchs/**").hasAuthority("matchs:read")
                         .requestMatchers("/api/matchs/**").hasAuthority("matchs:write")

@@ -62,7 +62,9 @@ public enum FeatureModule {
     ESPACE_STAFF("espace_staff", "Espace staff (application)",
             "Application mobile staff : agenda, appel, effectif, messagerie, documents et notifications push", false, 24),
     CONTRATS("contrats", "Contrats & paie",
-            "Contrats des joueurs et du staff (échéances, PDF signés) et distribution des fiches de paye", false, 25);
+            "Contrats des joueurs et du staff (échéances, PDF signés) et distribution des fiches de paye", false, 25),
+    MOTEUR_TACTIQUE("moteur_tactique", "Moteur tactique",
+            "Règles de positionnement collectif dérivées du plan de jeu : calibration par zones et mode dynamique du tableau tactique", false, 26);
 
     private final String code;
     private final String libelle;
@@ -132,6 +134,7 @@ public enum FeatureModule {
             case GPS_IMPORT -> GPS;
             case COACHING_ACCESS, EXERCICES_READ, EXERCICES_WRITE, FORMATIONS_READ, FORMATIONS_WRITE,
                  SCHEMAS_READ, SCHEMAS_WRITE, PLANDEJEU_READ, PLANDEJEU_WRITE -> TACTIQUE;
+            case REGLES_TACTIQUES_READ, REGLES_TACTIQUES_WRITE -> MOTEUR_TACTIQUE;
             case SEANCES_MODELES_ACCESS -> SEANCES_MODELES;
             case ESPACE_STAFF_ACCESS -> ESPACE_STAFF;
             case CONTRATS_MANAGE -> CONTRATS;

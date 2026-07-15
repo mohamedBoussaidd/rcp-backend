@@ -80,6 +80,10 @@ public class MatchPrepa {
     @Column(name = "session_gps_id")
     private UUID sessionGpsId;
 
+    /** Profil de règles adverses préparé pour ce match (référence vers regle_tactique, nullable). */
+    @Column(name = "profil_adverse_id")
+    private UUID profilAdverseId;
+
     @Column(name = "cree_par")
     private UUID creePar;
 
