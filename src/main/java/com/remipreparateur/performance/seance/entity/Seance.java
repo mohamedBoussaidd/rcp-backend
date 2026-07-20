@@ -70,9 +70,27 @@ public class Seance {
     @Column(name = "description")
     private String description;
 
-    // Nom de l'encadrant en charge de la séance (texte libre, affiché en vue Liste).
-    @Column(name = "responsable")
-    private String responsable;
+    /**
+     * Encadrant en charge de la séance. V65 : compte staff réel au lieu d'un nom tapé à la main —
+     * c'est la même liste que le staff affecté aux blocs, plus deux vocabulaires concurrents.
+     */
+    @Column(name = "responsable_id")
+    private UUID responsableId;
+
+    /**
+     * Le problème constaté qui motive la séance (« 3 buts encaissés sur CPA samedi »).
+     * <b>Staff uniquement</b> — jamais exposé dans la vue joueur de la fiche : il contient
+     * souvent une critique, parfois nominative.
+     */
+    @Column(name = "contexte")
+    private String contexte;
+
+    /**
+     * Séance ou match à l'origine de ce contexte (facultatif). Un match EST une séance dans ce
+     * modèle, donc une seule colonne suffit pour pointer l'un ou l'autre.
+     */
+    @Column(name = "contexte_seance_id")
+    private UUID contexteSeanceId;
 
     @Column(name = "equipe_id")
     private UUID equipeId;
@@ -92,18 +110,36 @@ public class Seance {
     @Column(name = "objectif_distance_haute_intensite_m")
     private Integer objectifDistanceHauteIntensiteM;
 
-    // ── Mode avancé (module seance_avancee) : objectifs pédagogiques (tous nullable) ──
+    // ── Mode avancé (module seance_avancee) : les cinq axes pédagogiques (tous nullable) ──
+    // V68 : chaque axe porte un DOSAGE 0-5 ; l'`obj*` reste la ligne de détail affichée sous
+    // la jauge. Ne pas confondre avec `seance_dominante` : ce dernier tague la NATURE de la
+    // séance (technique/musculaire/vivacité/PMA…), il ne dose pas ces cinq axes-là.
+    @Column(name = "dominante_tactique_org_intensite")
+    private Short dominanteTactiqueOrgIntensite;
+
     @Column(name = "obj_tactique_org")
     private String objTactiqueOrg;
+
+    @Column(name = "dominante_tactique_fonc_intensite")
+    private Short dominanteTactiqueFoncIntensite;
 
     @Column(name = "obj_tactique_fonc")
     private String objTactiqueFonc;
 
+    @Column(name = "dominante_mental_intensite")
+    private Short dominanteMentalIntensite;
+
     @Column(name = "obj_mental")
     private String objMental;
 
+    @Column(name = "dominante_technique_intensite")
+    private Short dominanteTechniqueIntensite;
+
     @Column(name = "obj_technique")
     private String objTechnique;
+
+    @Column(name = "dominante_athletique_intensite")
+    private Short dominanteAthletiqueIntensite;
 
     @Column(name = "obj_athletique")
     private String objAthletique;

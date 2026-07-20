@@ -45,6 +45,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -64,16 +65,48 @@ public class ImportPhotoService {
     private static final Logger log = LoggerFactory.getLogger(ImportPhotoService.class);
 
     private static final long TAILLE_MAX_OCTETS = 10L * 1024 * 1024;   // 10 Mo
-    private static final int LONG_COTE_MAX_PX = 1568;                  // guidance vision (coût maîtrisé)
+    // Testé à 2576px (résolution haute claude-opus-4-8) le 2026-07-20 : aucun gain net sur les
+    // scènes denses (le modèle perd des éléments avant même de raisonner dessus — un problème de
+    // perception, pas de résolution) pour ~3x le coût par appel. Revenu à 1568px : le résultat
+    // reste un brouillon à corriger quel que soit le réglage, autant maîtriser le coût.
+    private static final int LONG_COTE_MAX_PX = 1568;
     private static final String MODELE_VISION = "claude-opus-4-8";
 
     // Dimensions du terrain de l'éditeur Konva (schema-editor) pour convertir les 0..1.
     private static final int W_COMPLET = 1040, W_DEMI = 600, H_TERRAIN = 680;
-    private static final String COULEUR_NOUS = "#7c3aed", COULEUR_ADVERSE = "#1f2937";
 
-    private static final Set<String> TYPES_ELEMENTS =
-            Set.of("joueur", "plot", "ballon", "but", "cerceau", "mannequin");
+    /** Les 5 palettes de jetons de l'éditeur : l'IA répond avec ces libellés, jamais des couleurs. */
+    private static final Map<String, String> COULEURS_EQUIPE = Map.of(
+            "mon_equipe", "#7c3aed",
+            "equipe_1",   "#ef4444",
+            "equipe_2",   "#eab308",
+            "adversaire", "#1f2937",
+            "joker",      "#f97316");
+    private static final String COULEUR_EQUIPE_DEFAUT = "#7c3aed";
+
+    /** Couleurs du matériel, alignées sur la palette « Équipement » de l'éditeur. */
+    private static final Map<String, String> COULEURS_MATERIEL = Map.of(
+            "plot",      "#ef4444",
+            "coupelle",  "#f59e0b",
+            "cerceau",   "#f97316",
+            "mannequin", "#64748b",
+            "echelle",   "#eab308",
+            "haie",      "#f97316",
+            "piquet",    "#22c55e");
+    private static final String COULEUR_MATERIEL_DEFAUT = "#ffffff";   // ballon, mini-but
+
+    /** Couleurs des formes d'annotation (palette de l'éditeur : rouge / jaune / bleu). */
+    private static final Map<String, String> COULEURS_FORME = Map.of(
+            "rouge", "#ef4444", "jaune", "#eab308", "bleu", "#2563eb");
+
+    private static final Set<String> TYPES_ELEMENTS = Set.of(
+            "joueur", "plot", "ballon", "but", "cerceau", "mannequin",
+            "echelle", "haie", "piquet", "coupelle");
     private static final Set<String> TYPES_TRACES = Set.of("passe", "deplacement", "conduite", "tir");
+    private static final Set<String> TYPES_FORMES = Set.of("rect", "ellipse", "losange", "triangle");
+
+    /** Garde-fou : une série mal comprise par l'IA ne doit pas noyer le terrain. */
+    private static final int SERIE_MAX = 40;
 
     private final ImportPhotoJournalRepository journalRepository;
     private final ClubParametreRepository clubParametreRepository;
@@ -131,6 +164,11 @@ public class ImportPhotoService {
 
         try {
             String brut = mock ? reponseMock() : appelerVision(jpeg);
+            // Seule trace de ce que le modèle a réellement répondu : sans ce log, un élément
+            // absent du rendu est indiscernable entre « le modèle ne l'a pas vu » et
+            // « le modèle l'a proposé mais le parsing/la validation l'a rejeté silencieusement ».
+            log.info("Import photo {} : réponse brute ({} car.) : {}", journal.getId(), brut.length(),
+                    brut.length() > 8000 ? brut.substring(0, 8000) + "…" : brut);
             ImportPhotoResponse reponse = parser(brut, journal);
             journalRepository.save(journal);
             return reponse;
@@ -274,6 +312,9 @@ public class ImportPhotoService {
         String prompt = parametres.valeur(ParametreIaService.CLE_PROMPT_IMPORT_PHOTO);
         if (prompt == null || prompt.isBlank()) prompt = ParametreIaService.PROMPT_IMPORT_PHOTO_DEFAUT;
 
+        // Pas de `temperature` : le paramètre est retiré sur claude-opus-4-8 (400 si envoyé).
+        // La stabilité d'un import à l'autre passe donc par le prompt — d'où le champ « analyse »
+        // qui impose de décrire la scène avant d'en produire les coordonnées.
         MessageCreateParams params = MessageCreateParams.builder()
                 .model(MODELE_VISION)
                 .maxTokens(8192L)
@@ -351,37 +392,36 @@ public class ImportPhotoService {
         out.put("terrain", terrain);
         ArrayNode elements = out.putArray("elements");
         ArrayNode traces = out.putArray("traces");
+        ArrayNode formes = out.putArray("formes");
 
-        int i = 0;
+        Compteur n = new Compteur();
         for (JsonNode e : schema.path("elements")) {
-            String type = e.path("type").asText();
-            if (!TYPES_ELEMENTS.contains(type)) continue;
-            ObjectNode el = elements.addObject();
-            el.put("id", "imp-" + (++i));
-            el.put("type", type);
-            el.put("x", Math.round(borne(e.path("x").asDouble(0.5)) * W));
-            el.put("y", Math.round(borne(e.path("y").asDouble(0.5)) * H_TERRAIN));
-            String couleurLogique = e.path("couleur").asText("neutre");
-            if ("joueur".equals(type)) {
-                el.put("couleur", "adverse".equals(couleurLogique) ? COULEUR_ADVERSE : COULEUR_NOUS);
-                if (e.hasNonNull("numero")) el.put("numero", e.path("numero").asInt());
-                else el.put("numero", i);
-            } else {
-                el.put("couleur", switch (type) {
-                    case "plot" -> "#ef4444";
-                    case "cerceau" -> "#eab308";
-                    case "mannequin" -> "#f59e0b";
-                    default -> "#ffffff";
-                });
+            ajouterElement(elements, e.path("type").asText(), e, e, W, n);
+        }
+        // Séries : l'IA décrit « 8 plots de A à B » plutôt que d'énumérer 8 paires de coordonnées
+        // (localisation et comptage étant ses points faibles) — on développe ici, régulièrement.
+        for (JsonNode s : schema.path("series")) {
+            String type = s.path("element").asText();
+            JsonNode de = s.path("de"), a = s.path("a");
+            int nombre = s.path("nombre").asInt(0);
+            if (!TYPES_ELEMENTS.contains(type) || nombre < 2 || !estPoint(de) || !estPoint(a)) continue;
+            nombre = Math.min(nombre, SERIE_MAX);
+            double x1 = borne(de.get(0).asDouble()), y1 = borne(de.get(1).asDouble());
+            double x2 = borne(a.get(0).asDouble()), y2 = borne(a.get(1).asDouble());
+            for (int k = 0; k < nombre; k++) {
+                double t = (double) k / (nombre - 1);
+                ObjectNode point = mapper.createObjectNode();
+                point.put("x", x1 + (x2 - x1) * t);
+                point.put("y", y1 + (y2 - y1) * t);
+                ajouterElement(elements, type, point, s, W, n);
             }
         }
-        int j = 0;
         for (JsonNode tr : schema.path("traces")) {
             String type = tr.path("type").asText();
             JsonNode pts = tr.path("points");
             if (!TYPES_TRACES.contains(type) || !pts.isArray() || pts.size() < 4 || pts.size() % 2 != 0) continue;
             ObjectNode trace = traces.addObject();
-            trace.put("id", "imp-t-" + (++j));
+            trace.put("id", "imp-t-" + (++n.traces));
             trace.put("type", type);
             ArrayNode points = trace.putArray("points");
             for (int k = 0; k < pts.size(); k += 2) {
@@ -389,9 +429,62 @@ public class ImportPhotoService {
                 points.add(Math.round(borne(pts.get(k + 1).asDouble()) * H_TERRAIN));
             }
         }
-        compteurs[0] = i;
-        compteurs[1] = j;
-        return i == 0 && j == 0 ? null : out.toString();
+        // Formes d'annotation : zones de jeu (carré de conservation, couloirs…) que l'éditeur sait
+        // déjà dessiner — sans elles, toute délimitation tracée sur la fiche était perdue.
+        for (JsonNode f : schema.path("formes")) {
+            String type = f.path("type").asText();
+            if (!TYPES_FORMES.contains(type)) continue;
+            if (!f.hasNonNull("x") || !f.hasNonNull("y")) continue;
+            double x = borne(f.path("x").asDouble()), y = borne(f.path("y").asDouble());
+            double w = borne(f.path("w").asDouble(0)), h = borne(f.path("h").asDouble(0));
+            if (w <= 0 || h <= 0) continue;
+            ObjectNode forme = formes.addObject();
+            forme.put("id", "imp-f-" + (++n.formes));
+            forme.put("type", type);
+            forme.put("x", Math.round(x * W));
+            forme.put("y", Math.round(y * H_TERRAIN));
+            forme.put("w", Math.max(12, Math.round(w * W)));
+            forme.put("h", Math.max(12, Math.round(h * H_TERRAIN)));
+            forme.put("couleur", COULEURS_FORME.getOrDefault(f.path("couleur").asText("jaune"), "#eab308"));
+            String texte = texte(f, "texte");
+            if (texte != null) forme.put("texte", texte);
+        }
+
+        compteurs[0] = n.elements + n.formes;
+        compteurs[1] = n.traces;
+        return n.elements == 0 && n.traces == 0 && n.formes == 0 ? null : out.toString();
+    }
+
+    /** Compteurs d'ids du schéma converti (un par famille, pour des ids stables et lisibles). */
+    private static final class Compteur { int elements, traces, formes; }
+
+    private static boolean estPoint(JsonNode n) {
+        return n.isArray() && n.size() == 2 && n.get(0).isNumber() && n.get(1).isNumber();
+    }
+
+    /**
+     * Ajoute un élément : `position` porte x/y (0..1), `attributs` la couleur/le numéro/la rotation
+     * — deux nœuds distincts pour qu'une série applique ses attributs à chacun de ses points.
+     */
+    private void ajouterElement(ArrayNode cible, String type, JsonNode position, JsonNode attributs,
+                                int W, Compteur n) {
+        if (!TYPES_ELEMENTS.contains(type)) return;
+        ObjectNode el = cible.addObject();
+        el.put("id", "imp-" + (++n.elements));
+        el.put("type", type);
+        el.put("x", Math.round(borne(position.path("x").asDouble(0.5)) * W));
+        el.put("y", Math.round(borne(position.path("y").asDouble(0.5)) * H_TERRAIN));
+        if ("joueur".equals(type)) {
+            el.put("couleur", COULEURS_EQUIPE.getOrDefault(
+                    attributs.path("couleur").asText(""), COULEUR_EQUIPE_DEFAUT));
+            if (attributs.hasNonNull("numero")) el.put("numero", attributs.path("numero").asInt());
+            else el.put("numero", n.elements);
+        } else {
+            el.put("couleur", COULEURS_MATERIEL.getOrDefault(type, COULEUR_MATERIEL_DEFAUT));
+        }
+        // Orientation : n'a de sens que pour le matériel allongé (échelle, haie, mini-but…).
+        int rotation = ((attributs.path("rotation").asInt(0) % 360) + 360) % 360;
+        if (rotation != 0) el.put("rotation", rotation);
     }
 
     /** Le modèle peut entourer le JSON de texte/balises malgré la consigne : on isole l'objet. */
@@ -455,11 +548,14 @@ public class ImportPhotoService {
            "avance":{"formatJoueurs":"4 vs 4 + 2 jokers","terrainLongueurM":25,"terrainLargeurM":20,
                      "sequencage":"3 × 3'","butSystemeMarque":"10 passes = 1 pt","reglesJeu":"2 touches max","variablesPedagogiques":"Ajouter un gardien"}},
          "schema":{"terrain":"demi",
-           "elements":[{"type":"joueur","couleur":"nous","numero":1,"x":0.3,"y":0.3},
-                       {"type":"joueur","couleur":"nous","numero":2,"x":0.6,"y":0.35},
-                       {"type":"joueur","couleur":"adverse","numero":1,"x":0.45,"y":0.5},
-                       {"type":"ballon","couleur":"neutre","numero":null,"x":0.32,"y":0.33},
-                       {"type":"plot","couleur":"neutre","numero":null,"x":0.2,"y":0.2}],
+           "elements":[{"type":"joueur","couleur":"mon_equipe","numero":1,"x":0.3,"y":0.3},
+                       {"type":"joueur","couleur":"mon_equipe","numero":2,"x":0.6,"y":0.35},
+                       {"type":"joueur","couleur":"adversaire","numero":1,"x":0.45,"y":0.5},
+                       {"type":"joueur","couleur":"joker","numero":9,"x":0.15,"y":0.5},
+                       {"type":"ballon","numero":null,"x":0.32,"y":0.33},
+                       {"type":"echelle","rotation":90,"x":0.8,"y":0.4}],
+           "series":[{"element":"plot","de":[0.2,0.2],"a":[0.2,0.8],"nombre":5}],
+           "formes":[{"type":"rect","x":0.15,"y":0.15,"w":0.5,"h":0.6,"couleur":"jaune","texte":"25 × 20 m"}],
            "traces":[{"type":"passe","points":[0.32,0.33,0.6,0.35]}]}}
         """;
     }

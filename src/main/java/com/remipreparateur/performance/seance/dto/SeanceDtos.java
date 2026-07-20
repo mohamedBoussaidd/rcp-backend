@@ -28,7 +28,7 @@ public final class SeanceDtos {
     public record ExerciceLigne(
             UUID exerciceId,
             String nom,
-            String categorie,
+            String forme,        // V65 : forme de travail (ex-categorie)
             String type,
             int ordre,
             Short dureeMinutes,
@@ -49,12 +49,19 @@ public final class SeanceDtos {
      * prénom/nom), et sans ces deux champs le sélecteur affiche des boutons identiques.
      * {@code equipe} vaut null pour un compte rattaché au club seul (Président, Administratif).
      */
-    public record StaffRef(UUID id, String nom, String role, String equipe) {
+    public record StaffRef(UUID id, String nom, String role, String equipe, List<String> roleBloc) {
 
         public static StaffRef de(UUID id, String prenom, String nom,
                                   com.remipreparateur.auth.entity.Role role, String equipe) {
+            return de(id, prenom, nom, role, equipe, List.of());
+        }
+
+        /** @param roleBloc codes de {@code referentiel_role_bloc} tenus sur CE bloc (cumul libre). */
+        public static StaffRef de(UUID id, String prenom, String nom,
+                                  com.remipreparateur.auth.entity.Role role, String equipe,
+                                  List<String> roleBloc) {
             String complet = ((prenom != null ? prenom + " " : "") + (nom != null ? nom : "")).trim();
-            return new StaffRef(id, complet, libelleRole(role), equipe);
+            return new StaffRef(id, complet, libelleRole(role), equipe, roleBloc);
         }
 
         private static String libelleRole(com.remipreparateur.auth.entity.Role r) {
@@ -71,14 +78,29 @@ public final class SeanceDtos {
     }
     public record JoueurRef(UUID id, String nom, String prenom) {}
 
+    /**
+     * @param type  ECHAUFFEMENT / SITUATION / JEU / RETOUR_AU_CALME (nullable)
+     * @param zones zones du terrain occupées, 1..8 (V66 — remplace l'ancien texte libre)
+     * @param staff staff affecté, chacun avec les rôles qu'il tient sur CE bloc
+     */
     public record BlocDto(
             UUID id,
             int ordre,
             String libelle,
+            String type,
             String sequencage,
             Short dureeMinutes,
-            String zoneTerrain,
+            List<Short> zones,
             List<StaffRef> staff) {}
+
+    /** Rôle de bloc du référentiel figé (super-admin), pour peupler les sélecteurs. */
+    public record RoleBlocDto(String code, String libelle, String icone) {}
+
+    /**
+     * Deux blocs qui se déroulent en même temps sur une même zone. C'est LA raison de structurer
+     * les zones : avec du texte libre, ce chevauchement reste invisible jusqu'au terrain.
+     */
+    public record ConflitZone(int blocA, int blocB, List<Short> zones) {}
 
     /** Groupe du jour stocké (COULEUR / LIBRE). {@code blocId} null = toute la séance. */
     public record GroupeDto(
@@ -90,12 +112,17 @@ public final class SeanceDtos {
             int ordre,
             List<JoueurRef> joueurs) {}
 
+    /** Un rôle attribué à un membre du staff sur un bloc (plusieurs lignes possibles par personne). */
+    public record StaffRoleRequest(UUID utilisateurId, String role) {}
+
     public record BlocRequest(
             String libelle,
+            String type,
             String sequencage,
             Short dureeMinutes,
-            String zoneTerrain,
-            List<UUID> staffIds) {}
+            List<Short> zones,
+            List<UUID> staffIds,
+            List<StaffRoleRequest> staffRoles) {}
 
     /** {@code blocIndex} = index dans la liste de blocs du payload, null = groupe global séance. */
     public record GroupeRequest(
@@ -149,16 +176,32 @@ public final class SeanceDtos {
 
     public record RefItem(String code, String libelle, String groupe) {}
 
+    /**
+     * Les cinq axes pédagogiques de la séance. V68 : chaque axe porte son DOSAGE 0-5 (null =
+     * non travaillé) en plus de sa ligne de détail. Sur la fiche imprimée, c'est le dosage qui
+     * dit d'un coup d'œil où porte la séance — le texte ne se lit qu'ensuite.
+     */
     public record ObjectifsPedagogiques(
+            Short tactiqueOrgIntensite,
             String tactiqueOrg,
+            Short tactiqueFoncIntensite,
             String tactiqueFonc,
+            Short mentalIntensite,
             String mental,
+            Short techniqueIntensite,
             String technique,
+            Short athletiqueIntensite,
             String athletique) {}
 
     public record BlocResume(BlocDto bloc, List<ExerciceLigne> exercices) {}
 
-    /** Fiche complète d'une séance (écran de validation / consultation / impression). */
+    /**
+     * Fiche complète d'une séance (écran de validation / consultation / impression).
+     *
+     * <p>{@code contexte} et {@code contexteLibelle} ouvrent la chaîne de lecture de la fiche :
+     * <b>contexte → objectifs → déroulé</b>. Ils sont réservés au staff et n'apparaissent donc
+     * jamais dans {@link FicheSeanceJoueur}.
+     */
     public record ResumeSeance(
             UUID seanceId,
             String titre,
@@ -168,7 +211,9 @@ public final class SeanceDtos {
             Short dureeMinutes,
             Short dureeEffectiveMinutes,
             String terrain,
-            String responsable,
+            String responsable,        // nom du compte staff responsable (résolu depuis responsableId)
+            String contexte,           // problème constaté — STAFF UNIQUEMENT
+            String contexteLibelle,    // ex. « ⚽ Clermont — sam. 18/07 (1-3) », null si aucun lien
             String typeCode,
             String typeLibelle,
             String equipeNom,
@@ -191,7 +236,7 @@ public final class SeanceDtos {
             String libelle,
             String sequencage,
             Short dureeMinutes,
-            String zoneTerrain,
+            List<Short> zones,
             List<ExerciceJoueur> exercices) {}
 
     public record ExerciceJoueur(String nom, Short dureeMinutes, String schemaJson) {}

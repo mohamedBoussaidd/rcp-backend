@@ -236,15 +236,50 @@ public class SeanceFicheService {
 
         return new ResumeSeance(
                 s.getId(), s.getTitre(), s.getStatut(), s.getDate(), s.getHeureDebut(),
-                s.getDureeMinutes(), s.getDureeEffectiveMinutes(), s.getTerrain(), s.getResponsable(),
+                s.getDureeMinutes(), s.getDureeEffectiveMinutes(), s.getTerrain(), nomResponsable(s),
+                s.getContexte(), libelleContexte(s.getContexteSeanceId()),
                 type != null ? type.getCode() : null, type != null ? type.getLibelle() : null, equipeNom,
                 perimatch, dominantes, sousPrincipes,
-                new ObjectifsPedagogiques(s.getObjTactiqueOrg(), s.getObjTactiqueFonc(),
-                        s.getObjMental(), s.getObjTechnique(), s.getObjAthletique()),
+                new ObjectifsPedagogiques(
+                        s.getDominanteTactiqueOrgIntensite(),  s.getObjTactiqueOrg(),
+                        s.getDominanteTactiqueFoncIntensite(), s.getObjTactiqueFonc(),
+                        s.getDominanteMentalIntensite(),       s.getObjMental(),
+                        s.getDominanteTechniqueIntensite(),    s.getObjTechnique(),
+                        s.getDominanteAthletiqueIntensite(),   s.getObjAthletique()),
                 s.getObjectifDistanceM(), s.getObjectifDistanceHauteIntensiteM(), s.getObjectifIntensite(),
                 blocs, sansBloc, contenu.groupes(),
                 s.getEquipeId() != null ? groupesAuto(s.getEquipeId()) : new GroupesAutoDto(List.of(), List.of(), List.of()),
                 absents);
+    }
+
+    /** Nom du compte staff responsable (V65 : la séance pointe un compte, plus un texte libre). */
+    private String nomResponsable(Seance s) {
+        if (s.getResponsableId() == null) return null;
+        return utilisateurRepository.findById(s.getResponsableId())
+                .map(u -> ((u.getPrenom() != null ? u.getPrenom() + " " : "")
+                        + (u.getNom() != null ? u.getNom() : "")).trim())
+                .filter(n -> !n.isBlank())
+                .orElse(null);
+    }
+
+    /**
+     * Libellé lisible de la séance/du match à l'origine du contexte, ex.
+     * « ⚽ Clermont — sam. 18/07 (1-3) ». Un match est une séance ici, d'où le seul lien.
+     */
+    private String libelleContexte(UUID origineId) {
+        if (origineId == null) return null;
+        return seanceRepository.findById(origineId).map(o -> {
+            String jour = o.getDate() != null
+                    ? o.getDate().getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.FRENCH)
+                            + " " + o.getDate().format(DateTimeFormatter.ofPattern("dd/MM"))
+                    : "";
+            boolean estMatch = o.getAdversaire() != null && !o.getAdversaire().isBlank();
+            String quoi = estMatch ? "⚽ " + o.getAdversaire()
+                    : (o.getTitre() != null && !o.getTitre().isBlank() ? o.getTitre() : "Séance");
+            String score = o.getScoreMatch() != null && !o.getScoreMatch().isBlank()
+                    ? " (" + o.getScoreMatch() + ")" : "";
+            return quoi + (jour.isBlank() ? "" : " — " + jour) + score;
+        }).orElse(null);
     }
 
     // ══════════ Partage au staff ══════════
@@ -291,7 +326,7 @@ public class SeanceFicheService {
                 .collect(Collectors.toMap(BlocDto::id, BlocDto::libelle));
 
         List<BlocJoueur> blocs = contenu.blocs().stream()
-                .map(b -> new BlocJoueur(b.libelle(), b.sequencage(), b.dureeMinutes(), b.zoneTerrain(),
+                .map(b -> new BlocJoueur(b.libelle(), b.sequencage(), b.dureeMinutes(), b.zones(),
                         lignesParBloc.getOrDefault(b.id(), List.of()).stream()
                                 .map(l -> new ExerciceJoueur(l.nom(), l.dureeMinutes(), l.schemaJson()))
                                 .toList()))

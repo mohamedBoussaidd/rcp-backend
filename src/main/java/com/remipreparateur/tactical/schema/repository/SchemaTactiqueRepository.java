@@ -9,4 +9,7 @@ import java.util.UUID;
 @Repository
 public interface SchemaTactiqueRepository extends JpaRepository<SchemaTactique, UUID> {
     List<SchemaTactique> findByClubIdOrderByUpdatedAtDesc(UUID clubId);
+
+    /** Schémas FOURNIS (globaux, posés par le super-admin), visibles par tous les clubs. */
+    List<SchemaTactique> findByClubIdIsNullOrderByUpdatedAtDesc();
 }

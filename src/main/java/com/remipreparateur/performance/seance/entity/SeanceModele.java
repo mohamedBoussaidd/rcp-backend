@@ -63,19 +63,36 @@ public class SeanceModele {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    // ── Mode avancé (V63) : objectifs pédagogiques, recopiés à la planification ──
+    // ── Mode avancé (V63) : les cinq axes pédagogiques, recopiés à la planification ──
+    // V68 : dosage 0-5 par axe, `obj*` = ligne de détail. Recopiés eux aussi par
+    // `planifier()`, sinon le gabarit reperdrait le dosage à chaque utilisation.
+
+    @Column(name = "dominante_tactique_org_intensite")
+    private Short dominanteTactiqueOrgIntensite;
 
     @Column(name = "obj_tactique_org")
     private String objTactiqueOrg;
 
+    @Column(name = "dominante_tactique_fonc_intensite")
+    private Short dominanteTactiqueFoncIntensite;
+
     @Column(name = "obj_tactique_fonc")
     private String objTactiqueFonc;
+
+    @Column(name = "dominante_mental_intensite")
+    private Short dominanteMentalIntensite;
 
     @Column(name = "obj_mental")
     private String objMental;
 
+    @Column(name = "dominante_technique_intensite")
+    private Short dominanteTechniqueIntensite;
+
     @Column(name = "obj_technique")
     private String objTechnique;
+
+    @Column(name = "dominante_athletique_intensite")
+    private Short dominanteAthletiqueIntensite;
 
     @Column(name = "obj_athletique")
     private String objAthletique;

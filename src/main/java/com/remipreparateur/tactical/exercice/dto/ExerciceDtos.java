@@ -16,28 +16,33 @@ public final class ExerciceDtos {
      * (sinon ignorés, les valeurs existantes sont préservées).
      */
     public record ExerciceAvance(
-            String contextePedagogique,
             String niveauObjectif,      // TEMPS_DE_JEU / PRINCIPE_ACTION / REGLE_ACTION_COLLECTIVE / REGLE_ACTION_INDIVIDUELLE / MOYEN
             String echelleEffectif,     // COLLECTIF / INTERSECTORIEL / SECTORIEL / GROUPAL / INDIVIDUEL
+            // V68 : les cinq axes se DOSENT (0-5) ; le texte associé n'est plus que la note
+            // facultative qui précise l'axe. Un axe non travaillé reste à null/0.
+            Short dominanteTactiqueOrgIntensite,
+            Short dominanteTactiqueFoncIntensite,
+            Short dominanteMentalIntensite,
+            Short dominanteTechniqueIntensite,
+            Short dominanteAthletiqueIntensite,
             String dominanteTactiqueOrg,
             String dominanteTactiqueFonc,
             String dominanteMental,
             String dominanteTechnique,
             String dominanteAthletique,
-            String butSystemeMarque,
-            String reglesJeu,
+            String reglesJeu,           // V65 : règles ET système de marque
             String variablesPedagogiques,
             String reperesPerceptifs,
             String comportementsAttendus,
             BigDecimal terrainLongueurM,
             BigDecimal terrainLargeurM,
             String formatJoueurs,
-            Short nbJoueursTotal,
-            String sequencage) {}
+            Short nbJoueursTotal) {}
 
     public record ExerciceRequest(
             @NotBlank String nom,
-            String categorie,
+            String forme,           // ECHAUFFEMENT / ANALYTIQUE / SITUATION / JEU_REDUIT / MATCH_A_THEME
+            java.util.List<UUID> sousPrincipeIds,   // thèmes de jeu (référentiel commun à la séance)
             String type,            // PHYSIQUE / TECHNIQUE / MIXTE (defaut TECHNIQUE)
             Short dureeMinutes,
             String objectif,
@@ -52,7 +57,8 @@ public final class ExerciceDtos {
     public record ExerciceResponse(
             UUID id,
             String nom,
-            String categorie,
+            String forme,           // ECHAUFFEMENT / ANALYTIQUE / SITUATION / JEU_REDUIT / MATCH_A_THEME
+            java.util.List<UUID> sousPrincipeIds,   // thèmes de jeu (référentiel commun à la séance)
             String type,
             Short dureeMinutes,
             String objectif,

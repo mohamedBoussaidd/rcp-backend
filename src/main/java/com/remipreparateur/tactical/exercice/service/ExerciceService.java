@@ -110,7 +110,8 @@ public class ExerciceService {
         c.setCreePar(u.getId());
         c.setEquipeOrigineId(u.getEquipeId());
         c.setNom(source.getNom() + " (copie)");
-        c.setCategorie(source.getCategorie());
+        c.setForme(source.getForme());
+        c.setSousPrincipeIds(new java.util.ArrayList<>(source.getSousPrincipeIds()));
         c.setType(source.getType());
         c.setDureeMinutes(source.getDureeMinutes());
         c.setObjectif(source.getObjectif());
@@ -158,7 +159,9 @@ public class ExerciceService {
 
     private void appliquer(Exercice e, ExerciceRequest req) {
         e.setNom(req.nom());
-        e.setCategorie(req.categorie());
+        e.setForme(req.forme());
+        e.setSousPrincipeIds(req.sousPrincipeIds() == null
+                ? new java.util.ArrayList<>() : new java.util.ArrayList<>(req.sousPrincipeIds()));
         String type = req.type() == null ? "TECHNIQUE" : req.type().trim().toUpperCase();
         if (!type.equals("PHYSIQUE") && !type.equals("TECHNIQUE") && !type.equals("MIXTE")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type attendu : PHYSIQUE, TECHNIQUE ou MIXTE");
@@ -185,15 +188,18 @@ public class ExerciceService {
      */
     private void appliquerAvance(Exercice e, ExerciceAvance a) {
         if (a == null || !aAccesAvance()) return;
-        e.setContextePedagogique(a.contextePedagogique());
         e.setNiveauObjectif(a.niveauObjectif());
         e.setEchelleEffectif(a.echelleEffectif());
+        e.setDominanteTactiqueOrgIntensite(dosage(a.dominanteTactiqueOrgIntensite()));
+        e.setDominanteTactiqueFoncIntensite(dosage(a.dominanteTactiqueFoncIntensite()));
+        e.setDominanteMentalIntensite(dosage(a.dominanteMentalIntensite()));
+        e.setDominanteTechniqueIntensite(dosage(a.dominanteTechniqueIntensite()));
+        e.setDominanteAthletiqueIntensite(dosage(a.dominanteAthletiqueIntensite()));
         e.setDominanteTactiqueOrg(a.dominanteTactiqueOrg());
         e.setDominanteTactiqueFonc(a.dominanteTactiqueFonc());
         e.setDominanteMental(a.dominanteMental());
         e.setDominanteTechnique(a.dominanteTechnique());
         e.setDominanteAthletique(a.dominanteAthletique());
-        e.setButSystemeMarque(a.butSystemeMarque());
         e.setReglesJeu(a.reglesJeu());
         e.setVariablesPedagogiques(a.variablesPedagogiques());
         e.setReperesPerceptifs(a.reperesPerceptifs());
@@ -202,7 +208,16 @@ public class ExerciceService {
         e.setTerrainLargeurM(a.terrainLargeurM());
         e.setFormatJoueurs(a.formatJoueurs());
         e.setNbJoueursTotal(a.nbJoueursTotal());
-        e.setSequencage(a.sequencage());
+    }
+
+    /**
+     * Borne un dosage de dominante dans 0-5 (V68). La contrainte CHECK existe en base, mais un
+     * client qui enverrait 7 provoquerait une erreur SQL brute en fin de transaction plutôt
+     * qu'un enregistrement propre : on ramène ici dans les clous, comme pour l'intensité.
+     */
+    private Short dosage(Short v) {
+        if (v == null) return null;
+        return (short) Math.max(0, Math.min(5, v));
     }
 
     private boolean aAccesAvance() {
@@ -212,15 +227,18 @@ public class ExerciceService {
     }
 
     private void copierAvance(Exercice source, Exercice cible) {
-        cible.setContextePedagogique(source.getContextePedagogique());
         cible.setNiveauObjectif(source.getNiveauObjectif());
         cible.setEchelleEffectif(source.getEchelleEffectif());
+        cible.setDominanteTactiqueOrgIntensite(source.getDominanteTactiqueOrgIntensite());
+        cible.setDominanteTactiqueFoncIntensite(source.getDominanteTactiqueFoncIntensite());
+        cible.setDominanteMentalIntensite(source.getDominanteMentalIntensite());
+        cible.setDominanteTechniqueIntensite(source.getDominanteTechniqueIntensite());
+        cible.setDominanteAthletiqueIntensite(source.getDominanteAthletiqueIntensite());
         cible.setDominanteTactiqueOrg(source.getDominanteTactiqueOrg());
         cible.setDominanteTactiqueFonc(source.getDominanteTactiqueFonc());
         cible.setDominanteMental(source.getDominanteMental());
         cible.setDominanteTechnique(source.getDominanteTechnique());
         cible.setDominanteAthletique(source.getDominanteAthletique());
-        cible.setButSystemeMarque(source.getButSystemeMarque());
         cible.setReglesJeu(source.getReglesJeu());
         cible.setVariablesPedagogiques(source.getVariablesPedagogiques());
         cible.setReperesPerceptifs(source.getReperesPerceptifs());
@@ -229,7 +247,6 @@ public class ExerciceService {
         cible.setTerrainLargeurM(source.getTerrainLargeurM());
         cible.setFormatJoueurs(source.getFormatJoueurs());
         cible.setNbJoueursTotal(source.getNbJoueursTotal());
-        cible.setSequencage(source.getSequencage());
     }
 
     private ExerciceResponse toResponse(Exercice e, boolean modifiable) {
@@ -242,15 +259,19 @@ public class ExerciceService {
                 ? equipeRepository.findById(e.getEquipeOrigineId()).map(Equipe::getNom).orElse(null)
                 : null;
         ExerciceAvance avance = new ExerciceAvance(
-                e.getContextePedagogique(), e.getNiveauObjectif(), e.getEchelleEffectif(),
+                e.getNiveauObjectif(), e.getEchelleEffectif(),
+                e.getDominanteTactiqueOrgIntensite(), e.getDominanteTactiqueFoncIntensite(),
+                e.getDominanteMentalIntensite(), e.getDominanteTechniqueIntensite(),
+                e.getDominanteAthletiqueIntensite(),
                 e.getDominanteTactiqueOrg(), e.getDominanteTactiqueFonc(), e.getDominanteMental(),
                 e.getDominanteTechnique(), e.getDominanteAthletique(),
-                e.getButSystemeMarque(), e.getReglesJeu(), e.getVariablesPedagogiques(),
+                e.getReglesJeu(), e.getVariablesPedagogiques(),
                 e.getReperesPerceptifs(), e.getComportementsAttendus(),
                 e.getTerrainLongueurM(), e.getTerrainLargeurM(),
-                e.getFormatJoueurs(), e.getNbJoueursTotal(), e.getSequencage());
+                e.getFormatJoueurs(), e.getNbJoueursTotal());
         return new ExerciceResponse(
-                e.getId(), e.getNom(), e.getCategorie(), e.getType(), e.getDureeMinutes(), e.getObjectif(),
+                e.getId(), e.getNom(), e.getForme(), List.copyOf(e.getSousPrincipeIds()),
+                e.getType(), e.getDureeMinutes(), e.getObjectif(),
                 e.getIntensite(), e.getDescription(), e.getSchemaJson(),
                 e.getDistanceAttendueM(), e.getDistanceHauteIntensiteM(), e.getNbSprints(),
                 e.getCreePar(), creeParNom, e.getEquipeOrigineId(), equipeNom,

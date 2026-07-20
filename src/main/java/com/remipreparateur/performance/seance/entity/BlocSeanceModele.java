@@ -35,11 +35,18 @@ public class BlocSeanceModele {
     @Column(name = "sequencage", length = 120)
     private String sequencage;
 
+    /** ECHAUFFEMENT / SITUATION / JEU / RETOUR_AU_CALME — recopié à la planification. */
+    @Column(name = "type", length = 20)
+    private String type;
+
     @Column(name = "duree_minutes")
     private Short dureeMinutes;
 
-    @Column(name = "zone_terrain", length = 120)
-    private String zoneTerrain;
+    /** Zones du terrain (1..8) par défaut, recopiées à la planification. */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "bloc_seance_modele_zone", joinColumns = @JoinColumn(name = "bloc_id"))
+    @Column(name = "zone")
+    private List<Short> zones = new ArrayList<>();
 
     /** Comptes staff affectés par défaut au bloc. */
     @ElementCollection(fetch = FetchType.LAZY)

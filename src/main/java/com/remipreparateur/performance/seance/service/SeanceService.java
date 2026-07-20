@@ -5,6 +5,8 @@ import com.remipreparateur.joueur.repository.JoueurRepository;
 import com.remipreparateur.performance.gps.entity.DonneeGps;
 import com.remipreparateur.performance.seance.dto.SeanceDtos.*;
 import com.remipreparateur.performance.seance.entity.BlocSeance;
+import com.remipreparateur.performance.seance.entity.BlocSeanceStaffRole;
+import com.remipreparateur.performance.seance.entity.ReferentielRoleBloc;
 import com.remipreparateur.performance.seance.entity.GroupeSeance;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.performance.seance.entity.SeanceDominante;
@@ -34,6 +36,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -48,6 +51,7 @@ public class SeanceService {
     private final DonneeGpsRepository donneeGpsRepository;
     private final ExerciceRepository exerciceRepository;
     private final BlocSeanceRepository blocSeanceRepository;
+    private final com.remipreparateur.performance.seance.repository.ReferentielRoleBlocRepository roleBlocRepository;
     private final GroupeSeanceRepository groupeSeanceRepository;
     private final SeanceDominanteRepository seanceDominanteRepository;
     private final SeanceSousPrincipeRepository seanceSousPrincipeRepository;
@@ -101,6 +105,13 @@ public class SeanceService {
             seance.setObjMental(null);
             seance.setObjTechnique(null);
             seance.setObjAthletique(null);
+            seance.setDominanteTactiqueOrgIntensite(null);
+            seance.setDominanteTactiqueFoncIntensite(null);
+            seance.setDominanteMentalIntensite(null);
+            seance.setDominanteTechniqueIntensite(null);
+            seance.setDominanteAthletiqueIntensite(null);
+        } else {
+            bornerDosages(seance);
         }
         return seanceRepository.save(seance);
     }
@@ -125,7 +136,9 @@ public class SeanceService {
         if (patch.getDomicileExterieur() != null) existing.setDomicileExterieur(patch.getDomicileExterieur());
         if (patch.getScoreMatch()        != null) existing.setScoreMatch(patch.getScoreMatch());
         if (patch.getDescription()       != null) existing.setDescription(patch.getDescription());
-        if (patch.getResponsable()       != null) existing.setResponsable(patch.getResponsable());
+        if (patch.getResponsableId()     != null) existing.setResponsableId(patch.getResponsableId());
+        if (patch.getContexte()          != null) existing.setContexte(patch.getContexte());
+        if (patch.getContexteSeanceId()  != null) existing.setContexteSeanceId(patch.getContexteSeanceId());
         if (accesAvance()) {
             if (patch.getDureeEffectiveMinutes() != null) existing.setDureeEffectiveMinutes(patch.getDureeEffectiveMinutes());
             if (patch.getObjTactiqueOrg()  != null) existing.setObjTactiqueOrg(patch.getObjTactiqueOrg());
@@ -133,9 +146,33 @@ public class SeanceService {
             if (patch.getObjMental()       != null) existing.setObjMental(patch.getObjMental());
             if (patch.getObjTechnique()    != null) existing.setObjTechnique(patch.getObjTechnique());
             if (patch.getObjAthletique()   != null) existing.setObjAthletique(patch.getObjAthletique());
+            // Dosages V68 : un axe qu'on cesse de travailler se remet à 0, jamais à null —
+            // c'est la valeur qui exprime « pas travaillé » et elle traverse donc le patch.
+            bornerDosages(patch);
+            if (patch.getDominanteTactiqueOrgIntensite()  != null) existing.setDominanteTactiqueOrgIntensite(patch.getDominanteTactiqueOrgIntensite());
+            if (patch.getDominanteTactiqueFoncIntensite() != null) existing.setDominanteTactiqueFoncIntensite(patch.getDominanteTactiqueFoncIntensite());
+            if (patch.getDominanteMentalIntensite()       != null) existing.setDominanteMentalIntensite(patch.getDominanteMentalIntensite());
+            if (patch.getDominanteTechniqueIntensite()    != null) existing.setDominanteTechniqueIntensite(patch.getDominanteTechniqueIntensite());
+            if (patch.getDominanteAthletiqueIntensite()   != null) existing.setDominanteAthletiqueIntensite(patch.getDominanteAthletiqueIntensite());
         }
         existing.setTypeSeance((TypeSeance) Hibernate.unproxy(existing.getTypeSeance()));
         return seanceRepository.save(existing);
+    }
+
+    /**
+     * Ramène les cinq dosages de dominante dans 0-5 (V68). La contrainte CHECK existe en base,
+     * mais elle produirait une erreur SQL brute plutôt qu'un enregistrement propre.
+     */
+    private void bornerDosages(Seance s) {
+        s.setDominanteTactiqueOrgIntensite(dosage(s.getDominanteTactiqueOrgIntensite()));
+        s.setDominanteTactiqueFoncIntensite(dosage(s.getDominanteTactiqueFoncIntensite()));
+        s.setDominanteMentalIntensite(dosage(s.getDominanteMentalIntensite()));
+        s.setDominanteTechniqueIntensite(dosage(s.getDominanteTechniqueIntensite()));
+        s.setDominanteAthletiqueIntensite(dosage(s.getDominanteAthletiqueIntensite()));
+    }
+
+    private Short dosage(Short v) {
+        return v == null ? null : (short) Math.max(0, Math.min(5, v));
     }
 
     /** Droit d'éditer les enrichissements du mode avancé (module seance_avancee actif + rôle). */
@@ -234,7 +271,7 @@ public class SeanceService {
             if (nbSprints != null) { sprints += nbSprints; aSprints = true; }
 
             lignes.add(new ExerciceLigne(
-                    e.getId(), e.getNom(), e.getCategorie(), e.getType(), ordre++,
+                    e.getId(), e.getNom(), e.getForme(), e.getType(), ordre++,
                     duree, intensite, e.getObjectif(), e.getDescription(), e.getSchemaJson(),
                     distance, distanceHauteIntensite, nbSprints, l.getBlocId()));
         }
@@ -256,20 +293,85 @@ public class SeanceService {
     public List<BlocDto> blocsDe(UUID seanceId) {
         Map<UUID, String> equipes = new java.util.HashMap<>();
         return blocSeanceRepository.findBySeanceIdOrderByOrdreAsc(seanceId).stream()
-                .map(b -> new BlocDto(b.getId(), b.getOrdre(), b.getLibelle(), b.getSequencage(),
-                        b.getDureeMinutes(), b.getZoneTerrain(),
-                        b.getStaffIds().stream()
-                                .map(id -> utilisateurRepository.findById(id)
-                                        .map(u -> StaffRef.de(u.getId(), u.getPrenom(), u.getNom(), u.getRole(),
-                                                u.getEquipeId() == null ? null
-                                                        : equipes.computeIfAbsent(u.getEquipeId(),
-                                                                e -> equipeRepository.findById(e)
-                                                                        .map(com.remipreparateur.club.entity.Equipe::getNom)
-                                                                        .orElse(null))))
-                                        .orElse(null))
-                                .filter(s -> s != null)
-                                .toList()))
+                .map(b -> {
+                    // Rôles tenus sur CE bloc, regroupés par personne (le cumul est autorisé).
+                    Map<UUID, List<String>> rolesParStaff = b.getStaffRoles().stream()
+                            .collect(Collectors.groupingBy(BlocSeanceStaffRole::getUtilisateurId,
+                                    Collectors.mapping(BlocSeanceStaffRole::getRole, Collectors.toList())));
+                    List<StaffRef> staff = b.getStaffIds().stream()
+                            .map(id -> utilisateurRepository.findById(id)
+                                    .map(u -> StaffRef.de(u.getId(), u.getPrenom(), u.getNom(), u.getRole(),
+                                            u.getEquipeId() == null ? null
+                                                    : equipes.computeIfAbsent(u.getEquipeId(),
+                                                            e -> equipeRepository.findById(e)
+                                                                    .map(com.remipreparateur.club.entity.Equipe::getNom)
+                                                                    .orElse(null)),
+                                            rolesParStaff.getOrDefault(id, List.of())))
+                                    .orElse(null))
+                            .filter(s -> s != null)
+                            .toList();
+                    return new BlocDto(b.getId(), b.getOrdre(), b.getLibelle(), b.getType(),
+                            b.getSequencage(), b.getDureeMinutes(), List.copyOf(b.getZones()), staff);
+                })
                 .toList();
+    }
+
+    /** Zones du terrain valides (1..8), dédoublonnées et triées. Une valeur hors bornes est ignorée. */
+    private List<Short> zonesValides(List<Short> zones) {
+        if (zones == null) return new ArrayList<>();
+        return zones.stream()
+                .filter(z -> z != null && z >= 1 && z <= 8)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    /**
+     * Rôles du staff sur un bloc, filtrés sur trois règles :
+     * le code doit exister au référentiel, la personne doit être affectée au bloc, et il ne peut
+     * y avoir <b>qu'un seul MENEUR</b> — au-delà du premier, les suivants sont écartés plutôt que
+     * de laisser la base rejeter tout l'enregistrement sur son index unique.
+     */
+    private List<BlocSeanceStaffRole> rolesValides(BlocRequest b) {
+        List<BlocSeanceStaffRole> retenus = new ArrayList<>();
+        if (b.staffRoles() == null) return retenus;
+        Set<String> codes = roleBlocRepository.findAll().stream()
+                .map(ReferentielRoleBloc::getCode).collect(Collectors.toSet());
+        Set<UUID> affectes = b.staffIds() == null ? Set.of() : new java.util.HashSet<>(b.staffIds());
+        boolean meneurPris = false;
+        for (StaffRoleRequest r : b.staffRoles()) {
+            if (r.utilisateurId() == null || r.role() == null) continue;
+            if (!codes.contains(r.role()) || !affectes.contains(r.utilisateurId())) continue;
+            if ("MENEUR".equals(r.role())) {
+                if (meneurPris) continue;
+                meneurPris = true;
+            }
+            BlocSeanceStaffRole role = new BlocSeanceStaffRole(r.utilisateurId(), r.role());
+            if (!retenus.contains(role)) retenus.add(role);
+        }
+        return retenus;
+    }
+
+    /**
+     * Chevauchements de zones entre blocs consécutifs dans le temps. Les blocs d'une séance
+     * s'enchaînent en général l'un après l'autre — le conflit réel, c'est deux blocs qui
+     * partagent une zone <b>et</b> se déroulent simultanément, ce que l'app ne peut savoir que
+     * pour les blocs de même ordre d'exécution. On signale donc les zones communes entre blocs,
+     * charge au coach de trancher : c'est un avertissement, jamais un blocage.
+     */
+    public List<ConflitZone> conflitsZones(UUID seanceId) {
+        List<BlocDto> blocs = blocsDe(seanceId);
+        List<ConflitZone> conflits = new ArrayList<>();
+        for (int i = 0; i < blocs.size(); i++) {
+            for (int j = i + 1; j < blocs.size(); j++) {
+                List<Short> zonesJ = blocs.get(j).zones();
+                List<Short> communes = blocs.get(i).zones().stream()
+                        .filter(zonesJ::contains)
+                        .toList();
+                if (!communes.isEmpty()) conflits.add(new ConflitZone(i, j, communes));
+            }
+        }
+        return conflits;
     }
 
     /** Groupes du jour stockés (COULEUR / LIBRE) avec les joueurs résolus. */
@@ -322,10 +424,12 @@ public class SeanceService {
                 bloc.setSeanceId(seanceId);
                 bloc.setOrdre(ordre++);
                 bloc.setLibelle(b.libelle() == null || b.libelle().isBlank() ? "Bloc " + ordre : b.libelle());
+                bloc.setType(b.type());
                 bloc.setSequencage(b.sequencage());
                 bloc.setDureeMinutes(b.dureeMinutes());
-                bloc.setZoneTerrain(b.zoneTerrain());
+                bloc.setZones(zonesValides(b.zones()));
                 if (b.staffIds() != null) bloc.setStaffIds(new ArrayList<>(b.staffIds()));
+                bloc.setStaffRoles(rolesValides(b));
                 blocIds.add(blocSeanceRepository.save(bloc).getId());
             }
         }

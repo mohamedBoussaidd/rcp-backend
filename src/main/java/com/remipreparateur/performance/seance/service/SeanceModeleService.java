@@ -209,9 +209,13 @@ public class SeanceModeleService {
                 bloc.setSeanceModeleId(id);
                 bloc.setOrdre(ordre++);
                 bloc.setLibelle(b.libelle() != null && !b.libelle().isBlank() ? b.libelle() : "Bloc " + ordre);
+                bloc.setType(b.type());
                 bloc.setSequencage(b.sequencage());
                 bloc.setDureeMinutes(b.dureeMinutes());
-                bloc.setZoneTerrain(b.zoneTerrain());
+                if (b.zones() != null) {
+                    b.zones().stream().filter(z -> z != null && z >= 1 && z <= 8)
+                            .distinct().sorted().forEach(bloc.getZones()::add);
+                }
                 if (b.staffIds() != null) bloc.getStaffIds().addAll(b.staffIds());
                 blocIds.add(blocRepository.save(bloc).getId());
             }
@@ -273,6 +277,11 @@ public class SeanceModeleService {
         c.setObjectifIntensite(source.getObjectifIntensite());
         c.setObjectifDistanceHauteIntensiteM(source.getObjectifDistanceHauteIntensiteM());
         c.setDescription(source.getDescription());
+        c.setDominanteTactiqueOrgIntensite(source.getDominanteTactiqueOrgIntensite());
+        c.setDominanteTactiqueFoncIntensite(source.getDominanteTactiqueFoncIntensite());
+        c.setDominanteMentalIntensite(source.getDominanteMentalIntensite());
+        c.setDominanteTechniqueIntensite(source.getDominanteTechniqueIntensite());
+        c.setDominanteAthletiqueIntensite(source.getDominanteAthletiqueIntensite());
         c.setObjTactiqueOrg(source.getObjTactiqueOrg());
         c.setObjTactiqueFonc(source.getObjTactiqueFonc());
         c.setObjMental(source.getObjMental());
@@ -288,8 +297,9 @@ public class SeanceModeleService {
             b.setOrdre(bs.getOrdre());
             b.setLibelle(bs.getLibelle());
             b.setSequencage(bs.getSequencage());
+            b.setType(bs.getType());
             b.setDureeMinutes(bs.getDureeMinutes());
-            b.setZoneTerrain(bs.getZoneTerrain());
+            b.getZones().addAll(bs.getZones());
             b.getStaffIds().addAll(bs.getStaffIds());
             blocParSource.put(bs.getId(), blocRepository.save(b).getId());
         }
@@ -343,6 +353,12 @@ public class SeanceModeleService {
         s.setObjectifIntensite(m.getObjectifIntensite());
         s.setObjectifDistanceHauteIntensiteM(m.getObjectifDistanceHauteIntensiteM());
         s.setDescription(m.getDescription());
+        // V68 : le dosage des cinq axes suit le gabarit, sinon planifier() le reperdrait.
+        s.setDominanteTactiqueOrgIntensite(m.getDominanteTactiqueOrgIntensite());
+        s.setDominanteTactiqueFoncIntensite(m.getDominanteTactiqueFoncIntensite());
+        s.setDominanteMentalIntensite(m.getDominanteMentalIntensite());
+        s.setDominanteTechniqueIntensite(m.getDominanteTechniqueIntensite());
+        s.setDominanteAthletiqueIntensite(m.getDominanteAthletiqueIntensite());
         s.setObjTactiqueOrg(m.getObjTactiqueOrg());
         s.setObjTactiqueFonc(m.getObjTactiqueFonc());
         s.setObjMental(m.getObjMental());
@@ -360,8 +376,9 @@ public class SeanceModeleService {
             b.setOrdre(bm.getOrdre());
             b.setLibelle(bm.getLibelle());
             b.setSequencage(bm.getSequencage());
+            b.setType(bm.getType());
             b.setDureeMinutes(bm.getDureeMinutes());
-            b.setZoneTerrain(bm.getZoneTerrain());
+            b.getZones().addAll(bm.getZones());
             b.getStaffIds().addAll(bm.getStaffIds());
             blocParModele.put(bm.getId(), blocSeanceRepository.save(b).getId());
         }
@@ -442,11 +459,21 @@ public class SeanceModeleService {
         m.setObjectifDistanceM(req.objectifDistanceM());
         m.setObjectifDistanceHauteIntensiteM(req.objectifDistanceHauteIntensiteM());
         m.setDescription(req.description());
+        m.setDominanteTactiqueOrgIntensite(dosage(req.dominanteTactiqueOrgIntensite()));
+        m.setDominanteTactiqueFoncIntensite(dosage(req.dominanteTactiqueFoncIntensite()));
+        m.setDominanteMentalIntensite(dosage(req.dominanteMentalIntensite()));
+        m.setDominanteTechniqueIntensite(dosage(req.dominanteTechniqueIntensite()));
+        m.setDominanteAthletiqueIntensite(dosage(req.dominanteAthletiqueIntensite()));
         m.setObjTactiqueOrg(req.objTactiqueOrg());
         m.setObjTactiqueFonc(req.objTactiqueFonc());
         m.setObjMental(req.objMental());
         m.setObjTechnique(req.objTechnique());
         m.setObjAthletique(req.objAthletique());
+    }
+
+    /** Borne un dosage de dominante dans 0-5 (V68), comme côté séance et exercice. */
+    private Short dosage(Short v) {
+        return v == null ? null : (short) Math.max(0, Math.min(5, v));
     }
 
     private SeanceModeleResponse toResponse(SeanceModele m, boolean modifiable) {
@@ -468,6 +495,9 @@ public class SeanceModeleService {
                 m.getObjectifDistanceM(), m.getObjectifIntensite(), m.getObjectifDistanceHauteIntensiteM(),
                 m.getDescription(), nbExercices,
                 m.getCreePar(), creeParNom, m.getEquipeOrigineId(), equipeNom, modifiable,
+                m.getDominanteTactiqueOrgIntensite(), m.getDominanteTactiqueFoncIntensite(),
+                m.getDominanteMentalIntensite(), m.getDominanteTechniqueIntensite(),
+                m.getDominanteAthletiqueIntensite(),
                 m.getObjTactiqueOrg(), m.getObjTactiqueFonc(), m.getObjMental(),
                 m.getObjTechnique(), m.getObjAthletique());
     }
@@ -476,8 +506,8 @@ public class SeanceModeleService {
     private List<BlocDto> blocsDe(UUID modeleId) {
         Map<UUID, String> equipes = new HashMap<>();
         return blocRepository.findBySeanceModeleIdOrderByOrdreAsc(modeleId).stream()
-                .map(b -> new BlocDto(b.getId(), b.getOrdre(), b.getLibelle(), b.getSequencage(),
-                        b.getDureeMinutes(), b.getZoneTerrain(),
+                .map(b -> new BlocDto(b.getId(), b.getOrdre(), b.getLibelle(), b.getType(),
+                        b.getSequencage(), b.getDureeMinutes(), List.copyOf(b.getZones()),
                         b.getStaffIds().stream()
                                 .map(id -> utilisateurRepository.findById(id)
                                         .map(u -> StaffRef.de(u.getId(), u.getPrenom(), u.getNom(), u.getRole(),
@@ -520,7 +550,7 @@ public class SeanceModeleService {
             if (nbSprints != null) { sprints += nbSprints; aSprints = true; }
 
             lignes.add(new ExerciceLigne(
-                    e.getId(), e.getNom(), e.getCategorie(), e.getType(), ordre++,
+                    e.getId(), e.getNom(), e.getForme(), e.getType(), ordre++,
                     duree, intensite, e.getObjectif(), e.getDescription(), e.getSchemaJson(),
                     distance, distanceHauteIntensite, nbSprints, l.getBlocId()));
         }
