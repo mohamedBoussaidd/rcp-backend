@@ -44,4 +44,8 @@ public class SeanceModeleExercice {
 
     @Column(name = "nb_sprints")
     private Short nbSprints;
+
+    /** Bloc de rattachement (V63). NULL = liste plate, comportement historique. */
+    @Column(name = "bloc_id")
+    private UUID blocId;
 }

@@ -9,14 +9,29 @@ import com.remipreparateur.performance.seance.dto.SeanceDtos.ExerciceLigne;
 import com.remipreparateur.performance.seance.dto.SeanceDtos.ExercicesRequest;
 import com.remipreparateur.performance.seance.dto.SeanceDtos.LigneRequest;
 import com.remipreparateur.performance.seance.dto.SeanceModeleDtos.*;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.BlocDto;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.BlocRequest;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.StaffRef;
+import com.remipreparateur.performance.seance.entity.BlocSeance;
+import com.remipreparateur.performance.seance.entity.BlocSeanceModele;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.performance.seance.entity.SeanceExercice;
+import com.remipreparateur.performance.seance.entity.SeanceDominante;
 import com.remipreparateur.performance.seance.entity.SeanceModele;
+import com.remipreparateur.performance.seance.entity.SeanceModeleDominante;
+import com.remipreparateur.performance.seance.entity.SeanceSousPrincipe;
 import com.remipreparateur.performance.seance.entity.SeanceModeleExercice;
+import com.remipreparateur.performance.seance.entity.SeanceModeleSousPrincipe;
 import com.remipreparateur.performance.seance.entity.TypeSeance;
+import com.remipreparateur.performance.seance.repository.BlocSeanceModeleRepository;
+import com.remipreparateur.performance.seance.repository.BlocSeanceRepository;
 import com.remipreparateur.performance.seance.repository.SeanceExerciceRepository;
+import com.remipreparateur.performance.seance.repository.SeanceModeleDominanteRepository;
 import com.remipreparateur.performance.seance.repository.SeanceModeleExerciceRepository;
 import com.remipreparateur.performance.seance.repository.SeanceModeleRepository;
+import com.remipreparateur.performance.seance.repository.SeanceDominanteRepository;
+import com.remipreparateur.performance.seance.repository.SeanceModeleSousPrincipeRepository;
+import com.remipreparateur.performance.seance.repository.SeanceSousPrincipeRepository;
 import com.remipreparateur.performance.seance.repository.TypeSeanceRepository;
 import com.remipreparateur.tactical.exercice.entity.Exercice;
 import com.remipreparateur.tactical.exercice.repository.ExerciceRepository;
@@ -29,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -51,6 +67,12 @@ public class SeanceModeleService {
     private final ExerciceRepository exerciceRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final EquipeRepository equipeRepository;
+    private final BlocSeanceModeleRepository blocRepository;
+    private final SeanceModeleDominanteRepository dominanteRepository;
+    private final SeanceModeleSousPrincipeRepository sousPrincipeRepository;
+    private final BlocSeanceRepository blocSeanceRepository;
+    private final SeanceDominanteRepository seanceDominanteRepository;
+    private final SeanceSousPrincipeRepository seanceSousPrincipeRepository;
     private final SeanceService seanceService;
     private final CurrentUserProvider currentUser;
 
@@ -61,6 +83,12 @@ public class SeanceModeleService {
                                ExerciceRepository exerciceRepository,
                                UtilisateurRepository utilisateurRepository,
                                EquipeRepository equipeRepository,
+                               BlocSeanceModeleRepository blocRepository,
+                               SeanceModeleDominanteRepository dominanteRepository,
+                               SeanceModeleSousPrincipeRepository sousPrincipeRepository,
+                               BlocSeanceRepository blocSeanceRepository,
+                               SeanceDominanteRepository seanceDominanteRepository,
+                               SeanceSousPrincipeRepository seanceSousPrincipeRepository,
                                SeanceService seanceService,
                                CurrentUserProvider currentUser) {
         this.modeleRepository = modeleRepository;
@@ -70,6 +98,12 @@ public class SeanceModeleService {
         this.exerciceRepository = exerciceRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.equipeRepository = equipeRepository;
+        this.blocRepository = blocRepository;
+        this.dominanteRepository = dominanteRepository;
+        this.sousPrincipeRepository = sousPrincipeRepository;
+        this.blocSeanceRepository = blocSeanceRepository;
+        this.seanceDominanteRepository = seanceDominanteRepository;
+        this.seanceSousPrincipeRepository = seanceSousPrincipeRepository;
         this.seanceService = seanceService;
         this.currentUser = currentUser;
     }
@@ -116,7 +150,11 @@ public class SeanceModeleService {
         Utilisateur u = currentUser.current();
         SeanceModele m = chargeDuClub(id, u);
         exigeCreateur(m, u);
+        // Les lignes référencent les blocs : purge dans l'ordre inverse des dépendances.
         modeleExerciceRepository.deleteBySeanceModeleId(id);
+        blocRepository.deleteBySeanceModeleId(id);
+        dominanteRepository.deleteBySeanceModeleId(id);
+        sousPrincipeRepository.deleteBySeanceModeleId(id);
         modeleRepository.deleteById(id);
     }
 
@@ -145,6 +183,79 @@ public class SeanceModeleService {
         return construireDetail(m, true);
     }
 
+    /**
+     * Remplace l'intégralité du contenu avancé d'un modèle (blocs + rattachement des exercices
+     * + dominantes + sous-principes). Créateur-only, comme le reste de l'édition d'un modèle.
+     * {@code BlocRequest.blocIndex} des lignes référence l'index du bloc dans le payload.
+     */
+    @Transactional
+    public SeanceModeleDetail remplacerContenuAvance(UUID id, ContenuAvanceModeleRequest req) {
+        Utilisateur u = currentUser.current();
+        SeanceModele m = chargeDuClub(id, u);
+        exigeCreateur(m, u);
+
+        // Les lignes pointent les blocs : on purge dans l'ordre inverse des dépendances.
+        modeleExerciceRepository.deleteBySeanceModeleId(id);
+        blocRepository.deleteBySeanceModeleId(id);
+        dominanteRepository.deleteBySeanceModeleId(id);
+        sousPrincipeRepository.deleteBySeanceModeleId(id);
+        if (req == null) return construireDetail(m, true);
+
+        List<UUID> blocIds = new ArrayList<>();
+        if (req.blocs() != null) {
+            short ordre = 0;
+            for (BlocRequest b : req.blocs()) {
+                BlocSeanceModele bloc = new BlocSeanceModele();
+                bloc.setSeanceModeleId(id);
+                bloc.setOrdre(ordre++);
+                bloc.setLibelle(b.libelle() != null && !b.libelle().isBlank() ? b.libelle() : "Bloc " + ordre);
+                bloc.setSequencage(b.sequencage());
+                bloc.setDureeMinutes(b.dureeMinutes());
+                bloc.setZoneTerrain(b.zoneTerrain());
+                if (b.staffIds() != null) bloc.getStaffIds().addAll(b.staffIds());
+                blocIds.add(blocRepository.save(bloc).getId());
+            }
+        }
+        if (req.exercices() != null) {
+            short ordre = 0;
+            for (LigneRequest l : req.exercices()) {
+                SeanceModeleExercice se = new SeanceModeleExercice();
+                se.setSeanceModeleId(id);
+                se.setExerciceId(l.exerciceId());
+                se.setOrdre(ordre++);
+                se.setDureeMinutes(l.dureeMinutes());
+                se.setIntensite(l.intensite());
+                se.setDistanceAttendueM(l.distanceAttendueM());
+                se.setDistanceHauteIntensiteM(l.distanceHauteIntensiteM());
+                se.setNbSprints(l.nbSprints());
+                se.setBlocId(indexVersBlocId(l.blocIndex(), blocIds));
+                modeleExerciceRepository.save(se);
+            }
+        }
+        if (req.dominanteIds() != null) {
+            for (UUID d : req.dominanteIds()) {
+                SeanceModeleDominante sd = new SeanceModeleDominante();
+                sd.setSeanceModeleId(id);
+                sd.setDominanteId(d);
+                dominanteRepository.save(sd);
+            }
+        }
+        if (req.sousPrincipeIds() != null) {
+            for (UUID p : req.sousPrincipeIds()) {
+                SeanceModeleSousPrincipe sp = new SeanceModeleSousPrincipe();
+                sp.setSeanceModeleId(id);
+                sp.setSousPrincipeId(p);
+                sousPrincipeRepository.save(sp);
+            }
+        }
+        return construireDetail(m, true);
+    }
+
+    /** Index de bloc du payload → identifiant réel, en ignorant un index hors bornes. */
+    private static UUID indexVersBlocId(Integer index, List<UUID> blocIds) {
+        return (index != null && index >= 0 && index < blocIds.size()) ? blocIds.get(index) : null;
+    }
+
     /** Duplique un modèle du club en une copie éditable attribuée à l'utilisateur courant. */
     @Transactional
     public SeanceModeleResponse dupliquer(UUID id) {
@@ -162,7 +273,26 @@ public class SeanceModeleService {
         c.setObjectifIntensite(source.getObjectifIntensite());
         c.setObjectifDistanceHauteIntensiteM(source.getObjectifDistanceHauteIntensiteM());
         c.setDescription(source.getDescription());
+        c.setObjTactiqueOrg(source.getObjTactiqueOrg());
+        c.setObjTactiqueFonc(source.getObjTactiqueFonc());
+        c.setObjMental(source.getObjMental());
+        c.setObjTechnique(source.getObjTechnique());
+        c.setObjAthletique(source.getObjAthletique());
         SeanceModele copie = modeleRepository.save(c);
+
+        // Blocs d'abord : les lignes d'exercices s'y rattachent via la correspondance d'ids.
+        Map<UUID, UUID> blocParSource = new HashMap<>();
+        for (BlocSeanceModele bs : blocRepository.findBySeanceModeleIdOrderByOrdreAsc(id)) {
+            BlocSeanceModele b = new BlocSeanceModele();
+            b.setSeanceModeleId(copie.getId());
+            b.setOrdre(bs.getOrdre());
+            b.setLibelle(bs.getLibelle());
+            b.setSequencage(bs.getSequencage());
+            b.setDureeMinutes(bs.getDureeMinutes());
+            b.setZoneTerrain(bs.getZoneTerrain());
+            b.getStaffIds().addAll(bs.getStaffIds());
+            blocParSource.put(bs.getId(), blocRepository.save(b).getId());
+        }
         for (SeanceModeleExercice l : modeleExerciceRepository.findBySeanceModeleIdOrderByOrdreAsc(id)) {
             SeanceModeleExercice se = new SeanceModeleExercice();
             se.setSeanceModeleId(copie.getId());
@@ -173,7 +303,20 @@ public class SeanceModeleService {
             se.setDistanceAttendueM(l.getDistanceAttendueM());
             se.setDistanceHauteIntensiteM(l.getDistanceHauteIntensiteM());
             se.setNbSprints(l.getNbSprints());
+            se.setBlocId(l.getBlocId() != null ? blocParSource.get(l.getBlocId()) : null);
             modeleExerciceRepository.save(se);
+        }
+        for (SeanceModeleDominante d : dominanteRepository.findBySeanceModeleId(id)) {
+            SeanceModeleDominante sd = new SeanceModeleDominante();
+            sd.setSeanceModeleId(copie.getId());
+            sd.setDominanteId(d.getDominanteId());
+            dominanteRepository.save(sd);
+        }
+        for (SeanceModeleSousPrincipe p : sousPrincipeRepository.findBySeanceModeleId(id)) {
+            SeanceModeleSousPrincipe sp = new SeanceModeleSousPrincipe();
+            sp.setSeanceModeleId(copie.getId());
+            sp.setSousPrincipeId(p.getSousPrincipeId());
+            sousPrincipeRepository.save(sp);
         }
         return toResponse(copie, true);
     }
@@ -200,8 +343,28 @@ public class SeanceModeleService {
         s.setObjectifIntensite(m.getObjectifIntensite());
         s.setObjectifDistanceHauteIntensiteM(m.getObjectifDistanceHauteIntensiteM());
         s.setDescription(m.getDescription());
+        s.setObjTactiqueOrg(m.getObjTactiqueOrg());
+        s.setObjTactiqueFonc(m.getObjTactiqueFonc());
+        s.setObjMental(m.getObjMental());
+        s.setObjTechnique(m.getObjTechnique());
+        s.setObjAthletique(m.getObjAthletique());
         s.setCreePar(u.getId());
         Seance creee = seanceService.create(s);
+
+        // Blocs du gabarit → blocs de la séance ; on garde la correspondance pour rattacher
+        // ensuite les lignes d'exercices au bon bloc.
+        Map<UUID, UUID> blocParModele = new HashMap<>();
+        for (BlocSeanceModele bm : blocRepository.findBySeanceModeleIdOrderByOrdreAsc(id)) {
+            BlocSeance b = new BlocSeance();
+            b.setSeanceId(creee.getId());
+            b.setOrdre(bm.getOrdre());
+            b.setLibelle(bm.getLibelle());
+            b.setSequencage(bm.getSequencage());
+            b.setDureeMinutes(bm.getDureeMinutes());
+            b.setZoneTerrain(bm.getZoneTerrain());
+            b.getStaffIds().addAll(bm.getStaffIds());
+            blocParModele.put(bm.getId(), blocSeanceRepository.save(b).getId());
+        }
 
         for (SeanceModeleExercice l : modeleExerciceRepository.findBySeanceModeleIdOrderByOrdreAsc(id)) {
             SeanceExercice se = new SeanceExercice();
@@ -213,8 +376,23 @@ public class SeanceModeleService {
             se.setDistanceAttendueM(l.getDistanceAttendueM());
             se.setDistanceHauteIntensiteM(l.getDistanceHauteIntensiteM());
             se.setNbSprints(l.getNbSprints());
+            se.setBlocId(l.getBlocId() != null ? blocParModele.get(l.getBlocId()) : null);
             seanceExerciceRepository.save(se);
         }
+
+        for (SeanceModeleDominante d : dominanteRepository.findBySeanceModeleId(id)) {
+            SeanceDominante sd = new SeanceDominante();
+            sd.setSeanceId(creee.getId());
+            sd.setDominanteId(d.getDominanteId());
+            seanceDominanteRepository.save(sd);
+        }
+        for (SeanceModeleSousPrincipe p : sousPrincipeRepository.findBySeanceModeleId(id)) {
+            SeanceSousPrincipe sp = new SeanceSousPrincipe();
+            sp.setSeanceId(creee.getId());
+            sp.setSousPrincipeId(p.getSousPrincipeId());
+            seanceSousPrincipeRepository.save(sp);
+        }
+        // Les groupes du jour ne sont pas recopiés : ils désignent des joueurs réels à une date.
         return new PlanifieResponse(creee.getId(), creee.getDate());
     }
 
@@ -264,6 +442,11 @@ public class SeanceModeleService {
         m.setObjectifDistanceM(req.objectifDistanceM());
         m.setObjectifDistanceHauteIntensiteM(req.objectifDistanceHauteIntensiteM());
         m.setDescription(req.description());
+        m.setObjTactiqueOrg(req.objTactiqueOrg());
+        m.setObjTactiqueFonc(req.objTactiqueFonc());
+        m.setObjMental(req.objMental());
+        m.setObjTechnique(req.objTechnique());
+        m.setObjAthletique(req.objAthletique());
     }
 
     private SeanceModeleResponse toResponse(SeanceModele m, boolean modifiable) {
@@ -284,7 +467,27 @@ public class SeanceModeleService {
                 m.getObjectif(), m.getDureeMinutes(),
                 m.getObjectifDistanceM(), m.getObjectifIntensite(), m.getObjectifDistanceHauteIntensiteM(),
                 m.getDescription(), nbExercices,
-                m.getCreePar(), creeParNom, m.getEquipeOrigineId(), equipeNom, modifiable);
+                m.getCreePar(), creeParNom, m.getEquipeOrigineId(), equipeNom, modifiable,
+                m.getObjTactiqueOrg(), m.getObjTactiqueFonc(), m.getObjMental(),
+                m.getObjTechnique(), m.getObjAthletique());
+    }
+
+    /** Blocs d'un modèle, staff résolu — même forme que les blocs de séance côté front. */
+    private List<BlocDto> blocsDe(UUID modeleId) {
+        Map<UUID, String> equipes = new HashMap<>();
+        return blocRepository.findBySeanceModeleIdOrderByOrdreAsc(modeleId).stream()
+                .map(b -> new BlocDto(b.getId(), b.getOrdre(), b.getLibelle(), b.getSequencage(),
+                        b.getDureeMinutes(), b.getZoneTerrain(),
+                        b.getStaffIds().stream()
+                                .map(id -> utilisateurRepository.findById(id)
+                                        .map(u -> StaffRef.de(u.getId(), u.getPrenom(), u.getNom(), u.getRole(),
+                                                u.getEquipeId() == null ? null
+                                                        : equipes.computeIfAbsent(u.getEquipeId(),
+                                                                e -> equipeRepository.findById(e).map(Equipe::getNom).orElse(null))))
+                                        .orElse(null))
+                                .filter(s -> s != null)
+                                .toList()))
+                .toList();
     }
 
     /** Détail : cadre + lignes d'exercices (valeurs effectives : override sinon défaut) + totaux. */
@@ -319,13 +522,18 @@ public class SeanceModeleService {
             lignes.add(new ExerciceLigne(
                     e.getId(), e.getNom(), e.getCategorie(), e.getType(), ordre++,
                     duree, intensite, e.getObjectif(), e.getDescription(), e.getSchemaJson(),
-                    distance, distanceHauteIntensite, nbSprints));
+                    distance, distanceHauteIntensite, nbSprints, l.getBlocId()));
         }
         Double intensiteMoyenne = (aIntensite && dureeTotale > 0)
                 ? Math.round((sommePonderee / dureeTotale) * 10) / 10.0 : null;
 
         return new SeanceModeleDetail(toResponse(m, modifiable), lignes, dureeTotale, intensiteMoyenne,
-                aDistance ? distanceTotale : null, aHi ? distanceHi : null, aSprints ? sprints : null);
+                aDistance ? distanceTotale : null, aHi ? distanceHi : null, aSprints ? sprints : null,
+                blocsDe(m.getId()),
+                dominanteRepository.findBySeanceModeleId(m.getId()).stream()
+                        .map(SeanceModeleDominante::getDominanteId).toList(),
+                sousPrincipeRepository.findBySeanceModeleId(m.getId()).stream()
+                        .map(SeanceModeleSousPrincipe::getSousPrincipeId).toList());
     }
 
     private static <T> T valeur(T override, T defaut) {

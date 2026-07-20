@@ -34,3 +34,6 @@ build/
 
 ### Stockage local des documents medicaux (fichiers uploades) ###
 /data/
+
+### Logs de lancement local ###
+/backend-run.log

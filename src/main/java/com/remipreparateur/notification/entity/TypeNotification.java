@@ -29,6 +29,9 @@ public enum TypeNotification {
     CONTRAT_ECHEANCE(Categorie.INFO, false),        // contrat J-90/J-30 → personne + Président/Administratif
     RAPPEL_DOCUMENT_ADMIN(Categorie.RAPPEL, false), // relance hebdo : document manquant/refusé
 
+    // ── Info staff (événementiel) ──
+    SEANCE_PARTAGEE(Categorie.INFO, false),         // fiche séance partagée au staff de l'équipe
+
     // ── Messages humains ──
     MESSAGE_STAFF(Categorie.MESSAGE, false),
     MESSAGE_JOUEUR(Categorie.MESSAGE, false),

@@ -179,6 +179,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/exercices/**").hasAuthority("exercices:read")
                         .requestMatchers("/api/exercices/**").hasAuthority("exercices:write")
 
+                        // Import photo IA (module import_photo_ia) : l'appel Anthropic part du backend.
+                        .requestMatchers("/api/import-photo/**").hasAuthority("import_photo:use")
+
                         // Formations tactiques personnalisées (club) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/formations/**").hasAuthority("formations:read")
                         .requestMatchers("/api/formations/**").hasAuthority("formations:write")

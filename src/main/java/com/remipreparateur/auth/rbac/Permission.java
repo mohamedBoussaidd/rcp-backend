@@ -23,6 +23,10 @@ public enum Permission {
     SEANCES_WRITE("seances:write", "Entraînement", "Créer / éditer les séances"),
     PRESENCE_WRITE("presence:write", "Entraînement", "Saisir la présence"),
     TYPESEANCES_WRITE("typeseances:write", "Entraînement", "Paramétrer les types de séance"),
+    SEANCE_AVANCEE_ACCESS("seance_avancee:access", "Entraînement",
+            "Éditer le mode avancé des séances et exercices (pédagogie, blocs, effectifs du jour)"),
+    IMPORT_PHOTO_USE("import_photo:use", "Entraînement",
+            "Importer une séance ou un exercice depuis une photo (IA vision)"),
 
     // ── Analyse / GPS ───────────────────────────────────────────────
     PREDICTIONS_READ("predictions:read", "Analyse / GPS", "Voir charge & prédictions IA"),

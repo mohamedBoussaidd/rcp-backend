@@ -29,6 +29,10 @@ public class SeanceExercice {
     @Column(name = "ordre", nullable = false)
     private Short ordre = 0;
 
+    /** Bloc de rattachement en mode avancé (NULL = liste plate historique). */
+    @Column(name = "bloc_id")
+    private UUID blocId;
+
     // ── Overrides pour cette séance (null = valeur par défaut de l'exercice) ──
     @Column(name = "duree_minutes")
     private Short dureeMinutes;

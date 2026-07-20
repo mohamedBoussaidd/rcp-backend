@@ -14,7 +14,11 @@ public final class SeanceModeleDtos {
 
     private SeanceModeleDtos() {}
 
-    /** Création / édition du cadre d'un modèle (les exercices se posent via un endpoint dédié). */
+    /**
+     * Création / édition du cadre d'un modèle (les exercices se posent via un endpoint dédié).
+     * Les champs à partir de {@code objTactiqueOrg} relèvent du mode avancé (V63) : tous
+     * optionnels, un modèle en mode simplifié les laisse à null.
+     */
     public record SeanceModeleRequest(
             @NotBlank String nom,
             @NotNull UUID typeSeanceId,
@@ -23,7 +27,20 @@ public final class SeanceModeleDtos {
             Integer objectifDistanceM,
             Short objectifIntensite,
             Integer objectifDistanceHauteIntensiteM,
-            String description) {}
+            String description,
+            String objTactiqueOrg,
+            String objTactiqueFonc,
+            String objMental,
+            String objTechnique,
+            String objAthletique) {}
+
+    /** Remplacement complet du contenu avancé d'un modèle (miroir de ContenuAvanceRequest,
+     *  sans les groupes : un gabarit n'a ni date ni effectif). */
+    public record ContenuAvanceModeleRequest(
+            List<SeanceDtos.BlocRequest> blocs,
+            List<SeanceDtos.LigneRequest> exercices,
+            List<UUID> dominanteIds,
+            List<UUID> sousPrincipeIds) {}
 
     /** Ligne de liste (sans le détail des exercices). */
     public record SeanceModeleResponse(
@@ -42,9 +59,15 @@ public final class SeanceModeleDtos {
             String creeParNom,
             UUID equipeOrigineId,
             String equipeOrigineNom,
-            boolean modifiable) {}
+            boolean modifiable,
+            String objTactiqueOrg,
+            String objTactiqueFonc,
+            String objMental,
+            String objTechnique,
+            String objAthletique) {}
 
-    /** Détail d'un modèle : son cadre + la liste ordonnée des exercices (valeurs effectives) + totaux. */
+    /** Détail d'un modèle : son cadre + la liste ordonnée des exercices (valeurs effectives) + totaux
+     *  + (mode avancé) blocs et sélections de référentiels. */
     public record SeanceModeleDetail(
             SeanceModeleResponse modele,
             List<ExerciceLigne> exercices,
@@ -52,7 +75,10 @@ public final class SeanceModeleDtos {
             Double intensiteMoyenne,
             Integer distanceTotaleAttendueM,
             Integer distanceHauteIntensiteTotaleM,
-            Integer nbSprintsTotal) {}
+            Integer nbSprintsTotal,
+            List<SeanceDtos.BlocDto> blocs,
+            List<UUID> dominanteIds,
+            List<UUID> sousPrincipeIds) {}
 
     /** Instanciation : crée une vraie séance planifiée à cette date (heure optionnelle). */
     public record PlanifierRequest(

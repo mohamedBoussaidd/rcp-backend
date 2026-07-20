@@ -62,4 +62,21 @@ public class SeanceModele {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    // ── Mode avancé (V63) : objectifs pédagogiques, recopiés à la planification ──
+
+    @Column(name = "obj_tactique_org")
+    private String objTactiqueOrg;
+
+    @Column(name = "obj_tactique_fonc")
+    private String objTactiqueFonc;
+
+    @Column(name = "obj_mental")
+    private String objMental;
+
+    @Column(name = "obj_technique")
+    private String objTechnique;
+
+    @Column(name = "obj_athletique")
+    private String objAthletique;
 }

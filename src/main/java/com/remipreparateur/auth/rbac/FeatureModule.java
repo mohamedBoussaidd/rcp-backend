@@ -64,7 +64,11 @@ public enum FeatureModule {
     CONTRATS("contrats", "Contrats & paie",
             "Contrats des joueurs et du staff (échéances, PDF signés) et distribution des fiches de paye", false, 25),
     MOTEUR_TACTIQUE("moteur_tactique", "Moteur tactique",
-            "Règles de positionnement collectif dérivées du plan de jeu : calibration par zones et mode dynamique du tableau tactique", false, 26);
+            "Règles de positionnement collectif dérivées du plan de jeu : calibration par zones et mode dynamique du tableau tactique", false, 26),
+    SEANCE_AVANCEE("seance_avancee", "Séances & exercices enrichis",
+            "Mode avancé de préparation : cadre pédagogique des exercices, blocs de séance, effectifs du jour, dominantes et projet de jeu travaillé", false, 27),
+    IMPORT_PHOTO_IA("import_photo_ia", "Import photo (IA)",
+            "Import d'une séance ou d'un exercice depuis une photo : l'IA extrait les champs et le schéma tactique, l'entraîneur ajuste", false, 28);
 
     private final String code;
     private final String libelle;
@@ -124,6 +128,8 @@ public enum FeatureModule {
     public static FeatureModule of(Permission p) {
         return switch (p) {
             case SEANCES_READ, SEANCES_WRITE, TYPESEANCES_WRITE, SAISON_READ, SAISON_MANAGE -> PLANNING;
+            case SEANCE_AVANCEE_ACCESS -> SEANCE_AVANCEE;
+            case IMPORT_PHOTO_USE -> IMPORT_PHOTO_IA;
             case JOUEURS_READ, JOUEURS_WRITE -> EFFECTIF;
             case CONFIGURATION_READ, CONFIGURATION_WRITE, MEMBRES_MANAGE, CLUB_MANAGE -> ADMINISTRATION;
             case PRESENCE_WRITE -> PRESENCE;

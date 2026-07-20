@@ -1,7 +1,10 @@
 package com.remipreparateur.tactical.exercice.service;
 
+import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceAvance;
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceRequest;
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.remipreparateur.club.entity.Equipe;
 import com.remipreparateur.tactical.exercice.entity.Exercice;
 import com.remipreparateur.auth.entity.Role;
@@ -117,6 +120,7 @@ public class ExerciceService {
         c.setDistanceAttendueM(source.getDistanceAttendueM());
         c.setDistanceHauteIntensiteM(source.getDistanceHauteIntensiteM());
         c.setNbSprints(source.getNbSprints());
+        copierAvance(source, c);
         return toResponse(exerciceRepository.save(c), true);
     }
 
@@ -170,6 +174,62 @@ public class ExerciceService {
         e.setDistanceAttendueM(req.distanceAttendueM());
         e.setDistanceHauteIntensiteM(req.distanceHauteIntensiteM());
         e.setNbSprints(req.nbSprints());
+        if (req.photoImportId() != null) e.setPhotoImportId(req.photoImportId());
+        appliquerAvance(e, req.avance());
+    }
+
+    /**
+     * Champs du mode avancé : appliqués seulement si le bloc `avance` est présent ET que
+     * l'utilisateur détient `seance_avancee:access` (module actif + rôle). Un client en mode
+     * simplifié (avance null) ou un club sans le module ne wipe donc jamais les valeurs saisies.
+     */
+    private void appliquerAvance(Exercice e, ExerciceAvance a) {
+        if (a == null || !aAccesAvance()) return;
+        e.setContextePedagogique(a.contextePedagogique());
+        e.setNiveauObjectif(a.niveauObjectif());
+        e.setEchelleEffectif(a.echelleEffectif());
+        e.setDominanteTactiqueOrg(a.dominanteTactiqueOrg());
+        e.setDominanteTactiqueFonc(a.dominanteTactiqueFonc());
+        e.setDominanteMental(a.dominanteMental());
+        e.setDominanteTechnique(a.dominanteTechnique());
+        e.setDominanteAthletique(a.dominanteAthletique());
+        e.setButSystemeMarque(a.butSystemeMarque());
+        e.setReglesJeu(a.reglesJeu());
+        e.setVariablesPedagogiques(a.variablesPedagogiques());
+        e.setReperesPerceptifs(a.reperesPerceptifs());
+        e.setComportementsAttendus(a.comportementsAttendus());
+        e.setTerrainLongueurM(a.terrainLongueurM());
+        e.setTerrainLargeurM(a.terrainLargeurM());
+        e.setFormatJoueurs(a.formatJoueurs());
+        e.setNbJoueursTotal(a.nbJoueursTotal());
+        e.setSequencage(a.sequencage());
+    }
+
+    private boolean aAccesAvance() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(g -> "seance_avancee:access".equals(g.getAuthority()));
+    }
+
+    private void copierAvance(Exercice source, Exercice cible) {
+        cible.setContextePedagogique(source.getContextePedagogique());
+        cible.setNiveauObjectif(source.getNiveauObjectif());
+        cible.setEchelleEffectif(source.getEchelleEffectif());
+        cible.setDominanteTactiqueOrg(source.getDominanteTactiqueOrg());
+        cible.setDominanteTactiqueFonc(source.getDominanteTactiqueFonc());
+        cible.setDominanteMental(source.getDominanteMental());
+        cible.setDominanteTechnique(source.getDominanteTechnique());
+        cible.setDominanteAthletique(source.getDominanteAthletique());
+        cible.setButSystemeMarque(source.getButSystemeMarque());
+        cible.setReglesJeu(source.getReglesJeu());
+        cible.setVariablesPedagogiques(source.getVariablesPedagogiques());
+        cible.setReperesPerceptifs(source.getReperesPerceptifs());
+        cible.setComportementsAttendus(source.getComportementsAttendus());
+        cible.setTerrainLongueurM(source.getTerrainLongueurM());
+        cible.setTerrainLargeurM(source.getTerrainLargeurM());
+        cible.setFormatJoueurs(source.getFormatJoueurs());
+        cible.setNbJoueursTotal(source.getNbJoueursTotal());
+        cible.setSequencage(source.getSequencage());
     }
 
     private ExerciceResponse toResponse(Exercice e, boolean modifiable) {
@@ -181,11 +241,19 @@ public class ExerciceService {
         String equipeNom = e.getEquipeOrigineId() != null
                 ? equipeRepository.findById(e.getEquipeOrigineId()).map(Equipe::getNom).orElse(null)
                 : null;
+        ExerciceAvance avance = new ExerciceAvance(
+                e.getContextePedagogique(), e.getNiveauObjectif(), e.getEchelleEffectif(),
+                e.getDominanteTactiqueOrg(), e.getDominanteTactiqueFonc(), e.getDominanteMental(),
+                e.getDominanteTechnique(), e.getDominanteAthletique(),
+                e.getButSystemeMarque(), e.getReglesJeu(), e.getVariablesPedagogiques(),
+                e.getReperesPerceptifs(), e.getComportementsAttendus(),
+                e.getTerrainLongueurM(), e.getTerrainLargeurM(),
+                e.getFormatJoueurs(), e.getNbJoueursTotal(), e.getSequencage());
         return new ExerciceResponse(
                 e.getId(), e.getNom(), e.getCategorie(), e.getType(), e.getDureeMinutes(), e.getObjectif(),
                 e.getIntensite(), e.getDescription(), e.getSchemaJson(),
                 e.getDistanceAttendueM(), e.getDistanceHauteIntensiteM(), e.getNbSprints(),
                 e.getCreePar(), creeParNom, e.getEquipeOrigineId(), equipeNom,
-                modifiable);
+                modifiable, avance, e.getPhotoImportId());
     }
 }

@@ -50,10 +50,21 @@ public class NotificationDispatcher {
     /** Diffuse à des rôles staff EXPLICITES de l'équipe (indépendant du routage configurable). */
     public int versStaffRoles(UUID equipeId, List<Role> roles, TypeNotification type, String titre,
                               String corps, String lien, Priorite priorite) {
+        return versStaffRoles(equipeId, roles, type, titre, corps, lien, priorite, null);
+    }
+
+    /** Variante avec émetteur exclu (ex. partage de séance : l'auteur ne se notifie pas lui-même). */
+    public int versStaffRoles(UUID equipeId, List<Role> roles, TypeNotification type, String titre,
+                              String corps, String lien, Priorite priorite, UUID exclureUserId) {
         if (roles == null || roles.isEmpty()) return 0;
         int n = 0;
         for (Utilisateur u : utilisateurRepository.findByEquipeIdAndRoleIn(equipeId, roles)) {
+            if (u.getId().equals(exclureUserId)) continue;
             Notification notif = base(equipeId, u.getId(), type, titre, corps, lien, priorite);
+            if (exclureUserId != null) {
+                notif.setEmetteurType(EmetteurType.UTILISATEUR);
+                notif.setEmetteurUserId(exclureUserId);
+            }
             if (notificationService.delivrer(notif).isPresent()) n++;
         }
         return n;

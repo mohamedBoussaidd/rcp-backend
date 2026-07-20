@@ -51,8 +51,70 @@ public class Exercice {
     @Column(name = "description")
     private String description;
 
+    // ── Mode avancé (module seance_avancee) : cadre pédagogique — tout optionnel ──
+    @Column(name = "contexte_pedagogique")
+    private String contextePedagogique;
+
+    // TEMPS_DE_JEU / PRINCIPE_ACTION / REGLE_ACTION_COLLECTIVE / REGLE_ACTION_INDIVIDUELLE / MOYEN
+    @Column(name = "niveau_objectif", length = 40)
+    private String niveauObjectif;
+
+    // COLLECTIF / INTERSECTORIEL / SECTORIEL / GROUPAL / INDIVIDUEL
+    @Column(name = "echelle_effectif", length = 20)
+    private String echelleEffectif;
+
+    @Column(name = "dominante_tactique_org")
+    private String dominanteTactiqueOrg;
+
+    @Column(name = "dominante_tactique_fonc")
+    private String dominanteTactiqueFonc;
+
+    @Column(name = "dominante_mental")
+    private String dominanteMental;
+
+    @Column(name = "dominante_technique")
+    private String dominanteTechnique;
+
+    @Column(name = "dominante_athletique")
+    private String dominanteAthletique;
+
+    @Column(name = "but_systeme_marque")
+    private String butSystemeMarque;
+
+    @Column(name = "regles_jeu")
+    private String reglesJeu;
+
+    @Column(name = "variables_pedagogiques")
+    private String variablesPedagogiques;
+
+    @Column(name = "reperes_perceptifs")
+    private String reperesPerceptifs;
+
+    @Column(name = "comportements_attendus")
+    private String comportementsAttendus;
+
+    // ── Mode avancé : organisation (densité m²/joueur calculée côté front, jamais stockée) ──
+    @Column(name = "terrain_longueur_m", precision = 5, scale = 1)
+    private java.math.BigDecimal terrainLongueurM;
+
+    @Column(name = "terrain_largeur_m", precision = 5, scale = 1)
+    private java.math.BigDecimal terrainLargeurM;
+
+    @Column(name = "format_joueurs", length = 120)
+    private String formatJoueurs;
+
+    @Column(name = "nb_joueurs_total")
+    private Short nbJoueursTotal;
+
+    @Column(name = "sequencage", length = 120)
+    private String sequencage;
+
     @Column(name = "schema_json", columnDefinition = "text")
     private String schemaJson;
+
+    /** Import photo d'origine (pièce jointe consultable), nullable. */
+    @Column(name = "photo_import_id")
+    private UUID photoImportId;
 
     @Column(name = "cree_par")
     private UUID creePar;

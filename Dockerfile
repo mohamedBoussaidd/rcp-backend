@@ -17,8 +17,8 @@ WORKDIR /app
 
 COPY --from=build /app/target/remi-preparateur-0.0.1-SNAPSHOT.jar app.jar
 
-# Dossier de stockage des documents médicaux (monté en volume en prod)
-RUN mkdir -p /app/data/documents-medicaux && chown -R app:app /app
+# Dossiers de stockage montés en volume en prod (documents médicaux, photos import IA)
+RUN mkdir -p /app/data/documents-medicaux /app/data/import-photos && chown -R app:app /app
 USER app
 
 # Heap borné (cohabitation VPS) + port applicatif

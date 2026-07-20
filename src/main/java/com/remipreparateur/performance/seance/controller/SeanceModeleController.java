@@ -50,6 +50,13 @@ public class SeanceModeleController {
         return service.remplacerExercices(id, req);
     }
 
+    /** Contenu avancé du modèle (blocs + rattachement + dominantes + sous-principes). */
+    @PutMapping("/{id}/contenu-avance")
+    public SeanceModeleDetail remplacerContenuAvance(@PathVariable UUID id,
+                                                     @RequestBody ContenuAvanceModeleRequest req) {
+        return service.remplacerContenuAvance(id, req);
+    }
+
     @PostMapping("/{id}/dupliquer")
     public ResponseEntity<SeanceModeleResponse> dupliquer(@PathVariable UUID id) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.dupliquer(id));

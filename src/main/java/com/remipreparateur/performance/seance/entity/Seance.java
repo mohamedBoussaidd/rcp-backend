@@ -39,6 +39,10 @@ public class Seance {
     @Column(name = "duree_minutes")
     private Short dureeMinutes;
 
+    /** Mode avancé : temps réellement travaillé, hors mise en place / transitions (nullable). */
+    @Column(name = "duree_effective_minutes")
+    private Short dureeEffectiveMinutes;
+
     @Column(name = "terrain")
     private String terrain;
 
@@ -87,6 +91,22 @@ public class Seance {
 
     @Column(name = "objectif_distance_haute_intensite_m")
     private Integer objectifDistanceHauteIntensiteM;
+
+    // ── Mode avancé (module seance_avancee) : objectifs pédagogiques (tous nullable) ──
+    @Column(name = "obj_tactique_org")
+    private String objTactiqueOrg;
+
+    @Column(name = "obj_tactique_fonc")
+    private String objTactiqueFonc;
+
+    @Column(name = "obj_mental")
+    private String objMental;
+
+    @Column(name = "obj_technique")
+    private String objTechnique;
+
+    @Column(name = "obj_athletique")
+    private String objAthletique;
 
     @Column(name = "cree_par")
     private UUID creePar;

@@ -16,10 +16,12 @@ services:
       APP_SUPERADMIN_PASSWORD: ${APP_SUPERADMIN_PASSWORD}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SPRING_DEVTOOLS_RESTART_ENABLED: "false"
       JAVA_OPTS: "-Xmx512m"
     volumes:
       - /var/private_data/sportgestions/documents-medicaux:/app/data/documents-medicaux
+      - /var/private_data/sportgestions/import-photos:/app/data/import-photos
     networks:
       - sportgestions-network
 

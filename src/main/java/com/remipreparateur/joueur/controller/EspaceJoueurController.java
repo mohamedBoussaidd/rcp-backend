@@ -30,6 +30,8 @@ import com.remipreparateur.medical.blessure.service.BlessureService;
 import com.remipreparateur.medical.blessure.service.BlessureSuiviService;
 import com.remipreparateur.joueur.service.JoueurService;
 import com.remipreparateur.performance.rpe.service.RpeService;
+import com.remipreparateur.performance.seance.dto.SeanceDtos.FicheSeanceJoueur;
+import com.remipreparateur.performance.seance.service.SeanceFicheService;
 import com.remipreparateur.performance.seance.service.SeanceService;
 import com.remipreparateur.medical.wellness.service.WellnessService;
 import jakarta.validation.Valid;
@@ -72,6 +74,7 @@ public class EspaceJoueurController {
     private final ScopeResolver scopeResolver;
     private final ClubModulesService clubModulesService;
     private final PermissionResolver permissionResolver;
+    private final SeanceFicheService seanceFicheService;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
@@ -86,7 +89,8 @@ public class EspaceJoueurController {
                                   PresenceService presenceService,
                                   ScopeResolver scopeResolver,
                                   ClubModulesService clubModulesService,
-                                  PermissionResolver permissionResolver) {
+                                  PermissionResolver permissionResolver,
+                                  SeanceFicheService seanceFicheService) {
         this.currentUser = currentUser;
         this.joueurService = joueurService;
         this.historiquePoidsRepository = historiquePoidsRepository;
@@ -101,6 +105,7 @@ public class EspaceJoueurController {
         this.scopeResolver = scopeResolver;
         this.clubModulesService = clubModulesService;
         this.permissionResolver = permissionResolver;
+        this.seanceFicheService = seanceFicheService;
     }
 
     /**
@@ -170,6 +175,16 @@ public class EspaceJoueurController {
                 .map(s -> { scopeResolver.verifieAcces(s.getEquipeId()); return s; })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
         return seanceService.getContenu(id);
+    }
+
+    /**
+     * Fiche séance version joueur, FILTRÉE côté serveur : horaire, lieu, déroulé (blocs +
+     * schémas) et SON groupe du jour — jamais les objectifs pédagogiques, dominantes,
+     * projet de jeu ni l'affectation du staff.
+     */
+    @GetMapping("/seances/{id}/fiche")
+    public FicheSeanceJoueur maFicheSeance(@PathVariable UUID id) {
+        return seanceFicheService.ficheJoueur(id, monJoueurId());
     }
 
     /** Mes déclarations de présence déjà saisies (pour pré-remplir les boutons de la PWA). */
