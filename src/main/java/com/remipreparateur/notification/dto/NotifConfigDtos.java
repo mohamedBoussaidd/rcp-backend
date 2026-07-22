@@ -29,11 +29,13 @@ public final class NotifConfigDtos {
             boolean digestActif,
             LocalTime digestMatinHeure,
             LocalTime digestSoirHeure,
+            String digestJours,
+            String digestPoidsJours,
             boolean rappelWellnessActif,
             LocalTime rappelWellnessHeure,
+            String rappelWellnessJours,
             boolean rappelRpeActif,
             short rappelRpeDelaiHeures,
-            boolean rappelPoidsActif,
             boolean rappelSeanceActif) {}
 
     /** Routage d'un type : rôles destinataires (CSV) + actif. */

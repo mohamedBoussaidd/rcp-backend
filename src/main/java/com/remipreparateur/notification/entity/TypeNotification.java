@@ -51,7 +51,8 @@ public enum TypeNotification {
 
     // ── Transverses / système ──
     COMPTE(Categorie.SYSTEME, false),
-    ECHEANCE(Categorie.SYSTEME, false);
+    ECHEANCE(Categorie.SYSTEME, false),
+    ANNONCE(Categorie.SYSTEME, false);   // annonce diffusée par le super-admin (broadcast)
 
     public enum Categorie { RAPPEL, INFO, MESSAGE, ALERTE, SYSTEME }
 

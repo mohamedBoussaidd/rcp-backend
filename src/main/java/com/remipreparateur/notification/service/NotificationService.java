@@ -20,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -57,16 +58,32 @@ public class NotificationService {
     // ──────────────────────────── Lecture (destinataire) ────────────────────────────
 
     @Transactional(readOnly = true)
-    public NotificationPage lister(int page, int size) {
+    public NotificationPage lister(int page, int size, String categorie) {
         UUID userId = currentUser.current().getId();
-        Page<Notification> p = repository.findByDestinataireUserIdOrderByCreatedAtDesc(
-                userId, PageRequest.of(page, size));
+        var pageable = PageRequest.of(page, size);
+        Page<Notification> p;
+        if (categorie == null || categorie.isBlank()) {
+            p = repository.findByDestinataireUserIdOrderByCreatedAtDesc(userId, pageable);
+        } else {
+            List<TypeNotification> types = typesDeCategorie(categorie);
+            p = types.isEmpty() ? Page.empty(pageable)
+                    : repository.findByDestinataireUserIdAndTypeInOrderByCreatedAtDesc(userId, types, pageable);
+        }
         long nonLus = repository.countByDestinataireUserIdAndLuFalse(userId);
         Map<UUID, String> joueurNoms = new HashMap<>();
         Map<UUID, String> userNoms = new HashMap<>();
         return new NotificationPage(
                 p.getContent().stream().map(n -> toResponse(n, joueurNoms, userNoms)).toList(),
                 nonLus, page, p.isLast());
+    }
+
+    /** Types appartenant à une catégorie (RAPPEL/INFO/MESSAGE/ALERTE/SYSTEME) ; vide si inconnue. */
+    private List<TypeNotification> typesDeCategorie(String categorie) {
+        TypeNotification.Categorie cat;
+        try { cat = TypeNotification.Categorie.valueOf(categorie.toUpperCase()); }
+        catch (IllegalArgumentException e) { return List.of(); }
+        return java.util.Arrays.stream(TypeNotification.values())
+                .filter(t -> t.categorie() == cat).toList();
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +109,23 @@ public class NotificationService {
     @Transactional
     public void marquerToutLu() {
         repository.marquerToutLu(currentUser.current().getId(), LocalDateTime.now());
+    }
+
+    /** Supprime une notification du destinataire courant (404 si elle ne lui appartient pas). */
+    @Transactional
+    public void supprimer(UUID id) {
+        Notification n = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification introuvable"));
+        if (!n.getDestinataireUserId().equals(currentUser.current().getId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification introuvable");
+        }
+        repository.delete(n);
+    }
+
+    /** Supprime toutes les notifications déjà lues du destinataire courant. */
+    @Transactional
+    public void viderLues() {
+        repository.supprimerLues(currentUser.current().getId());
     }
 
     // ──────────────────────────── Création (producteurs) ────────────────────────────

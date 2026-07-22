@@ -204,18 +204,21 @@ public class NotificationScheduler {
 
     private void traiterEquipe(UUID equipeId, LocalTime now) {
         NotifConfigEquipe cfg = configService.getOrCreate(equipeId);
+        LocalDate today = LocalDate.now();
 
-        if (cfg.isRappelWellnessActif() && estLHeure(now, cfg.getRappelWellnessHeure())) {
+        if (cfg.isRappelWellnessActif() && estLHeure(now, cfg.getRappelWellnessHeure())
+                && CadenceJours.actifLe(cfg.getRappelWellnessJours(), today)) {
             rappelWellness(equipeId);
             if (cfg.isRappelSeanceActif()) rappelSeance(equipeId);
         }
         if (cfg.isRappelRpeActif()) {
             rappelRpe(equipeId, cfg.getRappelRpeDelaiHeures());
         }
-        if (cfg.isDigestActif() && estLHeure(now, cfg.getDigestMatinHeure())) {
+        boolean jourDigest = CadenceJours.actifLe(cfg.getDigestJours(), today);
+        if (cfg.isDigestActif() && jourDigest && estLHeure(now, cfg.getDigestMatinHeure())) {
             digestService.genererEtEnvoyer(cfg, "matin");
         }
-        if (cfg.isDigestActif() && estLHeure(now, cfg.getDigestSoirHeure())) {
+        if (cfg.isDigestActif() && jourDigest && estLHeure(now, cfg.getDigestSoirHeure())) {
             digestService.genererEtEnvoyer(cfg, "soir");
         }
         // Rappel staff : dimanche en fin de journée, vérifier la semaine d'entraînement à venir.

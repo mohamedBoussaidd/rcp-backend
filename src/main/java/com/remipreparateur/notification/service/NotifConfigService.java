@@ -124,11 +124,13 @@ public class NotifConfigService {
         c.setDigestActif(d.digestActif());
         c.setDigestMatinHeure(d.digestMatinHeure());
         c.setDigestSoirHeure(d.digestSoirHeure());
+        c.setDigestJours(normaliserJours(d.digestJours(), "1,2,3,4,5,6,7"));
+        c.setDigestPoidsJours(normaliserJours(d.digestPoidsJours(), ""));
         c.setRappelWellnessActif(d.rappelWellnessActif());
         c.setRappelWellnessHeure(d.rappelWellnessHeure());
+        c.setRappelWellnessJours(normaliserJours(d.rappelWellnessJours(), "1,2,3,4,5,6,7"));
         c.setRappelRpeActif(d.rappelRpeActif());
         c.setRappelRpeDelaiHeures(d.rappelRpeDelaiHeures());
-        c.setRappelPoidsActif(d.rappelPoidsActif());
         c.setRappelSeanceActif(d.rappelSeanceActif());
         c.setUpdatedAt(LocalDateTime.now());
         return toDto(configRepository.save(c));
@@ -141,9 +143,21 @@ public class NotifConfigService {
                 c.getSeuilWellnessSommeil(), c.getSeuilWellnessHumeur(),
                 c.getSeuilPoidsCourt(), c.getSeuilPoidsMoyen(), c.getSeuilCompletionMin(),
                 c.isDigestActif(), c.getDigestMatinHeure(), c.getDigestSoirHeure(),
-                c.isRappelWellnessActif(), c.getRappelWellnessHeure(),
+                c.getDigestJours(), c.getDigestPoidsJours(),
+                c.isRappelWellnessActif(), c.getRappelWellnessHeure(), c.getRappelWellnessJours(),
                 c.isRappelRpeActif(), c.getRappelRpeDelaiHeures(),
-                c.isRappelPoidsActif(), c.isRappelSeanceActif());
+                c.isRappelSeanceActif());
+    }
+
+    /**
+     * Nettoie une saisie de jours (CSV ISO 1..7) : ne garde que 1..7, dédoublonne et trie.
+     * Une saisie vide reste vide (= jamais) sauf si {@code defautSiVide} est fourni.
+     */
+    private static String normaliserJours(String csv, String defautSiVide) {
+        java.util.List<Integer> jours = com.remipreparateur.notification.service.CadenceJours.parse(csv)
+                .stream().sorted().toList();
+        if (jours.isEmpty()) return defautSiVide;
+        return jours.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
     }
 
     // ──────────────────────────── Routage (lecture/écriture) ────────────────────────────

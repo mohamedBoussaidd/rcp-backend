@@ -74,6 +74,14 @@ public class NotifConfigEquipe {
     @Column(name = "digest_soir_heure", nullable = false)
     private LocalTime digestSoirHeure = LocalTime.of(19, 0);
 
+    /** Jours d'envoi du digest « à surveiller » (CSV ISO 1..7, défaut = tous les jours). */
+    @Column(name = "digest_jours", nullable = false)
+    private String digestJours = "1,2,3,4,5,6,7";
+
+    /** Jours où le bloc poids est inclus dans le digest (jours de pesée ; défaut = lundi). */
+    @Column(name = "digest_poids_jours", nullable = false)
+    private String digestPoidsJours = "1";
+
     // ── Rappels joueur ──
     @Column(name = "rappel_wellness_actif", nullable = false)
     private boolean rappelWellnessActif = true;
@@ -81,14 +89,15 @@ public class NotifConfigEquipe {
     @Column(name = "rappel_wellness_heure", nullable = false)
     private LocalTime rappelWellnessHeure = LocalTime.of(8, 0);
 
+    /** Jours d'envoi du rappel wellness (CSV ISO 1..7, défaut = tous les jours). */
+    @Column(name = "rappel_wellness_jours", nullable = false)
+    private String rappelWellnessJours = "1,2,3,4,5,6,7";
+
     @Column(name = "rappel_rpe_actif", nullable = false)
     private boolean rappelRpeActif = true;
 
     @Column(name = "rappel_rpe_delai_heures", nullable = false)
     private short rappelRpeDelaiHeures = 3;
-
-    @Column(name = "rappel_poids_actif", nullable = false)
-    private boolean rappelPoidsActif = false;
 
     @Column(name = "rappel_seance_actif", nullable = false)
     private boolean rappelSeanceActif = true;

@@ -24,8 +24,9 @@ public class NotificationController {
     /** Liste paginée des notifications du destinataire courant (+ compteur de non-lus). */
     @GetMapping
     public NotificationPage lister(@RequestParam(defaultValue = "0") int page,
-                                   @RequestParam(defaultValue = "20") int size) {
-        return service.lister(page, Math.min(size, 50));
+                                   @RequestParam(defaultValue = "20") int size,
+                                   @RequestParam(required = false) String categorie) {
+        return service.lister(page, Math.min(size, 50), categorie);
     }
 
     /** Compteur de non-lus — endpoint léger pour le polling de la cloche. */
@@ -42,5 +43,17 @@ public class NotificationController {
     @PostMapping("/lire-tout")
     public void marquerToutLu() {
         service.marquerToutLu();
+    }
+
+    /** Supprime toutes les notifications déjà lues du destinataire courant. */
+    @DeleteMapping("/lues")
+    public void viderLues() {
+        service.viderLues();
+    }
+
+    /** Supprime une notification du destinataire courant. */
+    @DeleteMapping("/{id}")
+    public void supprimer(@PathVariable UUID id) {
+        service.supprimer(id);
     }
 }
