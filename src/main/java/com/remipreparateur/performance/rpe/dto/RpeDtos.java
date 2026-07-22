@@ -36,6 +36,8 @@ public final class RpeDtos {
             Short dureeMinutes,
             /** Charge séance = rpe × durée (null si durée inconnue). */
             Integer charge,
+            /** Plaisir ressenti 1..10 (null si non renseigné — ex. saisie PWA). */
+            Short plaisir,
             String commentaire,
             LocalDateTime createdAt) {}
 }

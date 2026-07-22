@@ -118,6 +118,6 @@ public class RpeService {
                 j != null ? j.getPrenom() : null,
                 r.getSeanceId(), r.getSeanceType(), r.getDate(),
                 r.getRpe(), r.getDureeMinutes(), r.getCharge(),
-                r.getCommentaire(), r.getCreatedAt());
+                r.getPlaisir(), r.getCommentaire(), r.getCreatedAt());
     }
 }

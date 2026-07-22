@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,11 +65,12 @@ public class HistoriquePoidsController {
                             j.getId(), j.getNom(), j.getPrenom(), j.getPostePrincipal(),
                             j.getPoidsFormeCible(), derniereDate, dernierPoids, ecart);
                 })
-                .sorted((a, b) -> {
-                    if (a.ecartKg() == null) return 1;
-                    if (b.ecartKg() == null) return -1;
-                    return b.ecartKg().compareTo(a.ecartKg());
-                })
+                // Écart décroissant (plus gros surpoids d'abord), fiches sans écart en dernier.
+                // Comparateur COHÉRENT obligatoire : l'ancien renvoyait 1 des deux côtés pour deux
+                // null, ce que TimSort rejette (« Comparison method violates its general contract! »)
+                // dès qu'assez de fiches n'ont pas de poids de forme (cas des fiches importées).
+                .sorted(Comparator.comparing(PoidsFicheJoueurDto::ecartKg,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 

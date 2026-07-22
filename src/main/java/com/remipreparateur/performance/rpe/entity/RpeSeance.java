@@ -47,6 +47,10 @@ public class RpeSeance {
     @Column(name = "charge")
     private Integer charge;
 
+    /** Niveau de plaisir ressenti sur la séance (1..10), issu du questionnaire post-séance. */
+    @Column(name = "plaisir")
+    private Short plaisir;
+
     @Column(name = "commentaire")
     private String commentaire;
 

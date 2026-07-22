@@ -31,6 +31,7 @@ public enum Permission {
     // ── Analyse / GPS ───────────────────────────────────────────────
     PREDICTIONS_READ("predictions:read", "Analyse / GPS", "Voir charge & prédictions IA"),
     GPS_IMPORT("gps:import", "Analyse / GPS", "Importer les données GPS"),
+    RPE_IMPORT("rpe:import", "Analyse / GPS", "Importer le RPE / ressenti des joueurs (fichier)"),
 
     // ── Effectif ────────────────────────────────────────────────────
     JOUEURS_READ("joueurs:read", "Effectif", "Voir les fiches joueurs"),
@@ -47,6 +48,7 @@ public enum Permission {
     WELLNESS_READ("wellness:read", "Médical", "Voir wellness & RPE"),
     WELLNESS_TREAT("wellness:treat", "Médical", "Traiter une gêne"),
     WELLNESS_REOPEN("wellness:reopen", "Médical", "Rouvrir une gêne"),
+    HOOPER_IMPORT("hooper:import", "Médical", "Importer le ressenti quotidien / wellness des joueurs (fichier)"),
     CONSEILS_READ("conseils:read", "Médical", "Voir les conseils"),
     CONSEILS_WRITE("conseils:write", "Médical", "Écrire des conseils au joueur"),
 

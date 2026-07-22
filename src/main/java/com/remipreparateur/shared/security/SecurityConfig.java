@@ -124,6 +124,10 @@ public class SecurityConfig {
                         // Import Excel / données GPS
                         .requestMatchers("/api/import/**").hasAuthority("gps:import")
 
+                        // Import RPE / ressenti (fichier questionnaire post-séance)
+                        .requestMatchers("/api/import-rpe/**").hasAuthority("rpe:import")
+                        .requestMatchers("/api/import-hooper/**").hasAuthority("hooper:import")
+
                         // Blessures (module médical) : qualification administrative & déclarations
                         // (arrêt/accident de travail) ouvertes au-delà du médical (Président,
                         // Administratif) via blessures:qualify — AVANT les règles génériques.
