@@ -27,6 +27,8 @@ public enum Permission {
             "Éditer le mode avancé des séances et exercices (pédagogie, blocs, effectifs du jour)"),
     IMPORT_PHOTO_USE("import_photo:use", "Entraînement",
             "Importer une séance ou un exercice depuis une photo (IA vision)"),
+    SEANCE_IA_GENERATE("seance_ia:generate", "Entraînement",
+            "Générer une séance par IA (à partir d'une demande en langage naturel)"),
 
     // ── Analyse / GPS ───────────────────────────────────────────────
     PREDICTIONS_READ("predictions:read", "Analyse / GPS", "Voir charge & prédictions IA"),

@@ -84,6 +84,9 @@ public class SecurityConfig {
                         // gardé par presence:write (et non seances:read qui couvre tout /api/seances).
                         .requestMatchers("/api/presence/**").hasAuthority("presence:write")
 
+                        // Générateur de séance par IA (module add-on generateur_seance_ia) : appel LLM
+                        // facturé → gardé par sa propre permission, AVANT la règle générique seances:write.
+                        .requestMatchers(HttpMethod.POST, "/api/seances/generer").hasAuthority("seance_ia:generate")
                         // Séances unifiées (cadre + exercices) : lecture / présence / écriture
                         .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAuthority("seances:read")
                         .requestMatchers("/api/seances/*/presence/**").hasAuthority("presence:write")

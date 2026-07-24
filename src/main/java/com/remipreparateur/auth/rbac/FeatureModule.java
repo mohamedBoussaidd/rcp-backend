@@ -68,7 +68,9 @@ public enum FeatureModule {
     SEANCE_AVANCEE("seance_avancee", "Séances & exercices enrichis",
             "Mode avancé de préparation : cadre pédagogique des exercices, blocs de séance, effectifs du jour, dominantes et projet de jeu travaillé", false, 27),
     IMPORT_PHOTO_IA("import_photo_ia", "Import photo (IA)",
-            "Import d'une séance ou d'un exercice depuis une photo : l'IA extrait les champs et le schéma tactique, l'entraîneur ajuste", false, 28);
+            "Import d'une séance ou d'un exercice depuis une photo : l'IA extrait les champs et le schéma tactique, l'entraîneur ajuste", false, 28),
+    GENERATEUR_SEANCE_IA("generateur_seance_ia", "Générateur de séance (IA)",
+            "Génération d'un brouillon de séance à partir d'une demande en langage naturel : l'IA compose blocs et exercices (biblio du club + globaux), l'entraîneur valide", false, 29);
 
     private final String code;
     private final String libelle;
@@ -130,6 +132,7 @@ public enum FeatureModule {
             case SEANCES_READ, SEANCES_WRITE, TYPESEANCES_WRITE, SAISON_READ, SAISON_MANAGE -> PLANNING;
             case SEANCE_AVANCEE_ACCESS -> SEANCE_AVANCEE;
             case IMPORT_PHOTO_USE -> IMPORT_PHOTO_IA;
+            case SEANCE_IA_GENERATE -> GENERATEUR_SEANCE_IA;
             case JOUEURS_READ, JOUEURS_WRITE -> EFFECTIF;
             case CONFIGURATION_READ, CONFIGURATION_WRITE, MEMBRES_MANAGE, CLUB_MANAGE -> ADMINISTRATION;
             case PRESENCE_WRITE -> PRESENCE;

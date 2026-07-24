@@ -146,4 +146,12 @@ public class Seance {
 
     @Column(name = "cree_par")
     private UUID creePar;
+
+    /**
+     * Origine du contenu, pour la traçabilité IA (badge « Proposée par IA »). {@code null} =
+     * saisie manuelle ; {@code IA_GENERATION} = brouillon proposé par le générateur de séance IA,
+     * validé par le coach. Marqueur d'affichage, jamais un critère de sécurité.
+     */
+    @Column(name = "origine")
+    private String origine;
 }
