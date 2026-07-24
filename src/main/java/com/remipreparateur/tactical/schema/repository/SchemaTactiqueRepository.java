@@ -12,4 +12,10 @@ public interface SchemaTactiqueRepository extends JpaRepository<SchemaTactique, 
 
     /** Schémas FOURNIS (globaux, posés par le super-admin), visibles par tous les clubs. */
     List<SchemaTactique> findByClubIdIsNullOrderByUpdatedAtDesc();
+
+    /** Tous les schémas appartenant à un club (recherche cross-club super-admin). */
+    List<SchemaTactique> findByClubIdIsNotNullOrderByUpdatedAtDesc();
+
+    /** Schémas des clubs sélectionnés (recherche cross-club filtrée). */
+    List<SchemaTactique> findByClubIdInOrderByUpdatedAtDesc(java.util.Collection<UUID> clubIds);
 }

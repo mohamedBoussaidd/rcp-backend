@@ -23,6 +23,7 @@ import com.remipreparateur.performance.seance.repository.SeanceSousPrincipeRepos
 import com.remipreparateur.tactical.exercice.entity.Exercice;
 import com.remipreparateur.tactical.exercice.repository.ExerciceRepository;
 import com.remipreparateur.shared.security.Authorites;
+import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.shared.time.Horloge;
@@ -33,7 +34,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,6 +63,7 @@ public class SeanceService {
     private final JoueurRepository joueurRepository;
     private final ScopeResolver scopeResolver;
     private final Horloge horloge;
+    private final CurrentUserProvider currentUser;
 
     public List<Seance> findAll() {
         Scope s = scopeResolver.resolve();
@@ -223,6 +227,110 @@ public class SeanceService {
 
     public List<DonneeGps> findDonneesGpsBySeance(UUID seanceId) {
         return donneeGpsRepository.findBySeanceId(seanceId);
+    }
+
+    /**
+     * Reprogramme une séance existante : crée une NOUVELLE séance PLANIFIÉE à la date/heure choisies
+     * en recopiant tout le contenu pédagogique (cadre, blocs + staff, exercices, dominantes,
+     * sous-principes), et en jetant le vécu (présence, groupes, résultats GPS, score, météo, statut).
+     * Même équipe que la source. Le coach ajuste ensuite la copie.
+     */
+    @Transactional
+    public Seance dupliquerVers(UUID sourceId, LocalDate date, LocalTime heureDebut) {
+        Seance src = seanceRepository.findById(sourceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
+        scopeResolver.verifieAcces(src.getEquipeId());
+        if (date == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date requise");
+
+        Seance s = new Seance();
+        s.setTypeSeance((TypeSeance) Hibernate.unproxy(src.getTypeSeance()));
+        s.setDate(date);
+        s.setHeureDebut(heureDebut);
+        s.setStatut("PLANIFIEE");
+        s.setTitre(src.getTitre());
+        s.setDureeMinutes(src.getDureeMinutes());
+        s.setTerrain(src.getTerrain());
+        s.setResponsableId(src.getResponsableId());
+        s.setContexte(src.getContexte());
+        s.setContexteSeanceId(src.getContexteSeanceId());
+        s.setAdversaire(src.getAdversaire());
+        s.setCompetition(src.getCompetition());
+        s.setDomicileExterieur(src.getDomicileExterieur());
+        s.setObjectif(src.getObjectif());
+        s.setObjectifDistanceM(src.getObjectifDistanceM());
+        s.setObjectifIntensite(src.getObjectifIntensite());
+        s.setObjectifDistanceHauteIntensiteM(src.getObjectifDistanceHauteIntensiteM());
+        s.setDescription(src.getDescription());
+        s.setDominanteTactiqueOrgIntensite(src.getDominanteTactiqueOrgIntensite());
+        s.setDominanteTactiqueFoncIntensite(src.getDominanteTactiqueFoncIntensite());
+        s.setDominanteMentalIntensite(src.getDominanteMentalIntensite());
+        s.setDominanteTechniqueIntensite(src.getDominanteTechniqueIntensite());
+        s.setDominanteAthletiqueIntensite(src.getDominanteAthletiqueIntensite());
+        s.setObjTactiqueOrg(src.getObjTactiqueOrg());
+        s.setObjTactiqueFonc(src.getObjTactiqueFonc());
+        s.setObjMental(src.getObjMental());
+        s.setObjTechnique(src.getObjTechnique());
+        s.setObjAthletique(src.getObjAthletique());
+        s.setEquipeId(src.getEquipeId());
+        s.setCreePar(currentUser.current().getId());
+        // Le vécu n'est jamais recopié : score, météo, durée effective, raison d'écart.
+        if (!accesAvance()) {
+            s.setObjTactiqueOrg(null); s.setObjTactiqueFonc(null); s.setObjMental(null);
+            s.setObjTechnique(null); s.setObjAthletique(null);
+            s.setDominanteTactiqueOrgIntensite(null); s.setDominanteTactiqueFoncIntensite(null);
+            s.setDominanteMentalIntensite(null); s.setDominanteTechniqueIntensite(null);
+            s.setDominanteAthletiqueIntensite(null);
+        } else {
+            bornerDosages(s);
+        }
+        Seance creee = seanceRepository.save(s);
+
+        // Blocs (avec zones + staff affecté + rôles de bloc) → correspondance pour les lignes.
+        Map<UUID, UUID> blocMap = new HashMap<>();
+        for (BlocSeance bs : blocSeanceRepository.findBySeanceIdOrderByOrdreAsc(sourceId)) {
+            BlocSeance b = new BlocSeance();
+            b.setSeanceId(creee.getId());
+            b.setOrdre(bs.getOrdre());
+            b.setLibelle(bs.getLibelle());
+            b.setType(bs.getType());
+            b.setSequencage(bs.getSequencage());
+            b.setDureeMinutes(bs.getDureeMinutes());
+            b.setZones(new ArrayList<>(bs.getZones()));
+            b.setStaffIds(new ArrayList<>(bs.getStaffIds()));
+            List<BlocSeanceStaffRole> roles = new ArrayList<>();
+            for (BlocSeanceStaffRole r : bs.getStaffRoles()) {
+                roles.add(new BlocSeanceStaffRole(r.getUtilisateurId(), r.getRole()));
+            }
+            b.setStaffRoles(roles);
+            blocMap.put(bs.getId(), blocSeanceRepository.save(b).getId());
+        }
+        for (SeanceExercice l : seanceExerciceRepository.findBySeanceIdOrderByOrdreAsc(sourceId)) {
+            SeanceExercice se = new SeanceExercice();
+            se.setSeanceId(creee.getId());
+            se.setExerciceId(l.getExerciceId());
+            se.setOrdre(l.getOrdre());
+            se.setBlocId(l.getBlocId() != null ? blocMap.get(l.getBlocId()) : null);
+            se.setDureeMinutes(l.getDureeMinutes());
+            se.setIntensite(l.getIntensite());
+            se.setDistanceAttendueM(l.getDistanceAttendueM());
+            se.setDistanceHauteIntensiteM(l.getDistanceHauteIntensiteM());
+            se.setNbSprints(l.getNbSprints());
+            seanceExerciceRepository.save(se);
+        }
+        for (SeanceDominante d : seanceDominanteRepository.findBySeanceId(sourceId)) {
+            SeanceDominante nd = new SeanceDominante();
+            nd.setSeanceId(creee.getId());
+            nd.setDominanteId(d.getDominanteId());
+            seanceDominanteRepository.save(nd);
+        }
+        for (SeanceSousPrincipe p : seanceSousPrincipeRepository.findBySeanceId(sourceId)) {
+            SeanceSousPrincipe np = new SeanceSousPrincipe();
+            np.setSeanceId(creee.getId());
+            np.setSousPrincipeId(p.getSousPrincipeId());
+            seanceSousPrincipeRepository.save(np);
+        }
+        // Groupes du jour NON recopiés : ils désignent des joueurs réels à une date précise.
+        return creee;
     }
 
     // ══════════ Exercices d'une séance (référence + overrides) ══════════

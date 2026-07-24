@@ -16,7 +16,8 @@ public class Exercice {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
-    @Column(name = "club_id", nullable = false)
+    /** Club propriétaire, ou {@code null} pour un exercice GLOBAL (bibliothèque super-admin, CB). */
+    @Column(name = "club_id")
     private UUID clubId;
 
     @Column(name = "nom", nullable = false)

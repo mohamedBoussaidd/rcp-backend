@@ -10,12 +10,14 @@ import com.remipreparateur.performance.seance.dto.SeanceDtos.ResumeSeance;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.performance.seance.service.SeanceFicheService;
+import com.remipreparateur.performance.seance.service.SeanceGenerationService;
 import com.remipreparateur.performance.seance.service.SeanceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,6 +30,7 @@ public class SeanceController {
     private final SeanceService seanceService;
     private final SeanceFicheService seanceFicheService;
     private final ScopeResolver scopeResolver;
+    private final SeanceGenerationService seanceGenerationService;
 
     @GetMapping
     public List<Seance> getAll(
@@ -155,4 +158,20 @@ public class SeanceController {
     public Map<String, Integer> partagerAuStaff(@PathVariable UUID id) {
         return Map.of("notifies", seanceFicheService.partagerAuStaff(id));
     }
+
+    /** Reprogramme une séance : crée une nouvelle séance PLANIFIÉE à la date/heure choisies. */
+    @PostMapping("/{id}/dupliquer")
+    public Seance dupliquer(@PathVariable UUID id, @RequestBody DupliquerRequest req) {
+        return seanceService.dupliquerVers(id, req.date(), req.heureDebut());
+    }
+
+    public record DupliquerRequest(LocalDate date, LocalTime heureDebut) {}
+
+    /** Génère un brouillon de séance à partir d'une demande en langage naturel (IA). */
+    @PostMapping("/generer")
+    public SeanceGenerationService.SeanceBrouillon generer(@RequestBody GenererRequest req) {
+        return seanceGenerationService.generer(req == null ? null : req.texte());
+    }
+
+    public record GenererRequest(String texte) {}
 }

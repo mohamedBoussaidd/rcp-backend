@@ -1,5 +1,6 @@
 package com.remipreparateur.tactical.exercice.controller;
 
+import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceRechercheResponse;
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceRequest;
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceResponse;
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.SchemaRequest;
@@ -30,6 +31,33 @@ public class ExerciceController {
     @GetMapping
     public List<ExerciceResponse> lister() {
         return exerciceService.lister();
+    }
+
+    /** Bibliothèque GLOBALE (super-admin) — exercices proposés à tous les clubs (CB). */
+    @GetMapping("/globaux")
+    public List<ExerciceResponse> listerGlobaux() {
+        return exerciceService.listerGlobaux();
+    }
+
+    /** Crée un exercice global (super-admin uniquement, vérifié dans le service). */
+    @PostMapping("/globaux")
+    public ResponseEntity<ExerciceResponse> creerGlobal(@Valid @RequestBody ExerciceRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(exerciceService.creerGlobal(req));
+    }
+
+    /** Recherche cross-club (super-admin) : exercices des clubs, filtrés nom/forme/type. */
+    @GetMapping("/recherche")
+    public List<ExerciceRechercheResponse> rechercher(@RequestParam(required = false) List<UUID> clubIds,
+                                                      @RequestParam(required = false) String q,
+                                                      @RequestParam(required = false) String forme,
+                                                      @RequestParam(required = false) String type) {
+        return exerciceService.rechercher(clubIds, q, forme, type);
+    }
+
+    /** Promeut un exercice de club en exercice global (copie ; l'original n'est jamais touché). */
+    @PostMapping("/{id}/promouvoir")
+    public ResponseEntity<ExerciceResponse> promouvoir(@PathVariable UUID id) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(exerciceService.promouvoir(id));
     }
 
     @PostMapping

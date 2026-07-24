@@ -1,11 +1,14 @@
 package com.remipreparateur.tactical.exercice.service;
 
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceAvance;
+import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceRechercheResponse;
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceRequest;
 import com.remipreparateur.tactical.exercice.dto.ExerciceDtos.ExerciceResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import com.remipreparateur.club.entity.Club;
 import com.remipreparateur.club.entity.Equipe;
+import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.tactical.exercice.entity.Exercice;
 import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
@@ -19,7 +22,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -34,26 +39,54 @@ public class ExerciceService {
     private final ExerciceRepository exerciceRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final EquipeRepository equipeRepository;
+    private final ClubRepository clubRepository;
     private final CurrentUserProvider currentUser;
 
     public ExerciceService(ExerciceRepository exerciceRepository,
                            UtilisateurRepository utilisateurRepository,
                            EquipeRepository equipeRepository,
+                           ClubRepository clubRepository,
                            CurrentUserProvider currentUser) {
         this.exerciceRepository = exerciceRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.equipeRepository = equipeRepository;
+        this.clubRepository = clubRepository;
         this.currentUser = currentUser;
     }
 
     public List<ExerciceResponse> lister() {
         Utilisateur u = currentUser.current();
         UUID clubId = clubCourant(u);
-        List<Exercice> exercices = (clubId != null)
-                ? exerciceRepository.findByClubIdOrderByCreatedAtDesc(clubId)
-                // Super-admin sans club actif (espace admin) : tout ; autres rôles sans club : rien.
-                : (u.getRole() == Role.SUPER_ADMIN ? exerciceRepository.findAll() : List.of());
+        List<Exercice> exercices;
+        if (clubId != null) {
+            // Club en priorité, puis les exercices GLOBAUX (super-admin, lecture seule) — CB.
+            exercices = new java.util.ArrayList<>(exerciceRepository.findByClubIdOrderByCreatedAtDesc(clubId));
+            exercices.addAll(exerciceRepository.findByClubIdIsNullOrderByCreatedAtDesc());
+        } else {
+            // Super-admin sans club actif (espace admin) : tout ; autres rôles sans club : rien.
+            exercices = (u.getRole() == Role.SUPER_ADMIN) ? exerciceRepository.findAll() : List.of();
+        }
         return exercices.stream().map(e -> toResponse(e, estCreateur(e, u))).toList();
+    }
+
+    /** Bibliothèque GLOBALE (exercices super-admin, club_id NULL). Modifiables par le super-admin seul. */
+    public List<ExerciceResponse> listerGlobaux() {
+        Utilisateur u = currentUser.current();
+        return exerciceRepository.findByClubIdIsNullOrderByCreatedAtDesc().stream()
+                .map(e -> toResponse(e, estCreateur(e, u))).toList();
+    }
+
+    /** Crée un exercice GLOBAL (super-admin uniquement) — visible en lecture par tous les clubs. */
+    public ExerciceResponse creerGlobal(ExerciceRequest req) {
+        Utilisateur u = currentUser.current();
+        if (u.getRole() != Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Réservé au super-admin");
+        }
+        Exercice e = new Exercice();
+        e.setClubId(null);
+        e.setCreePar(u.getId());
+        appliquer(e, req);
+        return toResponse(exerciceRepository.save(e), true);
     }
 
     public ExerciceResponse creer(ExerciceRequest req) {
@@ -102,11 +135,14 @@ public class ExerciceService {
         Utilisateur u = currentUser.current();
         Exercice source = charge(id);
         UUID clubId = clubCourant(u);
-        if (u.getRole() != Role.SUPER_ADMIN && (clubId == null || !clubId.equals(source.getClubId()))) {
+        boolean global = source.getClubId() == null;
+        // On peut dupliquer un exercice de SON club ou un exercice GLOBAL (pour l'adapter).
+        if (!global && u.getRole() != Role.SUPER_ADMIN && (clubId == null || !clubId.equals(source.getClubId()))) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Exercice introuvable");
         }
         Exercice c = new Exercice();
-        c.setClubId(source.getClubId());
+        // Cloné dans le club courant (un global cloné atterrit dans ma biblio) ; super-admin hors club = reste global.
+        c.setClubId(clubId != null ? clubId : source.getClubId());
         c.setCreePar(u.getId());
         c.setEquipeOrigineId(u.getEquipeId());
         c.setNom(source.getNom() + " (copie)");
@@ -125,7 +161,78 @@ public class ExerciceService {
         return toResponse(exerciceRepository.save(c), true);
     }
 
+    /**
+     * Recherche cross-club (super-admin) : parcourt les exercices <b>appartenant aux clubs</b>
+     * (jamais les globaux), filtrés par nom, forme et/ou type. Sans {@code clubIds} → tous les
+     * clubs ; sinon les clubs cochés seulement.
+     */
+    public List<ExerciceRechercheResponse> rechercher(List<UUID> clubIds, String q, String forme, String type) {
+        exigeSuperAdmin();
+        List<Exercice> source = (clubIds == null || clubIds.isEmpty())
+                ? exerciceRepository.findByClubIdIsNotNullOrderByCreatedAtDesc()
+                : exerciceRepository.findByClubIdInOrderByCreatedAtDesc(clubIds);
+        String qn = q == null ? "" : q.trim().toLowerCase();
+        String fn = forme == null ? "" : forme.trim().toUpperCase();
+        String tn = type == null ? "" : type.trim().toUpperCase();
+        Map<UUID, String> clubNoms = new HashMap<>();
+        return source.stream()
+                .filter(e -> qn.isEmpty() || (e.getNom() != null && e.getNom().toLowerCase().contains(qn)))
+                .filter(e -> fn.isEmpty() || fn.equals(e.getForme()))
+                .filter(e -> tn.isEmpty() || tn.equals(e.getType()))
+                .map(e -> toRecherche(e, clubNoms))
+                .toList();
+    }
+
+    /**
+     * Promeut un exercice de club en exercice GLOBAL : crée une <b>copie</b> sans club, à proposer
+     * à tous les clubs (et au générateur IA). L'original du club n'est <b>jamais</b> modifié.
+     */
+    public ExerciceResponse promouvoir(UUID id) {
+        exigeSuperAdmin();
+        Exercice src = charge(id);
+        if (src.getClubId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cet exercice est déjà global");
+        }
+        Exercice g = new Exercice();
+        g.setClubId(null); // devient global ; l'original du club reste intact
+        g.setCreePar(currentUser.current().getId());
+        g.setNom(src.getNom());
+        g.setForme(src.getForme());
+        g.setSousPrincipeIds(new java.util.ArrayList<>(src.getSousPrincipeIds()));
+        g.setType(src.getType());
+        g.setDureeMinutes(src.getDureeMinutes());
+        g.setObjectif(src.getObjectif());
+        g.setIntensite(src.getIntensite());
+        g.setDescription(src.getDescription());
+        g.setSchemaJson(src.getSchemaJson());
+        g.setDistanceAttendueM(src.getDistanceAttendueM());
+        g.setDistanceHauteIntensiteM(src.getDistanceHauteIntensiteM());
+        g.setNbSprints(src.getNbSprints());
+        copierAvance(src, g);
+        return toResponse(exerciceRepository.save(g), true);
+    }
+
     // ── Helpers ──
+
+    private void exigeSuperAdmin() {
+        if (currentUser.current().getRole() != Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Réservé au super-admin");
+        }
+    }
+
+    /** Nom du club porteur, résolu une fois par club (cache local à la requête). */
+    private ExerciceRechercheResponse toRecherche(Exercice e, Map<UUID, String> clubNoms) {
+        String clubNom = e.getClubId() == null ? null : clubNoms.computeIfAbsent(e.getClubId(),
+                cid -> clubRepository.findById(cid).map(Club::getNom).orElse(null));
+        String creeParNom = e.getCreePar() != null
+                ? utilisateurRepository.findById(e.getCreePar())
+                    .map(c -> ((c.getPrenom() != null ? c.getPrenom() + " " : "") + (c.getNom() != null ? c.getNom() : "")).trim())
+                    .orElse(null)
+                : null;
+        return new ExerciceRechercheResponse(e.getId(), e.getNom(), e.getForme(), e.getType(),
+                e.getDureeMinutes(), e.getObjectif(), e.getSchemaJson() != null && !e.getSchemaJson().isBlank(),
+                e.getClubId(), clubNom, creeParNom);
+    }
 
     /**
      * Club dont dépend la bibliothèque. Super-admin : le club du contexte actif
@@ -275,6 +382,6 @@ public class ExerciceService {
                 e.getIntensite(), e.getDescription(), e.getSchemaJson(),
                 e.getDistanceAttendueM(), e.getDistanceHauteIntensiteM(), e.getNbSprints(),
                 e.getCreePar(), creeParNom, e.getEquipeOrigineId(), equipeNom,
-                modifiable, avance, e.getPhotoImportId());
+                modifiable, avance, e.getPhotoImportId(), e.getClubId() == null);
     }
 }

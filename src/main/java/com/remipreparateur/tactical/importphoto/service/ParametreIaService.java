@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ParametreIaService {
 
     public static final String CLE_PROMPT_IMPORT_PHOTO = "prompt_import_photo";
+    public static final String CLE_PROMPT_GENERATEUR_SEANCE = "prompt_generateur_seance";
     public static final String CLE_QUOTA_DEFAUT = "quota_import_photo_defaut";
 
     private static final long CACHE_MS = 60_000;
@@ -104,9 +105,47 @@ public class ParametreIaService {
         return switch (cle) {
             case CLE_QUOTA_DEFAUT -> "20";
             case CLE_PROMPT_IMPORT_PHOTO -> PROMPT_IMPORT_PHOTO_DEFAUT;
+            case CLE_PROMPT_GENERATEUR_SEANCE -> PROMPT_GENERATEUR_SEANCE_DEFAUT;
             default -> "";
         };
     }
+
+    /**
+     * Prompt par défaut du générateur de séance IA (C4), éditable par le super-admin (écran
+     * Paramètres IA) — ce texte n'est que le fallback si la clé est absente en base.
+     *
+     * <p>Le catalogue d'exercices et sa légende de tags (dominantes, thèmes, intensité, durée)
+     * sont ajoutés automatiquement par {@code SeanceGenerationService} APRÈS ce prompt : inutile
+     * de les décrire ici, mais les consignes ci-dessous s'appuient dessus pour guider la sélection.</p>
+     */
+    public static final String PROMPT_GENERATEUR_SEANCE_DEFAUT = """
+Tu es préparateur/entraîneur de football. À partir de la demande du coach, compose une séance d'entraînement.
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte ni balises autour. Contrat :
+{
+  "titre": "court",
+  "typeCode": "<un des codes autorisés>",
+  "dureeMinutes": nombre,
+  "objectif": "1 phrase",
+  "dominantes": { "tactiqueOrg":0-5, "tactiqueFonc":0-5, "technique":0-5, "mental":0-5, "athletique":0-5 },
+  "blocs": [
+    { "libelle":"Échauffement", "dureeMinutes":nombre, "sequencage":"ex: 3x4'",
+      "exercices": [ "<id d'un exercice existant>", { "nom":"...", "description":"consignes" } ] }
+  ],
+  "note": "précision facultative pour le coach"
+}
+
+Règles :
+- Réutilise EN PRIORITÉ les exercices de la bibliothèque via leur id exact. N'invente jamais d'id.
+- Choisis les exercices dont les TAGS collent à la demande : privilégie ceux dont les dominantes (dom)
+  et les thèmes de jeu correspondent à l'intention, et dont l'intensité et la forme conviennent au
+  moment visé (échauffement, corps de séance, retour au calme).
+- Garde les "dominantes" de la séance COHÉRENTES avec les exercices retenus (une séance à dominante
+  technique enchaîne des exercices marqués technique).
+- Pour un exercice absent de la bibliothèque, mets un objet { "nom", "description" } (le coach le créera).
+- dominantes : dose chaque axe de 0 (pas travaillé) à 5 (dominant), cohérent avec la demande.
+- 2 à 4 blocs, durées réalistes, cohérentes avec dureeMinutes.
+""";
 
     /**
      * Prompt vision par défaut de l'import photo. Énumère explicitement la palette du

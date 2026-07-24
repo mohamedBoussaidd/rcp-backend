@@ -67,6 +67,16 @@ public class SeanceModeleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.planifier(id, req));
     }
 
+    /** Enregistre une séance existante comme modèle de bibliothèque (staff des blocs vidé). */
+    @PostMapping("/depuis-seance/{seanceId}")
+    public ResponseEntity<SeanceModeleResponse> creerDepuisSeance(@PathVariable UUID seanceId,
+                                                                  @RequestBody DepuisSeanceRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.creerDepuisSeance(seanceId, req == null ? null : req.nom()));
+    }
+
+    public record DepuisSeanceRequest(String nom) {}
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> supprimer(@PathVariable UUID id) {
         service.supprimer(id);

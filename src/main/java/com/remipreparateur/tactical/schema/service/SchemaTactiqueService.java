@@ -1,8 +1,11 @@
 package com.remipreparateur.tactical.schema.service;
 
+import com.remipreparateur.tactical.schema.dto.SchemaTactiqueDtos.SchemaRechercheResponse;
 import com.remipreparateur.tactical.schema.dto.SchemaTactiqueDtos.SchemaTactiqueRequest;
 import com.remipreparateur.tactical.schema.dto.SchemaTactiqueDtos.SchemaTactiqueResponse;
 import com.remipreparateur.auth.entity.Role;
+import com.remipreparateur.club.entity.Club;
+import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.tactical.schema.entity.SchemaTactique;
 import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.tactical.schema.repository.SchemaTactiqueRepository;
@@ -16,7 +19,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -34,13 +39,16 @@ public class SchemaTactiqueService {
 
     private final SchemaTactiqueRepository schemaRepository;
     private final UtilisateurRepository utilisateurRepository;
+    private final ClubRepository clubRepository;
     private final CurrentUserProvider currentUser;
 
     public SchemaTactiqueService(SchemaTactiqueRepository schemaRepository,
                                  UtilisateurRepository utilisateurRepository,
+                                 ClubRepository clubRepository,
                                  CurrentUserProvider currentUser) {
         this.schemaRepository = schemaRepository;
         this.utilisateurRepository = utilisateurRepository;
+        this.clubRepository = clubRepository;
         this.currentUser = currentUser;
     }
 
@@ -62,6 +70,33 @@ public class SchemaTactiqueService {
         }
         schemas.addAll(schemaRepository.findByClubIdIsNullOrderByUpdatedAtDesc());
         return schemas.stream().map(s -> toResponse(s, estModifiable(s, u))).toList();
+    }
+
+    /**
+     * Bibliothèque GLOBALE (schémas fournis, {@code club_id} NULL) — écran super-admin dédié.
+     * Contrairement à {@link #lister()}, ne dépend pas d'un contexte de club actif : le super-admin
+     * administre toujours le contenu commun, quel que soit le club sélectionné par ailleurs.
+     */
+    public List<SchemaTactiqueResponse> listerGlobaux() {
+        Utilisateur u = currentUser.current();
+        return schemaRepository.findByClubIdIsNullOrderByUpdatedAtDesc().stream()
+                .map(s -> toResponse(s, estModifiable(s, u))).toList();
+    }
+
+    /** Crée un schéma GLOBAL (fourni, super-admin uniquement) — visible par tous les clubs. */
+    public SchemaTactiqueResponse creerGlobal(SchemaTactiqueRequest req) {
+        Utilisateur u = currentUser.current();
+        if (u.getRole() != Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Réservé au super-admin");
+        }
+        SchemaTactique s = new SchemaTactique();
+        s.setClubId(null);
+        s.setCreePar(u.getId());
+        s.setNom(req.nom());
+        s.setCategorie(req.categorie());
+        s.setSchemaJson(req.schemaJson());
+        s.setApercu(req.apercu());
+        return toResponse(schemaRepository.save(s), true);
     }
 
     public SchemaTactiqueResponse creer(SchemaTactiqueRequest req) {
@@ -131,7 +166,66 @@ public class SchemaTactiqueService {
         return toResponse(schemaRepository.save(copie), true);
     }
 
+    /**
+     * Recherche cross-club (super-admin) : parcourt les schémas <b>appartenant aux clubs</b>
+     * (jamais les fournis, qui sont déjà globaux), filtrés par nom et/ou catégorie. Sans
+     * {@code clubIds} → tous les clubs ; sinon les clubs cochés seulement.
+     */
+    public List<SchemaRechercheResponse> rechercher(List<UUID> clubIds, String q, String categorie) {
+        exigeSuperAdmin();
+        List<SchemaTactique> source = (clubIds == null || clubIds.isEmpty())
+                ? schemaRepository.findByClubIdIsNotNullOrderByUpdatedAtDesc()
+                : schemaRepository.findByClubIdInOrderByUpdatedAtDesc(clubIds);
+        String qn = q == null ? "" : q.trim().toLowerCase();
+        String cn = categorie == null ? "" : categorie.trim().toLowerCase();
+        Map<UUID, String> clubNoms = new HashMap<>();
+        return source.stream()
+                .filter(s -> qn.isEmpty() || (s.getNom() != null && s.getNom().toLowerCase().contains(qn)))
+                .filter(s -> cn.isEmpty() || (s.getCategorie() != null && s.getCategorie().toLowerCase().contains(cn)))
+                .map(s -> toRecherche(s, clubNoms))
+                .toList();
+    }
+
+    /**
+     * Promeut un schéma de club en schéma GLOBAL (fourni) : crée une <b>copie</b> sans club, à
+     * proposer à tous les clubs. L'original du club n'est <b>jamais</b> modifié ni retiré.
+     */
+    public SchemaTactiqueResponse promouvoir(UUID id) {
+        exigeSuperAdmin();
+        SchemaTactique src = charge(id);
+        if (src.getClubId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ce schéma est déjà global");
+        }
+        SchemaTactique g = new SchemaTactique();
+        g.setClubId(null); // devient global (fourni) ; l'original du club reste intact
+        g.setCreePar(currentUser.current().getId());
+        g.setNom(src.getNom());
+        g.setCategorie(src.getCategorie());
+        g.setSchemaJson(src.getSchemaJson());
+        g.setApercu(src.getApercu());
+        return toResponse(schemaRepository.save(g), true);
+    }
+
     // ── Helpers ──
+
+    private void exigeSuperAdmin() {
+        if (currentUser.current().getRole() != Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Réservé au super-admin");
+        }
+    }
+
+    /** Nom du club porteur, résolu une fois par club (cache local à la requête). */
+    private SchemaRechercheResponse toRecherche(SchemaTactique s, Map<UUID, String> clubNoms) {
+        String clubNom = s.getClubId() == null ? null : clubNoms.computeIfAbsent(s.getClubId(),
+                cid -> clubRepository.findById(cid).map(Club::getNom).orElse(null));
+        String creeParNom = s.getCreePar() != null
+                ? utilisateurRepository.findById(s.getCreePar())
+                    .map(c -> ((c.getPrenom() != null ? c.getPrenom() + " " : "") + (c.getNom() != null ? c.getNom() : "")).trim())
+                    .orElse(null)
+                : null;
+        return new SchemaRechercheResponse(s.getId(), s.getNom(), s.getCategorie(), s.getApercu(),
+                s.getClubId(), clubNom, creeParNom, s.getUpdatedAt());
+    }
 
     private SchemaTactique charge(UUID id) {
         return schemaRepository.findById(id)

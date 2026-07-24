@@ -74,8 +74,25 @@ public final class ExerciceDtos {
             String equipeOrigineNom,
             boolean modifiable,
             ExerciceAvance avance,
-            UUID photoImportId) {}
+            UUID photoImportId,
+            boolean global) {}   // exercice de la bibliothèque globale (super-admin), lecture seule côté club
 
     /** Sauvegarde du schéma tactique (éditeur Konva). */
     public record SchemaRequest(String schemaJson) {}
+
+    /**
+     * Résultat de la recherche cross-club (super-admin) : exercice appartenant à un club, avec le
+     * nom du club pour situer l'origine. La promotion se fait par id côté serveur.
+     */
+    public record ExerciceRechercheResponse(
+            UUID id,
+            String nom,
+            String forme,
+            String type,
+            Short dureeMinutes,
+            String objectif,
+            boolean aSchema,
+            UUID clubId,
+            String clubNom,
+            String creeParNom) {}
 }

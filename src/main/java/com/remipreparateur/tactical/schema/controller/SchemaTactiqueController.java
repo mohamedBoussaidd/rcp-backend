@@ -1,5 +1,6 @@
 package com.remipreparateur.tactical.schema.controller;
 
+import com.remipreparateur.tactical.schema.dto.SchemaTactiqueDtos.SchemaRechercheResponse;
 import com.remipreparateur.tactical.schema.dto.SchemaTactiqueDtos.SchemaTactiqueRequest;
 import com.remipreparateur.tactical.schema.dto.SchemaTactiqueDtos.SchemaTactiqueResponse;
 import com.remipreparateur.tactical.schema.service.SchemaTactiqueService;
@@ -29,6 +30,32 @@ public class SchemaTactiqueController {
     @GetMapping
     public List<SchemaTactiqueResponse> lister() {
         return schemaService.lister();
+    }
+
+    /** Bibliothèque GLOBALE (super-admin) — schémas fournis à tous les clubs. */
+    @GetMapping("/globaux")
+    public List<SchemaTactiqueResponse> listerGlobaux() {
+        return schemaService.listerGlobaux();
+    }
+
+    /** Crée un schéma global (super-admin uniquement, vérifié dans le service). */
+    @PostMapping("/globaux")
+    public ResponseEntity<SchemaTactiqueResponse> creerGlobal(@Valid @RequestBody SchemaTactiqueRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(schemaService.creerGlobal(req));
+    }
+
+    /** Recherche cross-club (super-admin) : schémas des clubs, filtrés nom/catégorie. */
+    @GetMapping("/recherche")
+    public List<SchemaRechercheResponse> rechercher(@RequestParam(required = false) List<UUID> clubIds,
+                                                    @RequestParam(required = false) String q,
+                                                    @RequestParam(required = false) String categorie) {
+        return schemaService.rechercher(clubIds, q, categorie);
+    }
+
+    /** Promeut un schéma de club en schéma global (copie ; l'original n'est jamais touché). */
+    @PostMapping("/{id}/promouvoir")
+    public ResponseEntity<SchemaTactiqueResponse> promouvoir(@PathVariable UUID id) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(schemaService.promouvoir(id));
     }
 
     @PostMapping

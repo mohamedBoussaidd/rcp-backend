@@ -29,6 +29,7 @@ public class ParametreIaAdminController {
     /** Clés éditables depuis l'écran admin (liste fermée : pas de clé arbitraire). */
     private static final List<String> CLES_AUTORISEES = List.of(
             ParametreIaService.CLE_PROMPT_IMPORT_PHOTO,
+            ParametreIaService.CLE_PROMPT_GENERATEUR_SEANCE,
             ParametreIaService.CLE_QUOTA_DEFAUT);
 
     private final ParametreIaService parametres;
