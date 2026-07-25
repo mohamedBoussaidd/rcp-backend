@@ -114,6 +114,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/type-seances/**").hasAuthority("typeseances:write")
                         .requestMatchers(HttpMethod.GET, "/api/type-seances/**").hasAuthority("seances:read")
                         // Prédictions / charge IA : module Prépa physique OU GPS (voir FeatureModule).
+                        .requestMatchers(HttpMethod.PUT, "/api/predictions/objectif-hebdo").hasAuthority("predictions:write")
                         .requestMatchers(HttpMethod.GET, "/api/predictions/**").hasAuthority("predictions:read")
 
                         // Joueurs (effectif) : lecture / écriture

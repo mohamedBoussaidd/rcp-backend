@@ -32,6 +32,7 @@ public enum Permission {
 
     // ── Analyse / GPS ───────────────────────────────────────────────
     PREDICTIONS_READ("predictions:read", "Analyse / GPS", "Voir charge & prédictions IA"),
+    PREDICTIONS_WRITE("predictions:write", "Analyse / GPS", "Définir l'objectif hebdomadaire de charge"),
     GPS_IMPORT("gps:import", "Analyse / GPS", "Importer les données GPS"),
     RPE_IMPORT("rpe:import", "Analyse / GPS", "Importer le RPE / ressenti des joueurs (fichier)"),
 

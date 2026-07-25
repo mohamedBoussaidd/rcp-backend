@@ -111,7 +111,7 @@ public enum FeatureModule {
      * physique ET aux écrans GPS. Un module socle (toujours actif) garantit l'accès.
      */
     public static Set<FeatureModule> modulesDe(Permission p) {
-        if (p == Permission.PREDICTIONS_READ) {
+        if (p == Permission.PREDICTIONS_READ || p == Permission.PREDICTIONS_WRITE) {
             return Set.of(PREPA_PHYSIQUE, GPS);
         }
         if (p == Permission.COACHING_ACCESS) {
@@ -138,7 +138,7 @@ public enum FeatureModule {
             case PRESENCE_WRITE -> PRESENCE;
             case MATCHS_READ, MATCHS_WRITE -> MATCH;
             case WELLNESS_READ, CONSEILS_READ, CONSEILS_WRITE, RPE_IMPORT, HOOPER_IMPORT -> WELLNESS;
-            case PREDICTIONS_READ -> PREPA_PHYSIQUE;
+            case PREDICTIONS_READ, PREDICTIONS_WRITE -> PREPA_PHYSIQUE;
             case PESEES_READ, PESEES_WRITE -> PESEES;
             case GPS_IMPORT -> GPS;
             case COACHING_ACCESS, EXERCICES_READ, EXERCICES_WRITE, FORMATIONS_READ, FORMATIONS_WRITE,

@@ -73,6 +73,13 @@ public class PredictionService {
         return appelPythonScope(url.toString(), scope);
     }
 
+    /** Panneau « Objectif de la semaine » : cumul de la semaine courante + cible A.5 + objectif, par joueur. */
+    public Object getObjectifHebdo() {
+        Scope scope = scopeResolver.resolve();
+        if (scope.none()) return Map.of("joueurs", List.of());
+        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/objectif-hebdo", scope);
+    }
+
     /** Appel Python simple (sans portée d'équipes) transmettant la date simulée si elle est honorée. */
     private Object appelPython(String url) {
         return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headersBase()), Object.class).getBody();
