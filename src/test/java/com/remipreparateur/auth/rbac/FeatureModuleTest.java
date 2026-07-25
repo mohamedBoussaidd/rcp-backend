@@ -35,4 +35,38 @@ class FeatureModuleTest {
         assertThat(FeatureModule.modulesDe(Permission.SEANCE_IA_GENERATE))
                 .containsExactly(FeatureModule.GENERATEUR_SEANCE_IA);
     }
+
+    @Test
+    void assistantBriefingEstUnAddonGouvernantSaPermission() {
+        FeatureModule m = FeatureModule.ASSISTANT_BRIEFING;
+
+        // Add-on : jamais socle, présent dans le catalogue des modules activables.
+        assertThat(m.isSocle()).isFalse();
+        assertThat(FeatureModule.activableCodes()).contains("assistant_briefing");
+
+        // Gouvernée par ce seul module (et NON par predictions:read/write) → coupé, la carte tombe.
+        assertThat(FeatureModule.of(Permission.PREPA_IA_BRIEFING)).isEqualTo(m);
+        assertThat(FeatureModule.modulesDe(Permission.PREPA_IA_BRIEFING))
+                .containsExactly(FeatureModule.ASSISTANT_BRIEFING);
+    }
+
+    @Test
+    void assistantDebriefEstUnAddonGouvernantSaPermission() {
+        FeatureModule m = FeatureModule.ASSISTANT_DEBRIEF;
+        assertThat(m.isSocle()).isFalse();
+        assertThat(FeatureModule.activableCodes()).contains("assistant_debrief");
+        assertThat(FeatureModule.of(Permission.PREPA_IA_DEBRIEF)).isEqualTo(m);
+        assertThat(FeatureModule.modulesDe(Permission.PREPA_IA_DEBRIEF))
+                .containsExactly(FeatureModule.ASSISTANT_DEBRIEF);
+    }
+
+    @Test
+    void assistantDerivesEstUnAddonGouvernantSaPermission() {
+        FeatureModule m = FeatureModule.ASSISTANT_DERIVES;
+        assertThat(m.isSocle()).isFalse();
+        assertThat(FeatureModule.activableCodes()).contains("assistant_derives");
+        assertThat(FeatureModule.of(Permission.PREPA_IA_DERIVES)).isEqualTo(m);
+        assertThat(FeatureModule.modulesDe(Permission.PREPA_IA_DERIVES))
+                .containsExactly(FeatureModule.ASSISTANT_DERIVES);
+    }
 }

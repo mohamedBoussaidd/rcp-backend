@@ -44,6 +44,7 @@ public enum TypeNotification {
     ALERTE_COMPLETION(Categorie.ALERTE, true),
     ALERTE_STATUT(Categorie.ALERTE, false),
     ALERTE_ENTRETIEN(Categorie.ALERTE, true),   // digest hebdo : joueurs sans entretien récent (staff)
+    ALERTE_DERIVE(Categorie.ALERTE, false),     // surveillance hebdo : dérives lentes de charge (staff prépa)
     ALERTE_CONFORMITE_DOCUMENTS(Categorie.ALERTE, false),  // digest club-wide : conformité documentaire (staff)
     ALERTE_GENE(Categorie.ALERTE, false),   // urgent, unitaire immédiat (médical)
     RETOUR_BLESSURE_A_CONFIRMER(Categorie.ALERTE, false),  // retour soldé auto → staff confirme/prolonge

@@ -33,6 +33,9 @@ public enum Permission {
     // ── Analyse / GPS ───────────────────────────────────────────────
     PREDICTIONS_READ("predictions:read", "Analyse / GPS", "Voir charge & prédictions IA"),
     PREDICTIONS_WRITE("predictions:write", "Analyse / GPS", "Définir l'objectif hebdomadaire de charge"),
+    PREPA_IA_BRIEFING("prepa_ia:briefing", "Analyse / GPS", "Voir le briefing IA du préparateur (note de l'équipe)"),
+    PREPA_IA_DEBRIEF("prepa_ia:debrief", "Analyse / GPS", "Générer le debrief IA d'une séance"),
+    PREPA_IA_DERIVES("prepa_ia:derives", "Analyse / GPS", "Voir les dérives de charge et l'alerte de surveillance"),
     GPS_IMPORT("gps:import", "Analyse / GPS", "Importer les données GPS"),
     RPE_IMPORT("rpe:import", "Analyse / GPS", "Importer le RPE / ressenti des joueurs (fichier)"),
 

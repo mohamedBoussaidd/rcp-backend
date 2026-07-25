@@ -185,6 +185,17 @@ public class NotificationProducer {
                 "Présence : auto-déclaration", corps, "/dashboard", joueurId, Priorite.NORMALE));
     }
 
+    /** Surveillance hebdo des dérives de charge (module assistant_derives) → staff prépa. */
+    public void derivesDetectees(UUID equipeId, String corps) {
+        if (equipeId == null || corps == null || corps.isBlank()) return;
+        safe(() -> dispatcher.versStaffRoles(equipeId,
+                List.of(com.remipreparateur.auth.entity.Role.PREPARATEUR,
+                        com.remipreparateur.auth.entity.Role.ENTRAINEUR,
+                        com.remipreparateur.auth.entity.Role.PRESIDENT),
+                TypeNotification.ALERTE_DERIVE, "Dérives à surveiller", corps,
+                "/tableau-preparateur", Priorite.NORMALE));
+    }
+
     /** Changement de statut d'un joueur (indisponible…) → alerte au staff. */
     public void statutJoueurChange(UUID equipeId, UUID joueurId, String joueurNom, String statut) {
         if (equipeId == null) return;

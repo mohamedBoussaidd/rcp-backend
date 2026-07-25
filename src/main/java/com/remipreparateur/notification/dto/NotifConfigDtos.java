@@ -36,7 +36,8 @@ public final class NotifConfigDtos {
             String rappelWellnessJours,
             boolean rappelRpeActif,
             short rappelRpeDelaiHeures,
-            boolean rappelSeanceActif) {}
+            boolean rappelSeanceActif,
+            boolean derivesAlerteActive) {}
 
     /** Routage d'un type : rôles destinataires (CSV) + actif. */
     public record RoutageDto(TypeNotification type, String roles, boolean actif) {}

@@ -23,6 +23,7 @@ import com.remipreparateur.notification.entity.NotifConfigEquipe;
 import com.remipreparateur.notification.entity.Priorite;
 import com.remipreparateur.notification.entity.TypeNotification;
 import com.remipreparateur.notification.repository.NotificationRepository;
+import com.remipreparateur.performance.derives.DerivesService;
 import com.remipreparateur.performance.rpe.repository.RpeSeanceRepository;
 import com.remipreparateur.performance.seance.entity.Seance;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
@@ -67,6 +68,7 @@ public class NotificationScheduler {
     private final TypeDocumentRequisRepository typeDocumentRequisRepository;
     private final NotificationProducer notifications;
     private final AppartenanceService appartenance;
+    private final DerivesService derivesService;
 
     public NotificationScheduler(EquipeRepository equipeRepository, NotifConfigService configService,
                                  DigestService digestService, NotificationDispatcher dispatcher,
@@ -82,7 +84,8 @@ public class NotificationScheduler {
                                  DocumentAdminService documentAdminService,
                                  TypeDocumentRequisRepository typeDocumentRequisRepository,
                                  NotificationProducer notifications,
-                                 AppartenanceService appartenance) {
+                                 AppartenanceService appartenance,
+                                 DerivesService derivesService) {
         this.equipeRepository = equipeRepository;
         this.configService = configService;
         this.digestService = digestService;
@@ -101,6 +104,7 @@ public class NotificationScheduler {
         this.typeDocumentRequisRepository = typeDocumentRequisRepository;
         this.notifications = notifications;
         this.appartenance = appartenance;
+        this.derivesService = derivesService;
     }
 
     /**
@@ -182,6 +186,36 @@ public class NotificationScheduler {
         } catch (Exception e) {
             log.warn("Réconciliation retours blessure : {}", e.getMessage());
         }
+    }
+
+    /**
+     * Surveillance hebdomadaire des dérives de charge (lundi 08:30) : pour chaque équipe dont le
+     * module {@code assistant_derives} est actif et l'alerte activée (config notif), notifie le staff
+     * prépa (in-app + push) si des dérives lentes dépassent le seuil. Dédoublonné sur 7 jours — les
+     * dérives évoluent lentement, une alerte par semaine suffit.
+     */
+    @Scheduled(cron = "0 30 8 * * MON")
+    public void surveillerDerives() {
+        for (Equipe equipe : equipeRepository.findAll()) {
+            try {
+                surveillerDerivesEquipe(equipe);
+            } catch (Exception e) {
+                log.warn("Surveillance dérives — équipe {} : {}", equipe.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private void surveillerDerivesEquipe(Equipe equipe) {
+        UUID equipeId = equipe.getId();
+        if (equipe.getClubId() == null) return;
+        if (!clubModulesService.modulesActifs(equipe.getClubId()).contains(FeatureModule.ASSISTANT_DERIVES.getCode())) return;
+        if (!configService.getOrCreate(equipeId).isDerivesAlerteActive()) return;
+        if (notificationRepository.existsByEquipeIdAndTypeAndCreatedAtAfter(
+                equipeId, TypeNotification.ALERTE_DERIVE, LocalDateTime.now().minusWeeks(1))) {
+            return;
+        }
+        derivesService.alertePourEquipe(equipeId)
+                .ifPresent(corps -> notifications.derivesDetectees(equipeId, corps));
     }
 
     private static String orVide(String s) { return s == null ? "" : s; }

@@ -70,7 +70,13 @@ public enum FeatureModule {
     IMPORT_PHOTO_IA("import_photo_ia", "Import photo (IA)",
             "Import d'une séance ou d'un exercice depuis une photo : l'IA extrait les champs et le schéma tactique, l'entraîneur ajuste", false, 28),
     GENERATEUR_SEANCE_IA("generateur_seance_ia", "Générateur de séance (IA)",
-            "Génération d'un brouillon de séance à partir d'une demande en langage naturel : l'IA compose blocs et exercices (biblio du club + globaux), l'entraîneur valide", false, 29);
+            "Génération d'un brouillon de séance à partir d'une demande en langage naturel : l'IA compose blocs et exercices (biblio du club + globaux), l'entraîneur valide", false, 29),
+    ASSISTANT_BRIEFING("assistant_briefing", "Assistant IA — Briefing",
+            "Note automatique du préparateur : synthèse de l'état de l'équipe sur la semaine (objectif hebdo, charge, vigilances), rédigée par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 30),
+    ASSISTANT_DEBRIEF("assistant_debrief", "Assistant IA — Debrief séance",
+            "Debrief automatique d'une séance réalisée : prévu vs réalisé, objectif de charge atteint, joueurs au-dessus / en-dessous, rédigé par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 31),
+    ASSISTANT_DERIVES("assistant_derives", "Assistant IA — Dérives & surveillance",
+            "Surveillance des dérives lentes de charge de l'effectif (volume, haute intensité, ressenti) sur 4 semaines, avec synthèse rédigée par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 32);
 
     private final String code;
     private final String libelle;
@@ -133,6 +139,9 @@ public enum FeatureModule {
             case SEANCE_AVANCEE_ACCESS -> SEANCE_AVANCEE;
             case IMPORT_PHOTO_USE -> IMPORT_PHOTO_IA;
             case SEANCE_IA_GENERATE -> GENERATEUR_SEANCE_IA;
+            case PREPA_IA_BRIEFING -> ASSISTANT_BRIEFING;
+            case PREPA_IA_DEBRIEF -> ASSISTANT_DEBRIEF;
+            case PREPA_IA_DERIVES -> ASSISTANT_DERIVES;
             case JOUEURS_READ, JOUEURS_WRITE -> EFFECTIF;
             case CONFIGURATION_READ, CONFIGURATION_WRITE, MEMBRES_MANAGE, CLUB_MANAGE -> ADMINISTRATION;
             case PRESENCE_WRITE -> PRESENCE;

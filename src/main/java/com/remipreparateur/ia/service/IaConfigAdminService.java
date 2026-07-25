@@ -2,19 +2,26 @@ package com.remipreparateur.ia.service;
 
 import com.remipreparateur.club.entity.Club;
 import com.remipreparateur.club.repository.ClubRepository;
+import com.remipreparateur.ia.IaFeature;
 import com.remipreparateur.ia.entity.ClubIaConfig;
 import com.remipreparateur.ia.repository.ClubIaConfigRepository;
 import com.remipreparateur.shared.security.CurrentUserProvider;
+import com.remipreparateur.tactical.importphoto.entity.ClubParametre;
+import com.remipreparateur.tactical.importphoto.repository.ClubParametreRepository;
 import com.remipreparateur.tactical.importphoto.service.ParametreIaService;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Administration (SUPER_ADMIN) des configs IA par club : liste, upsert (clé chiffrée, jamais
@@ -23,24 +30,24 @@ import java.util.UUID;
 @Service
 public class IaConfigAdminService {
 
-    /** Features IA soumises à quota sur la clé globale (pour l'écran des quotas). */
-    private static final List<String> FEATURES = List.of("import_photo", "generateur_seance");
-
     private final ClubIaConfigRepository configRepository;
     private final ClubRepository clubRepository;
     private final CryptoService crypto;
     private final ParametreIaService parametres;
     private final IaQuotaService quotaService;
+    private final ClubParametreRepository clubParametreRepository;
     private final CurrentUserProvider currentUser;
 
     public IaConfigAdminService(ClubIaConfigRepository configRepository, ClubRepository clubRepository,
                                 CryptoService crypto, ParametreIaService parametres,
-                                IaQuotaService quotaService, CurrentUserProvider currentUser) {
+                                IaQuotaService quotaService, ClubParametreRepository clubParametreRepository,
+                                CurrentUserProvider currentUser) {
         this.configRepository = configRepository;
         this.clubRepository = clubRepository;
         this.crypto = crypto;
         this.parametres = parametres;
         this.quotaService = quotaService;
+        this.clubParametreRepository = clubParametreRepository;
         this.currentUser = currentUser;
     }
 
@@ -48,6 +55,21 @@ public class IaConfigAdminService {
                             boolean actif, boolean aCle, String cleMasquee) {}
 
     public record ConfigRequest(String provider, String cleApi, String modele, Boolean actif) {}
+
+    // ── Catalogue des features IA (drive l'écran d'admin : onglets Prompts + Quotas) ──
+    public record FeatureDto(String code, String libelle, boolean prompt, boolean toggle,
+                             String clePrompt, String cleToggle) {}
+
+    public List<FeatureDto> features() {
+        return Arrays.stream(IaFeature.values())
+                .map(f -> new FeatureDto(f.code(), f.libelle(), f.aPrompt(), f.aToggle(),
+                        f.clePrompt(), f.cleToggle()))
+                .toList();
+    }
+
+    // ── Quotas unifiés (toutes features) : défaut global + surcharge par club ──
+    public record QuotaClubLigne(UUID clubId, String clubNom, Integer surcharge, int effectif, long consomme) {}
+    public record QuotaFeatureDto(String feature, String libelle, int defautGlobal, List<QuotaClubLigne> clubs) {}
 
     /** Tous les clubs avec leur config IA (clé masquée). */
     @Transactional(readOnly = true)
@@ -97,23 +119,65 @@ public class IaConfigAdminService {
         configRepository.deleteById(clubId);
     }
 
-    // ── Quotas par feature (défauts globaux, clé globale) ──
+    // ── Quotas unifiés : par feature, défaut global (clé plateforme) + surcharge par club ──
 
+    /**
+     * Tableau des quotas pour l'écran d'admin : une entrée par feature IA, avec le défaut global et,
+     * pour chaque club, sa surcharge éventuelle, son quota effectif et sa consommation du jour.
+     */
     @Transactional(readOnly = true)
-    public Map<String, Integer> quotasDefauts() {
-        Map<String, Integer> out = new LinkedHashMap<>();
-        for (String f : FEATURES) out.put(f, quotaService.quota(null, f));
+    public List<QuotaFeatureDto> quotas() {
+        List<Club> clubs = clubRepository.findAll();
+        List<QuotaFeatureDto> out = new ArrayList<>();
+        for (IaFeature f : IaFeature.values()) {
+            Map<UUID, Integer> surcharges = clubParametreRepository.findByCle(f.cleQuotaClub()).stream()
+                    .collect(Collectors.toMap(ClubParametre::getClubId, this::entier, (a, b) -> a));
+            List<QuotaClubLigne> lignes = clubs.stream()
+                    .map(c -> new QuotaClubLigne(c.getId(), c.getNom(), surcharges.get(c.getId()),
+                            quotaService.quota(c.getId(), f.code()), quotaService.consommeAujourdhui(c.getId(), f.code())))
+                    .toList();
+            out.add(new QuotaFeatureDto(f.code(), f.libelle(), quotaService.quota(null, f.code()), lignes));
+        }
         return out;
     }
 
+    /** Fixe le quota global par défaut d'une feature (clé plateforme). */
     @Transactional
-    public Map<String, Integer> majQuotasDefauts(Map<String, Integer> valeurs) {
-        UUID par = currentUser.current().getId();
-        valeurs.forEach((feature, valeur) -> {
-            if (FEATURES.contains(feature) && valeur != null && valeur > 0) {
-                parametres.mettreAJour("quota_" + feature + "_defaut", String.valueOf(valeur), par);
-            }
-        });
-        return quotasDefauts();
+    public List<QuotaFeatureDto> majDefaut(String feature, Integer valeur) {
+        IaFeature f = exigerFeature(feature);
+        if (valeur == null || valeur < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quota invalide");
+        parametres.mettreAJour(f.cleQuotaDefaut(), String.valueOf(valeur), currentUser.current().getId());
+        return quotas();
+    }
+
+    /** Fixe (ou retire, valeur null) la surcharge de quota d'un club pour une feature. */
+    @Transactional
+    public List<QuotaFeatureDto> majClub(UUID clubId, String feature, Integer valeur) {
+        IaFeature f = exigerFeature(feature);
+        if (valeur == null) {
+            clubParametreRepository.findByClubIdAndCle(clubId, f.cleQuotaClub())
+                    .ifPresent(clubParametreRepository::delete);
+        } else {
+            ClubParametre p = clubParametreRepository.findByClubIdAndCle(clubId, f.cleQuotaClub())
+                    .orElseGet(() -> {
+                        ClubParametre n = new ClubParametre();
+                        n.setClubId(clubId);
+                        n.setCle(f.cleQuotaClub());
+                        return n;
+                    });
+            p.setValeur(String.valueOf(Math.max(0, valeur)));
+            clubParametreRepository.save(p);
+        }
+        return quotas();
+    }
+
+    private IaFeature exigerFeature(String feature) {
+        IaFeature f = IaFeature.parCode(feature);
+        if (f == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Feature IA inconnue : " + feature);
+        return f;
+    }
+
+    private Integer entier(ClubParametre p) {
+        try { return Integer.parseInt(p.getValeur().trim()); } catch (NumberFormatException e) { return null; }
     }
 }

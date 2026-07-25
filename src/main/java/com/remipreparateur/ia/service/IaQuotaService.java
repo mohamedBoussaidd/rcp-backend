@@ -1,5 +1,6 @@
 package com.remipreparateur.ia.service;
 
+import com.remipreparateur.ia.IaFeature;
 import com.remipreparateur.ia.entity.IaUsage;
 import com.remipreparateur.ia.repository.IaUsageRepository;
 import com.remipreparateur.tactical.importphoto.entity.ClubParametre;
@@ -11,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -22,11 +22,6 @@ import java.util.UUID;
  */
 @Service
 public class IaQuotaService {
-
-    /** Défauts en dur par feature (si aucune valeur en base). */
-    private static final Map<String, Integer> DEFAUTS = Map.of(
-            "import_photo", 20,
-            "generateur_seance", 10);
 
     private final IaUsageRepository usageRepository;
     private final ClubParametreRepository clubParametreRepository;
@@ -47,7 +42,8 @@ public class IaQuotaService {
                     .map(this::entier).orElse(null);
             if (club != null) return club;
         }
-        return parametres.valeurEntier("quota_" + feature + "_defaut", DEFAUTS.getOrDefault(feature, 10));
+        IaFeature f = IaFeature.parCode(feature);
+        return parametres.valeurEntier("quota_" + feature + "_defaut", f != null ? f.quotaDefaut() : 10);
     }
 
     public long consommeAujourdhui(UUID clubId, String feature) {

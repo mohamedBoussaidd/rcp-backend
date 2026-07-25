@@ -109,6 +109,10 @@ public class NotifConfigEquipe {
     @Column(name = "entretien_seuil_jours", nullable = false)
     private short entretienSeuilJours = 42;   // 6 semaines
 
+    // ── Alerte staff « dérives de charge » (surveillance hebdo, module assistant_derives) ──
+    @Column(name = "derives_alerte_active", nullable = false)
+    private boolean derivesAlerteActive = true;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 

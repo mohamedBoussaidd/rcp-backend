@@ -117,6 +117,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/predictions/objectif-hebdo").hasAuthority("predictions:write")
                         .requestMatchers(HttpMethod.GET, "/api/predictions/**").hasAuthority("predictions:read")
 
+                        // Assistant IA du préparateur (cartes add-on) : chaque carte a sa permission et son
+                        // module dédié. Génération LLM facturée → gardée par la permission de la carte.
+                        .requestMatchers(HttpMethod.POST, "/api/assistant-ia/briefing").hasAuthority("prepa_ia:briefing")
+                        .requestMatchers(HttpMethod.POST, "/api/assistant-ia/debrief/**").hasAuthority("prepa_ia:debrief")
+                        .requestMatchers("/api/assistant-ia/derives/**").hasAuthority("prepa_ia:derives")
+                        .requestMatchers("/api/assistant-ia/derives").hasAuthority("prepa_ia:derives")
+
                         // Joueurs (effectif) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/joueurs/**").hasAuthority("joueurs:read")
                         .requestMatchers("/api/joueurs/**").hasAuthority("joueurs:write")

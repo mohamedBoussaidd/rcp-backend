@@ -27,6 +27,18 @@ public class ParametreIaService {
     public static final String CLE_PROMPT_GENERATEUR_SEANCE = "prompt_generateur_seance";
     public static final String CLE_QUOTA_DEFAUT = "quota_import_photo_defaut";
 
+    // ── Cartes IA du préparateur (moteur ancré) : prompt éditable + toggle LLM + quota par carte ──
+    /** Carte « briefing » (note du prépa). Feature = {@code briefing_prepa}. */
+    public static final String CLE_PROMPT_BRIEFING_PREPA = "prompt_briefing_prepa";
+    public static final String CLE_CARTE_BRIEFING_ACTIVE = "ia_carte_briefing_prepa_active";
+    public static final String CLE_QUOTA_BRIEFING_DEFAUT = "quota_briefing_prepa_defaut";
+    /** Carte « debrief de séance ». Feature = {@code debrief_seance}. */
+    public static final String CLE_PROMPT_DEBRIEF_SEANCE = "prompt_debrief_seance";
+    public static final String CLE_CARTE_DEBRIEF_ACTIVE = "ia_carte_debrief_seance_active";
+    /** Carte « dérives & surveillance ». Feature = {@code derives_prepa}. */
+    public static final String CLE_PROMPT_DERIVES_PREPA = "prompt_derives_prepa";
+    public static final String CLE_CARTE_DERIVES_ACTIVE = "ia_carte_derives_prepa_active";
+
     private static final long CACHE_MS = 60_000;
 
     private final ParametreIaRepository repository;
@@ -106,6 +118,13 @@ public class ParametreIaService {
             case CLE_QUOTA_DEFAUT -> "20";
             case CLE_PROMPT_IMPORT_PHOTO -> PROMPT_IMPORT_PHOTO_DEFAUT;
             case CLE_PROMPT_GENERATEUR_SEANCE -> PROMPT_GENERATEUR_SEANCE_DEFAUT;
+            case CLE_PROMPT_BRIEFING_PREPA -> PROMPT_BRIEFING_PREPA_DEFAUT;
+            case CLE_CARTE_BRIEFING_ACTIVE -> "true";      // toggle LLM par défaut ON
+            case CLE_QUOTA_BRIEFING_DEFAUT -> "30";        // briefings/jour si repli clé plateforme
+            case CLE_PROMPT_DEBRIEF_SEANCE -> PROMPT_DEBRIEF_SEANCE_DEFAUT;
+            case CLE_CARTE_DEBRIEF_ACTIVE -> "true";
+            case CLE_PROMPT_DERIVES_PREPA -> PROMPT_DERIVES_PREPA_DEFAUT;
+            case CLE_CARTE_DERIVES_ACTIVE -> "true";
             default -> "";
         };
     }
@@ -145,6 +164,62 @@ Règles :
 - Pour un exercice absent de la bibliothèque, mets un objet { "nom", "description" } (le coach le créera).
 - dominantes : dose chaque axe de 0 (pas travaillé) à 5 (dominant), cohérent avec la demande.
 - 2 à 4 blocs, durées réalistes, cohérentes avec dureeMinutes.
+""";
+
+    /**
+     * Prompt par défaut de la carte « briefing » (note du prépa), éditable par le super-admin.
+     * Reçoit en message utilisateur un bloc d'INDICATEURS DÉJÀ CALCULÉS (readiness, objectif hebdo,
+     * anomalies de charge, vigilances) — jamais de données brutes. Le LLM ne fait que la mise en mots :
+     * il n'a pas le droit d'inventer un chiffre absent du bloc.
+     */
+    public static final String PROMPT_BRIEFING_PREPA_DEFAUT = """
+Tu es l'assistant d'un préparateur physique de football. À partir des INDICATEURS déjà calculés
+ci-dessous (et d'eux SEULS), rédige une courte « note du prépa » sur l'état de l'équipe cette semaine.
+
+Consignes :
+- 3 à 5 phrases, en français, ton professionnel et direct, sans liste à puces ni titres.
+- N'utilise QUE les chiffres fournis : n'invente jamais une valeur, un nom ou une tendance absente.
+- Priorise : d'abord l'atteinte de l'objectif hebdomadaire, puis les joueurs en surcharge ou en
+  sous-charge notable, puis 1 à 2 points de vigilance. Termine par une reco d'ajustement si pertinent.
+- Si un indicateur est marqué indisponible, dis-le sobrement plutôt que de le contourner.
+- N'ajoute aucun préambule (« Voici… ») ni signature : uniquement la note.
+""";
+
+    /**
+     * Prompt par défaut de la carte « debrief de séance », éditable par le super-admin. Reçoit en
+     * message utilisateur les INDICATEURS DÉJÀ CALCULÉS d'UNE séance réalisée (prévu vs réalisé,
+     * objectif de charge, joueurs au-dessus / en-dessous). Le LLM met en mots, sans rien inventer.
+     */
+    public static final String PROMPT_DEBRIEF_SEANCE_DEFAUT = """
+Tu es l'assistant d'un préparateur physique de football. À partir des INDICATEURS déjà calculés
+ci-dessous (et d'eux SEULS), rédige un court debrief d'UNE séance qui vient d'avoir lieu.
+
+Consignes :
+- 3 à 5 phrases, en français, ton professionnel et factuel, sans liste à puces ni titres.
+- N'utilise QUE les chiffres fournis : n'invente jamais une valeur, un nom ou une tendance absente.
+- Dis d'abord si la séance a tenu son objectif de charge (volume prévu vs réalisé), puis pointe les
+  joueurs nettement au-dessus ou en-dessous de l'attendu, puis une reco pour la suite si pertinent.
+- Si un indicateur est marqué indisponible, dis-le sobrement plutôt que de le contourner.
+- Aucun préambule ni signature : uniquement le debrief.
+""";
+
+    /**
+     * Prompt par défaut de la carte « dérives & surveillance », éditable par le super-admin. Reçoit en
+     * message utilisateur les DÉRIVES DÉJÀ CALCULÉES sur 3 axes (volume, haute intensité, ressenti),
+     * par joueur, sur 4 semaines. Le LLM met en mots la surveillance, sans rien inventer.
+     */
+    public static final String PROMPT_DERIVES_PREPA_DEFAUT = """
+Tu es l'assistant d'un préparateur physique de football. À partir des DÉRIVES déjà calculées
+ci-dessous (et d'elles SEULES), rédige une courte synthèse de surveillance de l'effectif sur 4 semaines.
+
+Consignes :
+- 3 à 5 phrases, en français, ton professionnel et factuel, sans liste à puces ni titres.
+- N'utilise QUE les joueurs et pourcentages fournis : n'invente jamais une valeur ou un nom.
+- Traite les axes SÉPARÉMENT (volume, haute intensité, ressenti) pour donner une vision de chacun,
+  puis termine par les joueurs à surveiller en priorité (cumul de dérives) et une reco si pertinent.
+- Attention au sens : sur le ressenti, une hausse = fatigue qui monte (défavorable) ; sur la charge,
+  une hausse forte peut signaler une surcharge, une baisse forte un désentraînement.
+- Si un axe n'a aucune dérive, dis-le sobrement. Aucun préambule ni signature.
 """;
 
     /**

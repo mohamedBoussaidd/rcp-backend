@@ -132,6 +132,7 @@ public class NotifConfigService {
         c.setRappelRpeActif(d.rappelRpeActif());
         c.setRappelRpeDelaiHeures(d.rappelRpeDelaiHeures());
         c.setRappelSeanceActif(d.rappelSeanceActif());
+        c.setDerivesAlerteActive(d.derivesAlerteActive());
         c.setUpdatedAt(LocalDateTime.now());
         return toDto(configRepository.save(c));
     }
@@ -146,7 +147,7 @@ public class NotifConfigService {
                 c.getDigestJours(), c.getDigestPoidsJours(),
                 c.isRappelWellnessActif(), c.getRappelWellnessHeure(), c.getRappelWellnessJours(),
                 c.isRappelRpeActif(), c.getRappelRpeDelaiHeures(),
-                c.isRappelSeanceActif());
+                c.isRappelSeanceActif(), c.isDerivesAlerteActive());
     }
 
     /**

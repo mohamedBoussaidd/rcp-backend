@@ -80,6 +80,38 @@ public class PredictionService {
         return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/objectif-hebdo", scope);
     }
 
+    /**
+     * Bundle d'indicateurs COMPACT du briefing (dérivé de l'objectif hebdo) : atteinte de l'objectif +
+     * joueurs en surcharge/sous-charge. Consommé par le back (mise en mots LLM ou gabarit), jamais rendu
+     * tel quel au front. Portée forwardée à Python, qui filtre.
+     */
+    public Object getBriefingIndicateurs() {
+        Scope scope = scopeResolver.resolve();
+        if (scope.none()) return Map.of("effectif", Map.of("nb_joueurs", 0));
+        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/briefing", scope);
+    }
+
+    /**
+     * Dérives lentes de l'effectif sur ~4 semaines, en 3 axes séparés (volume, haute intensité,
+     * ressenti). Portée forwardée à Python. Consommé par la carte web/PWA et la synthèse textuelle.
+     */
+    public Object getDerives() {
+        Scope scope = scopeResolver.resolve();
+        if (scope.none()) return Map.of("axes", List.of(), "effectif", Map.of("nb_joueurs", 0));
+        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/derives", scope);
+    }
+
+    /**
+     * Dérives d'UNE équipe donnée, hors contexte HTTP (appelé par le scheduler de surveillance) :
+     * la portée n'est pas résolue via {@link ScopeResolver} mais imposée explicitement.
+     */
+    public Object getDerivesEquipe(UUID equipeId) {
+        HttpHeaders headers = headersBase();
+        headers.set("X-Contexte-Equipes", equipeId.toString());
+        return restTemplate.exchange(pythonApiUrl + "/api/predictions/equipe/derives",
+                HttpMethod.GET, new HttpEntity<>(headers), Object.class).getBody();
+    }
+
     /** Appel Python simple (sans portée d'équipes) transmettant la date simulée si elle est honorée. */
     private Object appelPython(String url) {
         return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headersBase()), Object.class).getBody();
