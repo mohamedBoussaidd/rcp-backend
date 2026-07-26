@@ -2,7 +2,9 @@ package com.remipreparateur.ia.service;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.models.messages.Base64ImageSource;
 import com.anthropic.models.messages.ContentBlockParam;
+import com.anthropic.models.messages.ImageBlockParam;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.TextBlockParam;
@@ -10,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -45,6 +48,37 @@ public class AnthropicTextClient implements LlmTextClient {
             throw e;
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Appel IA (Anthropic) échoué : " + e.getMessage());
+        }
+    }
+
+    @Override
+    public String genererAvecImage(IaResolved cfg, String consigne, byte[] imageJpeg, int maxTokens) {
+        if (!cfg.cleDisponible()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Clé API Anthropic absente");
+        }
+        try {
+            AnthropicClient client = AnthropicOkHttpClient.builder().apiKey(cfg.cleApi()).build();
+            MessageCreateParams params = MessageCreateParams.builder()
+                    .model(cfg.modele())
+                    .maxTokens((long) maxTokens)
+                    .addUserMessageOfBlockParams(List.of(
+                            ContentBlockParam.ofImage(ImageBlockParam.builder()
+                                    .source(Base64ImageSource.builder()
+                                            .mediaType(Base64ImageSource.MediaType.IMAGE_JPEG)
+                                            .data(Base64.getEncoder().encodeToString(imageJpeg))
+                                            .build())
+                                    .build()),
+                            ContentBlockParam.ofText(TextBlockParam.builder().text(consigne).build())))
+                    .build();
+            Message message = client.messages().create(params);
+            return message.content().stream()
+                    .flatMap(b -> b.text().stream())
+                    .map(t -> t.text())
+                    .collect(Collectors.joining());
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Appel IA (Anthropic vision) échoué : " + e.getMessage());
         }
     }
 }

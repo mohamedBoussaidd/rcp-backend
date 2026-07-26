@@ -11,6 +11,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -41,9 +42,11 @@ public class OpenAiTextClient implements LlmTextClient {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Clé API OpenAI absente");
         }
         try {
+            // `max_completion_tokens` (et non `max_tokens`, déprécié) : requis par les modèles
+            // récents (gpt-5, o-series) et accepté par gpt-4o — un seul champ pour tous.
             Map<String, Object> body = Map.of(
                     "model", cfg.modele(),
-                    "max_tokens", maxTokens,
+                    "max_completion_tokens", maxTokens,
                     "messages", List.of(
                             Map.of("role", "system", "content", systeme == null ? "" : systeme),
                             Map.of("role", "user", "content", utilisateur)));
@@ -56,7 +59,7 @@ public class OpenAiTextClient implements LlmTextClient {
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() >= 400) {
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                        "Appel IA (OpenAI) HTTP " + resp.statusCode());
+                        "Appel IA (OpenAI) HTTP " + resp.statusCode() + " : " + tronquer(resp.body()));
             }
             JsonNode root = mapper.readTree(resp.body());
             return root.path("choices").path(0).path("message").path("content").asText("");
@@ -65,5 +68,47 @@ public class OpenAiTextClient implements LlmTextClient {
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Appel IA (OpenAI) échoué : " + e.getMessage());
         }
+    }
+
+    @Override
+    public String genererAvecImage(IaResolved cfg, String consigne, byte[] imageJpeg, int maxTokens) {
+        if (!cfg.cleDisponible()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Clé API OpenAI absente");
+        }
+        try {
+            String dataUri = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(imageJpeg);
+            // Message multimodal (texte + image en data-URI) : format « chat/completions » vision OpenAI.
+            Map<String, Object> body = Map.of(
+                    "model", cfg.modele(),
+                    "max_completion_tokens", maxTokens,
+                    "messages", List.of(Map.of(
+                            "role", "user",
+                            "content", List.of(
+                                    Map.of("type", "text", "text", consigne),
+                                    Map.of("type", "image_url", "image_url", Map.of("url", dataUri))))));
+            HttpRequest req = HttpRequest.newBuilder(URI.create(URL))
+                    .timeout(Duration.ofSeconds(90))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + cfg.cleApi())
+                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
+                    .build();
+            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() >= 400) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                        "Appel IA (OpenAI vision) HTTP " + resp.statusCode() + " : " + tronquer(resp.body()));
+            }
+            JsonNode root = mapper.readTree(resp.body());
+            return root.path("choices").path(0).path("message").path("content").asText("");
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Appel IA (OpenAI vision) échoué : " + e.getMessage());
+        }
+    }
+
+    /** Corps d'erreur OpenAI tronqué (message JSON lisible côté admin, sans noyer les logs). */
+    private static String tronquer(String s) {
+        if (s == null) return "";
+        return s.length() > 400 ? s.substring(0, 400) : s;
     }
 }

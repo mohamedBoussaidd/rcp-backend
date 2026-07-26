@@ -43,4 +43,24 @@ public class LlmService {
         quota.enregistrer(clubId, feature, cfg);
         return out;
     }
+
+    /**
+     * Analyse une image pour une feature d'un club (résolution config + quota + journal), même
+     * chemin que {@link #genererTexte} : clé propre du club → illimité, sinon clé globale plafonnée.
+     */
+    public String genererAvecImage(UUID clubId, String feature, String consigne, byte[] imageJpeg, int maxTokens) {
+        IaResolved cfg = resolver.pour(clubId);
+        if (!cfg.cleDisponible()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "IA non configurée (aucune clé pour ce club ni clé globale sur le serveur).");
+        }
+        quota.verifierAvant(clubId, feature, cfg);
+        LlmTextClient client = clients.get(cfg.provider() == null ? "" : cfg.provider().toUpperCase());
+        if (client == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provider IA non supporté : " + cfg.provider());
+        }
+        String out = client.genererAvecImage(cfg, consigne, imageJpeg, maxTokens);
+        quota.enregistrer(clubId, feature, cfg);
+        return out;
+    }
 }

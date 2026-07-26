@@ -1,13 +1,5 @@
 package com.remipreparateur.tactical.importphoto.service;
 
-import com.anthropic.client.AnthropicClient;
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
-import com.anthropic.models.messages.Base64ImageSource;
-import com.anthropic.models.messages.ContentBlockParam;
-import com.anthropic.models.messages.ImageBlockParam;
-import com.anthropic.models.messages.Message;
-import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.TextBlockParam;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -15,12 +7,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
 import com.remipreparateur.auth.rbac.PermissionResolver;
+import com.remipreparateur.ia.IaFeature;
+import com.remipreparateur.ia.service.LlmService;
 import com.remipreparateur.performance.seance.repository.ReferentielDominanteRepository;
 import com.remipreparateur.performance.seance.repository.ReferentielSousPrincipeRepository;
 import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.tactical.importphoto.dto.ImportPhotoDtos.*;
 import com.remipreparateur.tactical.importphoto.entity.ImportPhotoJournal;
-import com.remipreparateur.tactical.importphoto.repository.ClubParametreRepository;
 import com.remipreparateur.tactical.importphoto.repository.ImportPhotoJournalRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,9 +34,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,11 +43,13 @@ import java.util.stream.Collectors;
 
 /**
  * Import d'une séance/exercice depuis une photo : validation + compression de l'image,
- * appel DIRECT de l'API Anthropic (vision, SDK officiel — jamais depuis le front),
+ * analyse vision via le SOCLE IA ({@link LlmService} — jamais depuis le front),
  * parsing STRICT du JSON (référentiels validés, coordonnées bornées), conversion du
- * schéma au format de l'éditeur Konva, quota par club/jour et journal d'audit.
+ * schéma au format de l'éditeur Konva, et journal d'audit.
  *
- * La clé API vient de l'environnement (ANTHROPIC_API_KEY), jamais du repo.
+ * <p>La résolution de la clé (clé propre du club sinon clé globale de la plateforme), le quota
+ * quotidien (feature {@code import_photo}, appliqué à la seule clé globale) et le décompte
+ * ({@code ia_usage}) sont délégués au socle : ni clé ni quota ne sont gérés ici.
  * IMPORT_PHOTO_MOCK=true → réponse simulée (tests sans consommer l'API).
  */
 @Service
@@ -70,7 +63,9 @@ public class ImportPhotoService {
     // perception, pas de résolution) pour ~3x le coût par appel. Revenu à 1568px : le résultat
     // reste un brouillon à corriger quel que soit le réglage, autant maîtriser le coût.
     private static final int LONG_COTE_MAX_PX = 1568;
-    private static final String MODELE_VISION = "claude-opus-4-8";
+
+    /** Budget de sortie de l'analyse vision (JSON séance/exercice + schéma). */
+    private static final int MAX_TOKENS_VISION = 8192;
 
     // Dimensions du terrain de l'éditeur Konva (schema-editor) pour convertir les 0..1.
     private static final int W_COMPLET = 1040, W_DEMI = 600, H_TERRAIN = 680;
@@ -109,7 +104,7 @@ public class ImportPhotoService {
     private static final int SERIE_MAX = 40;
 
     private final ImportPhotoJournalRepository journalRepository;
-    private final ClubParametreRepository clubParametreRepository;
+    private final LlmService llmService;
     private final ParametreIaService parametres;
     private final ReferentielDominanteRepository dominanteRepository;
     private final ReferentielSousPrincipeRepository sousPrincipeRepository;
@@ -119,10 +114,8 @@ public class ImportPhotoService {
     private final Path uploadDir;
     private final boolean mock;
 
-    private volatile AnthropicClient client;   // construit paresseusement (clé requise)
-
     public ImportPhotoService(ImportPhotoJournalRepository journalRepository,
-                              ClubParametreRepository clubParametreRepository,
+                              LlmService llmService,
                               ParametreIaService parametres,
                               ReferentielDominanteRepository dominanteRepository,
                               ReferentielSousPrincipeRepository sousPrincipeRepository,
@@ -131,7 +124,7 @@ public class ImportPhotoService {
                               @Value("${app.import-photo.upload-dir:./data/import-photos}") String uploadDir,
                               @Value("${app.import-photo.mock:#{environment.IMPORT_PHOTO_MOCK ?: 'false'}}") String mock) {
         this.journalRepository = journalRepository;
-        this.clubParametreRepository = clubParametreRepository;
+        this.llmService = llmService;
         this.parametres = parametres;
         this.dominanteRepository = dominanteRepository;
         this.sousPrincipeRepository = sousPrincipeRepository;
@@ -149,8 +142,6 @@ public class ImportPhotoService {
         if (clubId == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Aucun club actif");
         }
-        verifierQuota(clubId);
-
         byte[] jpeg = validerEtCompresser(photo);
         String photoPath = sauvegarderPhoto(jpeg);
 
@@ -163,7 +154,8 @@ public class ImportPhotoService {
         journal = journalRepository.save(journal);
 
         try {
-            String brut = mock ? reponseMock() : appelerVision(jpeg);
+            String brut = mock ? reponseMock() : llmService.genererAvecImage(
+                    clubId, IaFeature.IMPORT_PHOTO.code(), promptVision(), jpeg, MAX_TOKENS_VISION);
             // Seule trace de ce que le modèle a réellement répondu : sans ce log, un élément
             // absent du rendu est indiscernable entre « le modèle ne l'a pas vu » et
             // « le modèle l'a proposé mais le parsing/la validation l'a rejeté silencieusement ».
@@ -204,29 +196,6 @@ public class ImportPhotoService {
             return Files.readAllBytes(p);
         } catch (IOException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Photo illisible");
-        }
-    }
-
-    /** Quota effectif d'un club (surcharge club sinon défaut global). */
-    public int quotaDuClub(UUID clubId) {
-        return clubParametreRepository.findByClubIdAndCle(clubId, "quota_import_photo")
-                .map(p -> {
-                    try { return Integer.parseInt(p.getValeur().trim()); }
-                    catch (NumberFormatException e) { return null; }
-                })
-                .orElseGet(() -> parametres.valeurEntier(ParametreIaService.CLE_QUOTA_DEFAUT, 20));
-    }
-
-    /** Appels déjà consommés aujourd'hui par le club. */
-    public long consommeAujourdhui(UUID clubId) {
-        return journalRepository.countByClubIdAndCreatedAtAfter(clubId, LocalDate.now().atStartOfDay());
-    }
-
-    private void verifierQuota(UUID clubId) {
-        int quota = quotaDuClub(clubId);
-        if (consommeAujourdhui(clubId) >= quota) {
-            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
-                    "Quota d'imports photo atteint pour aujourd'hui (" + quota + "/jour) — réessaie demain");
         }
     }
 
@@ -288,51 +257,16 @@ public class ImportPhotoService {
         }
     }
 
-    // ══════════ Appel vision (SDK officiel Anthropic) ══════════
+    // ══════════ Prompt vision ══════════
 
-    private AnthropicClient clientAnthropic() {
-        AnthropicClient c = client;
-        if (c == null) {
-            synchronized (this) {
-                if (client == null) {
-                    try {
-                        client = AnthropicOkHttpClient.fromEnv();   // lit ANTHROPIC_API_KEY
-                    } catch (Exception e) {
-                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                                "Import photo non configuré (clé API absente sur le serveur)");
-                    }
-                }
-                c = client;
-            }
-        }
-        return c;
-    }
-
-    private String appelerVision(byte[] jpeg) {
+    /**
+     * Prompt d'analyse vision : surcharge super-admin ({@code prompt_import_photo}) sinon défaut.
+     * La consigne « pas de temperature » (retirée sur les modèles récents) et la stabilité inter-imports
+     * sont désormais portées par le contenu même du prompt, appliqué par le socle IA.
+     */
+    private String promptVision() {
         String prompt = parametres.valeur(ParametreIaService.CLE_PROMPT_IMPORT_PHOTO);
-        if (prompt == null || prompt.isBlank()) prompt = ParametreIaService.PROMPT_IMPORT_PHOTO_DEFAUT;
-
-        // Pas de `temperature` : le paramètre est retiré sur claude-opus-4-8 (400 si envoyé).
-        // La stabilité d'un import à l'autre passe donc par le prompt — d'où le champ « analyse »
-        // qui impose de décrire la scène avant d'en produire les coordonnées.
-        MessageCreateParams params = MessageCreateParams.builder()
-                .model(MODELE_VISION)
-                .maxTokens(8192L)
-                .addUserMessageOfBlockParams(List.of(
-                        ContentBlockParam.ofImage(ImageBlockParam.builder()
-                                .source(Base64ImageSource.builder()
-                                        .mediaType(Base64ImageSource.MediaType.IMAGE_JPEG)
-                                        .data(Base64.getEncoder().encodeToString(jpeg))
-                                        .build())
-                                .build()),
-                        ContentBlockParam.ofText(TextBlockParam.builder().text(prompt).build())))
-                .build();
-
-        Message message = clientAnthropic().messages().create(params);
-        return message.content().stream()
-                .flatMap(b -> b.text().stream())
-                .map(t -> t.text())
-                .collect(Collectors.joining());
+        return (prompt == null || prompt.isBlank()) ? ParametreIaService.PROMPT_IMPORT_PHOTO_DEFAUT : prompt;
     }
 
     // ══════════ Parsing strict + conversion schéma ══════════
