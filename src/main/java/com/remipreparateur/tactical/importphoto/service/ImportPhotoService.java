@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import com.remipreparateur.auth.entity.Role;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -42,14 +43,20 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Import d'une séance/exercice depuis une photo : validation + compression de l'image,
+ * Import d'une séance/exercice depuis une photo : validation + compression de
+ * l'image,
  * analyse vision via le SOCLE IA ({@link LlmService} — jamais depuis le front),
- * parsing STRICT du JSON (référentiels validés, coordonnées bornées), conversion du
+ * parsing STRICT du JSON (référentiels validés, coordonnées bornées),
+ * conversion du
  * schéma au format de l'éditeur Konva, et journal d'audit.
  *
- * <p>La résolution de la clé (clé propre du club sinon clé globale de la plateforme), le quota
- * quotidien (feature {@code import_photo}, appliqué à la seule clé globale) et le décompte
- * ({@code ia_usage}) sont délégués au socle : ni clé ni quota ne sont gérés ici.
+ * <p>
+ * La résolution de la clé (clé propre du club sinon clé globale de la
+ * plateforme), le quota
+ * quotidien (feature {@code import_photo}, appliqué à la seule clé globale) et
+ * le décompte
+ * ({@code ia_usage}) sont délégués au socle : ni clé ni quota ne sont gérés
+ * ici.
  * IMPORT_PHOTO_MOCK=true → réponse simulée (tests sans consommer l'API).
  */
 @Service
@@ -57,40 +64,53 @@ public class ImportPhotoService {
 
     private static final Logger log = LoggerFactory.getLogger(ImportPhotoService.class);
 
-    private static final long TAILLE_MAX_OCTETS = 10L * 1024 * 1024;   // 10 Mo
-    // Testé à 2576px (résolution haute claude-opus-4-8) le 2026-07-20 : aucun gain net sur les
-    // scènes denses (le modèle perd des éléments avant même de raisonner dessus — un problème de
-    // perception, pas de résolution) pour ~3x le coût par appel. Revenu à 1568px : le résultat
-    // reste un brouillon à corriger quel que soit le réglage, autant maîtriser le coût.
+    private static final long TAILLE_MAX_OCTETS = 10L * 1024 * 1024; // 10 Mo
+    // Testé à 2576px (résolution haute claude-opus-4-8) le 2026-07-20 : aucun gain
+    // net sur les
+    // scènes denses (le modèle perd des éléments avant même de raisonner dessus —
+    // un problème de
+    // perception, pas de résolution) pour ~3x le coût par appel. Revenu à 1568px :
+    // le résultat
+    // reste un brouillon à corriger quel que soit le réglage, autant maîtriser le
+    // coût.
     private static final int LONG_COTE_MAX_PX = 1568;
 
     /** Budget de sortie de l'analyse vision (JSON séance/exercice + schéma). */
     private static final int MAX_TOKENS_VISION = 8192;
 
-    // Dimensions du terrain de l'éditeur Konva (schema-editor) pour convertir les 0..1.
+    // Dimensions du terrain de l'éditeur Konva (schema-editor) pour convertir les
+    // 0..1.
     private static final int W_COMPLET = 1040, W_DEMI = 600, H_TERRAIN = 680;
 
-    /** Les 5 palettes de jetons de l'éditeur : l'IA répond avec ces libellés, jamais des couleurs. */
+    /**
+     * Les 5 palettes de jetons de l'éditeur : l'IA répond avec ces libellés, jamais
+     * des couleurs.
+     */
     private static final Map<String, String> COULEURS_EQUIPE = Map.of(
             "mon_equipe", "#7c3aed",
-            "equipe_1",   "#ef4444",
-            "equipe_2",   "#eab308",
+            "equipe_1", "#ef4444",
+            "equipe_2", "#eab308",
             "adversaire", "#1f2937",
-            "joker",      "#f97316");
+            "joker", "#f97316");
     private static final String COULEUR_EQUIPE_DEFAUT = "#7c3aed";
 
-    /** Couleurs du matériel, alignées sur la palette « Équipement » de l'éditeur. */
+    /**
+     * Couleurs du matériel, alignées sur la palette « Équipement » de l'éditeur.
+     */
     private static final Map<String, String> COULEURS_MATERIEL = Map.of(
-            "plot",      "#ef4444",
-            "coupelle",  "#f59e0b",
-            "cerceau",   "#f97316",
+            "plot", "#ef4444",
+            "coupelle", "#f59e0b",
+            "cerceau", "#f97316",
             "mannequin", "#64748b",
-            "echelle",   "#eab308",
-            "haie",      "#f97316",
-            "piquet",    "#22c55e");
-    private static final String COULEUR_MATERIEL_DEFAUT = "#ffffff";   // ballon, mini-but
+            "echelle", "#eab308",
+            "haie", "#f97316",
+            "piquet", "#22c55e");
+    private static final String COULEUR_MATERIEL_DEFAUT = "#ffffff"; // ballon, mini-but
 
-    /** Couleurs des formes d'annotation (palette de l'éditeur : rouge / jaune / bleu). */
+    /**
+     * Couleurs des formes d'annotation (palette de l'éditeur : rouge / jaune /
+     * bleu).
+     */
     private static final Map<String, String> COULEURS_FORME = Map.of(
             "rouge", "#ef4444", "jaune", "#eab308", "bleu", "#2563eb");
 
@@ -115,14 +135,14 @@ public class ImportPhotoService {
     private final boolean mock;
 
     public ImportPhotoService(ImportPhotoJournalRepository journalRepository,
-                              LlmService llmService,
-                              ParametreIaService parametres,
-                              ReferentielDominanteRepository dominanteRepository,
-                              ReferentielSousPrincipeRepository sousPrincipeRepository,
-                              CurrentUserProvider currentUser,
-                              PermissionResolver permissionResolver,
-                              @Value("${app.import-photo.upload-dir:./data/import-photos}") String uploadDir,
-                              @Value("${app.import-photo.mock:#{environment.IMPORT_PHOTO_MOCK ?: 'false'}}") String mock) {
+            LlmService llmService,
+            ParametreIaService parametres,
+            ReferentielDominanteRepository dominanteRepository,
+            ReferentielSousPrincipeRepository sousPrincipeRepository,
+            CurrentUserProvider currentUser,
+            PermissionResolver permissionResolver,
+            @Value("${app.import-photo.upload-dir:./data/import-photos}") String uploadDir,
+            @Value("${app.import-photo.mock:#{environment.IMPORT_PHOTO_MOCK ?: 'false'}}") String mock) {
         this.journalRepository = journalRepository;
         this.llmService = llmService;
         this.parametres = parametres;
@@ -135,6 +155,58 @@ public class ImportPhotoService {
     }
 
     // ══════════ Point d'entrée ══════════
+    /**
+     * Import d'une séance/exercice depuis une photo (IA vision) en global (SUPER_ADMIN) : le club actif est ignoré, l'exercice créé est global.
+     */
+    public ImportPhotoResponse importerGlobal(MultipartFile photo) {
+        Utilisateur u = currentUser.current();
+
+        if (u.getRole() != Role.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Réservé au super-admin");
+        }
+
+        byte[] jpeg = validerEtCompresser(photo);
+        String photoPath = sauvegarderPhoto(jpeg);
+
+        ImportPhotoJournal journal = new ImportPhotoJournal();
+        journal.setClubId(null); // <-- **NULL = exercice global**
+        journal.setUtilisateurId(u.getId());
+        journal.setPhotoPath(photoPath);
+        journal = journalRepository.save(journal);
+
+        // Sauvé AVANT l'analyse : l'id généré part dans la réponse (pièce jointe), et
+        // l'appel compte dans le quota même si l'analyse échoue ensuite (statut mis à
+        // jour).
+        journal = journalRepository.save(journal);
+
+        try {
+            String brut = mock ? reponseMock()
+                    : llmService.genererAvecImage(null, IaFeature.IMPORT_PHOTO.code(), promptVision(), jpeg,
+                            MAX_TOKENS_VISION);
+            // Seule trace de ce que le modèle a réellement répondu : sans ce log, un
+            // élément
+            // absent du rendu est indiscernable entre « le modèle ne l'a pas vu » et
+            // « le modèle l'a proposé mais le parsing/la validation l'a rejeté
+            // silencieusement ».
+            log.info("Import photo {} : réponse brute ({} car.) : {}", journal.getId(), brut.length(),
+                    brut.length() > 8000 ? brut.substring(0, 8000) + "…" : brut);
+            ImportPhotoResponse reponse = parser(brut, journal);
+            journalRepository.save(journal);
+            return reponse;
+        } catch (ResponseStatusException e) {
+            journal.setStatut("ERREUR");
+            journal.setMessage(tronquer(e.getReason()));
+            journalRepository.save(journal);
+            throw e;
+        } catch (Exception e) {
+            log.error("Import photo : échec appel/parsing", e);
+            journal.setStatut("ERREUR");
+            journal.setMessage(tronquer(e.getMessage()));
+            journalRepository.save(journal);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "L'analyse de la photo a échoué — réessaie dans un instant");
+        }
+    }
 
     public ImportPhotoResponse importer(MultipartFile photo) {
         Utilisateur u = currentUser.current();
@@ -150,15 +222,19 @@ public class ImportPhotoService {
         journal.setUtilisateurId(u.getId());
         journal.setPhotoPath(photoPath);
         // Sauvé AVANT l'analyse : l'id généré part dans la réponse (pièce jointe), et
-        // l'appel compte dans le quota même si l'analyse échoue ensuite (statut mis à jour).
+        // l'appel compte dans le quota même si l'analyse échoue ensuite (statut mis à
+        // jour).
         journal = journalRepository.save(journal);
 
         try {
-            String brut = mock ? reponseMock() : llmService.genererAvecImage(
-                    clubId, IaFeature.IMPORT_PHOTO.code(), promptVision(), jpeg, MAX_TOKENS_VISION);
-            // Seule trace de ce que le modèle a réellement répondu : sans ce log, un élément
+            String brut = mock ? reponseMock()
+                    : llmService.genererAvecImage(
+                            clubId, IaFeature.IMPORT_PHOTO.code(), promptVision(), jpeg, MAX_TOKENS_VISION);
+            // Seule trace de ce que le modèle a réellement répondu : sans ce log, un
+            // élément
             // absent du rendu est indiscernable entre « le modèle ne l'a pas vu » et
-            // « le modèle l'a proposé mais le parsing/la validation l'a rejeté silencieusement ».
+            // « le modèle l'a proposé mais le parsing/la validation l'a rejeté
+            // silencieusement ».
             log.info("Import photo {} : réponse brute ({} car.) : {}", journal.getId(), brut.length(),
                     brut.length() > 8000 ? brut.substring(0, 8000) + "…" : brut);
             ImportPhotoResponse reponse = parser(brut, journal);
@@ -215,7 +291,8 @@ public class ImportPhotoService {
             image = null;
         }
         if (image == null) {
-            // HEIC (iPhone) non décodable côté serveur : demander un JPEG (réglage « Plus compatible »).
+            // HEIC (iPhone) non décodable côté serveur : demander un JPEG (réglage « Plus
+            // compatible »).
             throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                     "Format non pris en charge — envoie la photo en JPEG ou PNG (sur iPhone : Réglages → Appareil photo → Formats → « Plus compatible »)");
         }
@@ -229,14 +306,18 @@ public class ImportPhotoService {
         }
     }
 
-    /** Ramène le grand côté à 1568 px max (qualité vision suffisante, coût maîtrisé). */
+    /**
+     * Ramène le grand côté à 1568 px max (qualité vision suffisante, coût
+     * maîtrisé).
+     */
     private BufferedImage reduire(BufferedImage src) {
         int w = src.getWidth(), h = src.getHeight();
         int grand = Math.max(w, h);
         double ratio = grand > LONG_COTE_MAX_PX ? (double) LONG_COTE_MAX_PX / grand : 1.0;
         int nw = Math.max(1, (int) Math.round(w * ratio));
         int nh = Math.max(1, (int) Math.round(h * ratio));
-        // TYPE_INT_RGB : aplatit aussi un éventuel canal alpha (PNG) pour l'encodage JPEG.
+        // TYPE_INT_RGB : aplatit aussi un éventuel canal alpha (PNG) pour l'encodage
+        // JPEG.
         BufferedImage dst = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = dst.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
@@ -253,16 +334,19 @@ public class ImportPhotoService {
             return nom;
         } catch (IOException e) {
             log.warn("Import photo : sauvegarde de la photo impossible", e);
-            return null;   // non bloquant : l'analyse peut continuer sans pièce jointe
+            return null; // non bloquant : l'analyse peut continuer sans pièce jointe
         }
     }
 
     // ══════════ Prompt vision ══════════
 
     /**
-     * Prompt d'analyse vision : surcharge super-admin ({@code prompt_import_photo}) sinon défaut.
-     * La consigne « pas de temperature » (retirée sur les modèles récents) et la stabilité inter-imports
-     * sont désormais portées par le contenu même du prompt, appliqué par le socle IA.
+     * Prompt d'analyse vision : surcharge super-admin ({@code prompt_import_photo})
+     * sinon défaut.
+     * La consigne « pas de temperature » (retirée sur les modèles récents) et la
+     * stabilité inter-imports
+     * sont désormais portées par le contenu même du prompt, appliqué par le socle
+     * IA.
      */
     private String promptVision() {
         String prompt = parametres.valeur(ParametreIaService.CLE_PROMPT_IMPORT_PHOTO);
@@ -290,7 +374,8 @@ public class ImportPhotoService {
         List<BlocExtrait> blocs = new ArrayList<>();
         for (JsonNode b : t.path("blocs")) {
             String libelle = texte(b, "libelle");
-            if (libelle == null) continue;
+            if (libelle == null)
+                continue;
             blocs.add(new BlocExtrait(libelle, entier(b, "dureeMinutes"),
                     texte(b, "sequencage"), texte(b, "consignes")));
         }
@@ -316,9 +401,13 @@ public class ImportPhotoService {
         return new ImportPhotoResponse(journal.getId(), extrait, schemaJson, compteurs[0], compteurs[1]);
     }
 
-    /** Convertit le schéma normalisé 0..1 au format de l'éditeur (pixels, couleurs, ids). */
+    /**
+     * Convertit le schéma normalisé 0..1 au format de l'éditeur (pixels, couleurs,
+     * ids).
+     */
     private String convertirSchema(JsonNode schema, int[] compteurs) {
-        if (schema.isMissingNode() || schema.isNull()) return null;
+        if (schema.isMissingNode() || schema.isNull())
+            return null;
         String terrain = "demi".equals(schema.path("terrain").asText()) ? "demi" : "complet";
         int W = "demi".equals(terrain) ? W_DEMI : W_COMPLET;
 
@@ -332,13 +421,16 @@ public class ImportPhotoService {
         for (JsonNode e : schema.path("elements")) {
             ajouterElement(elements, e.path("type").asText(), e, e, W, n);
         }
-        // Séries : l'IA décrit « 8 plots de A à B » plutôt que d'énumérer 8 paires de coordonnées
-        // (localisation et comptage étant ses points faibles) — on développe ici, régulièrement.
+        // Séries : l'IA décrit « 8 plots de A à B » plutôt que d'énumérer 8 paires de
+        // coordonnées
+        // (localisation et comptage étant ses points faibles) — on développe ici,
+        // régulièrement.
         for (JsonNode s : schema.path("series")) {
             String type = s.path("element").asText();
             JsonNode de = s.path("de"), a = s.path("a");
             int nombre = s.path("nombre").asInt(0);
-            if (!TYPES_ELEMENTS.contains(type) || nombre < 2 || !estPoint(de) || !estPoint(a)) continue;
+            if (!TYPES_ELEMENTS.contains(type) || nombre < 2 || !estPoint(de) || !estPoint(a))
+                continue;
             nombre = Math.min(nombre, SERIE_MAX);
             double x1 = borne(de.get(0).asDouble()), y1 = borne(de.get(1).asDouble());
             double x2 = borne(a.get(0).asDouble()), y2 = borne(a.get(1).asDouble());
@@ -353,7 +445,8 @@ public class ImportPhotoService {
         for (JsonNode tr : schema.path("traces")) {
             String type = tr.path("type").asText();
             JsonNode pts = tr.path("points");
-            if (!TYPES_TRACES.contains(type) || !pts.isArray() || pts.size() < 4 || pts.size() % 2 != 0) continue;
+            if (!TYPES_TRACES.contains(type) || !pts.isArray() || pts.size() < 4 || pts.size() % 2 != 0)
+                continue;
             ObjectNode trace = traces.addObject();
             trace.put("id", "imp-t-" + (++n.traces));
             trace.put("type", type);
@@ -363,15 +456,20 @@ public class ImportPhotoService {
                 points.add(Math.round(borne(pts.get(k + 1).asDouble()) * H_TERRAIN));
             }
         }
-        // Formes d'annotation : zones de jeu (carré de conservation, couloirs…) que l'éditeur sait
-        // déjà dessiner — sans elles, toute délimitation tracée sur la fiche était perdue.
+        // Formes d'annotation : zones de jeu (carré de conservation, couloirs…) que
+        // l'éditeur sait
+        // déjà dessiner — sans elles, toute délimitation tracée sur la fiche était
+        // perdue.
         for (JsonNode f : schema.path("formes")) {
             String type = f.path("type").asText();
-            if (!TYPES_FORMES.contains(type)) continue;
-            if (!f.hasNonNull("x") || !f.hasNonNull("y")) continue;
+            if (!TYPES_FORMES.contains(type))
+                continue;
+            if (!f.hasNonNull("x") || !f.hasNonNull("y"))
+                continue;
             double x = borne(f.path("x").asDouble()), y = borne(f.path("y").asDouble());
             double w = borne(f.path("w").asDouble(0)), h = borne(f.path("h").asDouble(0));
-            if (w <= 0 || h <= 0) continue;
+            if (w <= 0 || h <= 0)
+                continue;
             ObjectNode forme = formes.addObject();
             forme.put("id", "imp-f-" + (++n.formes));
             forme.put("type", type);
@@ -381,7 +479,8 @@ public class ImportPhotoService {
             forme.put("h", Math.max(12, Math.round(h * H_TERRAIN)));
             forme.put("couleur", COULEURS_FORME.getOrDefault(f.path("couleur").asText("jaune"), "#eab308"));
             String texte = texte(f, "texte");
-            if (texte != null) forme.put("texte", texte);
+            if (texte != null)
+                forme.put("texte", texte);
         }
 
         compteurs[0] = n.elements + n.formes;
@@ -389,20 +488,28 @@ public class ImportPhotoService {
         return n.elements == 0 && n.traces == 0 && n.formes == 0 ? null : out.toString();
     }
 
-    /** Compteurs d'ids du schéma converti (un par famille, pour des ids stables et lisibles). */
-    private static final class Compteur { int elements, traces, formes; }
+    /**
+     * Compteurs d'ids du schéma converti (un par famille, pour des ids stables et
+     * lisibles).
+     */
+    private static final class Compteur {
+        int elements, traces, formes;
+    }
 
     private static boolean estPoint(JsonNode n) {
         return n.isArray() && n.size() == 2 && n.get(0).isNumber() && n.get(1).isNumber();
     }
 
     /**
-     * Ajoute un élément : `position` porte x/y (0..1), `attributs` la couleur/le numéro/la rotation
-     * — deux nœuds distincts pour qu'une série applique ses attributs à chacun de ses points.
+     * Ajoute un élément : `position` porte x/y (0..1), `attributs` la couleur/le
+     * numéro/la rotation
+     * — deux nœuds distincts pour qu'une série applique ses attributs à chacun de
+     * ses points.
      */
     private void ajouterElement(ArrayNode cible, String type, JsonNode position, JsonNode attributs,
-                                int W, Compteur n) {
-        if (!TYPES_ELEMENTS.contains(type)) return;
+            int W, Compteur n) {
+        if (!TYPES_ELEMENTS.contains(type))
+            return;
         ObjectNode el = cible.addObject();
         el.put("id", "imp-" + (++n.elements));
         el.put("type", type);
@@ -411,17 +518,24 @@ public class ImportPhotoService {
         if ("joueur".equals(type)) {
             el.put("couleur", COULEURS_EQUIPE.getOrDefault(
                     attributs.path("couleur").asText(""), COULEUR_EQUIPE_DEFAUT));
-            if (attributs.hasNonNull("numero")) el.put("numero", attributs.path("numero").asInt());
-            else el.put("numero", n.elements);
+            if (attributs.hasNonNull("numero"))
+                el.put("numero", attributs.path("numero").asInt());
+            else
+                el.put("numero", n.elements);
         } else {
             el.put("couleur", COULEURS_MATERIEL.getOrDefault(type, COULEUR_MATERIEL_DEFAUT));
         }
-        // Orientation : n'a de sens que pour le matériel allongé (échelle, haie, mini-but…).
+        // Orientation : n'a de sens que pour le matériel allongé (échelle, haie,
+        // mini-but…).
         int rotation = ((attributs.path("rotation").asInt(0) % 360) + 360) % 360;
-        if (rotation != 0) el.put("rotation", rotation);
+        if (rotation != 0)
+            el.put("rotation", rotation);
     }
 
-    /** Le modèle peut entourer le JSON de texte/balises malgré la consigne : on isole l'objet. */
+    /**
+     * Le modèle peut entourer le JSON de texte/balises malgré la consigne : on
+     * isole l'objet.
+     */
     private String extraireJson(String brut) {
         String s = brut.trim();
         if (s.startsWith("```")) {
@@ -435,11 +549,14 @@ public class ImportPhotoService {
         return s.substring(debut, fin + 1);
     }
 
-    private static double borne(double v) { return Math.max(0, Math.min(1, v)); }
+    private static double borne(double v) {
+        return Math.max(0, Math.min(1, v));
+    }
 
     private static String texte(JsonNode n, String champ) {
         JsonNode v = n.path(champ);
-        if (v.isMissingNode() || v.isNull()) return null;
+        if (v.isMissingNode() || v.isNull())
+            return null;
         String s = v.asText().trim();
         return s.isEmpty() || "null".equals(s) ? null : s;
     }
@@ -459,38 +576,43 @@ public class ImportPhotoService {
         if (tableau.isArray()) {
             for (JsonNode c : tableau) {
                 String code = c.asText();
-                if (valides.contains(code) && !out.contains(code)) out.add(code);
+                if (valides.contains(code) && !out.contains(code))
+                    out.add(code);
             }
         }
         return out;
     }
 
     private static String tronquer(String s) {
-        if (s == null) return null;
+        if (s == null)
+            return null;
         return s.length() > 480 ? s.substring(0, 480) : s;
     }
 
-    /** Réponse simulée (IMPORT_PHOTO_MOCK=true) : valide tout le pipeline sans appel réel. */
+    /**
+     * Réponse simulée (IMPORT_PHOTO_MOCK=true) : valide tout le pipeline sans appel
+     * réel.
+     */
     private String reponseMock() {
         return """
-        {"lisible":true,
-         "texte":{"type":"EXERCICE","titre":"Conservation 4v4 + 2 jokers","description":"Conserver le ballon, jouer avec les appuis",
-           "objectif":"Conservation sous pression","dureeMinutes":12,"materiel":"8 chasubles, 6 plots",
-           "blocs":[{"libelle":"Mise en place","dureeMinutes":3,"sequencage":null,"consignes":"Deux équipes de 4"},
-                    {"libelle":"Jeu","dureeMinutes":9,"sequencage":"3 × 3'","consignes":"Jokers offensifs"}],
-           "dominantes":["technique","tactique"],"sousPrincipes":["conservation"],
-           "avance":{"formatJoueurs":"4 vs 4 + 2 jokers","terrainLongueurM":25,"terrainLargeurM":20,
-                     "sequencage":"3 × 3'","butSystemeMarque":"10 passes = 1 pt","reglesJeu":"2 touches max","variablesPedagogiques":"Ajouter un gardien"}},
-         "schema":{"terrain":"demi",
-           "elements":[{"type":"joueur","couleur":"mon_equipe","numero":1,"x":0.3,"y":0.3},
-                       {"type":"joueur","couleur":"mon_equipe","numero":2,"x":0.6,"y":0.35},
-                       {"type":"joueur","couleur":"adversaire","numero":1,"x":0.45,"y":0.5},
-                       {"type":"joueur","couleur":"joker","numero":9,"x":0.15,"y":0.5},
-                       {"type":"ballon","numero":null,"x":0.32,"y":0.33},
-                       {"type":"echelle","rotation":90,"x":0.8,"y":0.4}],
-           "series":[{"element":"plot","de":[0.2,0.2],"a":[0.2,0.8],"nombre":5}],
-           "formes":[{"type":"rect","x":0.15,"y":0.15,"w":0.5,"h":0.6,"couleur":"jaune","texte":"25 × 20 m"}],
-           "traces":[{"type":"passe","points":[0.32,0.33,0.6,0.35]}]}}
-        """;
+                {"lisible":true,
+                 "texte":{"type":"EXERCICE","titre":"Conservation 4v4 + 2 jokers","description":"Conserver le ballon, jouer avec les appuis",
+                   "objectif":"Conservation sous pression","dureeMinutes":12,"materiel":"8 chasubles, 6 plots",
+                   "blocs":[{"libelle":"Mise en place","dureeMinutes":3,"sequencage":null,"consignes":"Deux équipes de 4"},
+                            {"libelle":"Jeu","dureeMinutes":9,"sequencage":"3 × 3'","consignes":"Jokers offensifs"}],
+                   "dominantes":["technique","tactique"],"sousPrincipes":["conservation"],
+                   "avance":{"formatJoueurs":"4 vs 4 + 2 jokers","terrainLongueurM":25,"terrainLargeurM":20,
+                             "sequencage":"3 × 3'","butSystemeMarque":"10 passes = 1 pt","reglesJeu":"2 touches max","variablesPedagogiques":"Ajouter un gardien"}},
+                 "schema":{"terrain":"demi",
+                   "elements":[{"type":"joueur","couleur":"mon_equipe","numero":1,"x":0.3,"y":0.3},
+                               {"type":"joueur","couleur":"mon_equipe","numero":2,"x":0.6,"y":0.35},
+                               {"type":"joueur","couleur":"adversaire","numero":1,"x":0.45,"y":0.5},
+                               {"type":"joueur","couleur":"joker","numero":9,"x":0.15,"y":0.5},
+                               {"type":"ballon","numero":null,"x":0.32,"y":0.33},
+                               {"type":"echelle","rotation":90,"x":0.8,"y":0.4}],
+                   "series":[{"element":"plot","de":[0.2,0.2],"a":[0.2,0.8],"nombre":5}],
+                   "formes":[{"type":"rect","x":0.15,"y":0.15,"w":0.5,"h":0.6,"couleur":"jaune","texte":"25 × 20 m"}],
+                   "traces":[{"type":"passe","points":[0.32,0.33,0.6,0.35]}]}}
+                """;
     }
 }

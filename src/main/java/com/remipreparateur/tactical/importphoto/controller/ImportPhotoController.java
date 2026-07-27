@@ -24,7 +24,15 @@ public class ImportPhotoController {
         this.service = service;
     }
 
-    /** Analyse la photo (10-20 s) et renvoie le contenu extrait + le schéma prêt pour l'éditeur. */
+    @PostMapping("/global")
+    public ImportPhotoResponse importerGlobal(@RequestParam("photo") MultipartFile photo) {
+        return service.importerGlobal(photo);
+    }
+
+    /**
+     * Analyse la photo (10-20 s) et renvoie le contenu extrait + le schéma prêt
+     * pour l'éditeur.
+     */
     @PostMapping
     public ImportPhotoResponse importer(@RequestParam("photo") MultipartFile photo) {
         return service.importer(photo);

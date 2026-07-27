@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Point d'entrée unique des features IA : résout la config du club, applique le quota (si clé
@@ -15,6 +16,7 @@ import java.util.UUID;
  * (import photo, générateur de séance…) passent toutes par ici.
  */
 @Service
+@Slf4j
 public class LlmService {
 
     private final IaConfigResolver resolver;
@@ -30,6 +32,8 @@ public class LlmService {
     /** Génère du texte pour une feature d'un club (résolution config + quota + journal). */
     public String genererTexte(UUID clubId, String feature, String systeme, String utilisateur, int maxTokens) {
         IaResolved cfg = resolver.pour(clubId);
+        log.info("Appel IA - Fournisseur: {}, Modèle: {}, Feature: {}", 
+            cfg.provider(), cfg.modele(), feature);
         if (!cfg.cleDisponible()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "IA non configurée (aucune clé pour ce club ni clé globale sur le serveur).");
@@ -50,6 +54,8 @@ public class LlmService {
      */
     public String genererAvecImage(UUID clubId, String feature, String consigne, byte[] imageJpeg, int maxTokens) {
         IaResolved cfg = resolver.pour(clubId);
+        log.info("Appel IA - Fournisseur: {}, Modèle: {}, Feature: {}", 
+            cfg.provider(), cfg.modele(), feature);
         if (!cfg.cleDisponible()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "IA non configurée (aucune clé pour ce club ni clé globale sur le serveur).");

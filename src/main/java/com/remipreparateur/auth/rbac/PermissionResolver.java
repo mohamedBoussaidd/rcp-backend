@@ -17,14 +17,22 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Calcule l'ensemble des permissions effectives d'un utilisateur POUR LE CONTEXTE ACTIF
- * (club + équipe(s)). Résolution côté serveur à chaque requête : un changement de droit ou
- * d'abonnement prend effet immédiatement, et le scope par équipe interdit de figer ça dans le JWT.
+ * Calcule l'ensemble des permissions effectives d'un utilisateur POUR LE
+ * CONTEXTE ACTIF
+ * (club + équipe(s)). Résolution côté serveur à chaque requête : un changement
+ * de droit ou
+ * d'abonnement prend effet immédiatement, et le scope par équipe interdit de
+ * figer ça dans le JWT.
  *
- * <p>Permissions = union des permissions des rôles affectés à l'utilisateur qui « couvrent » le
- * contexte (affectation sur l'équipe active, ou affectation club-wide sur le club actif).
+ * <p>
+ * Permissions = union des permissions des rôles affectés à l'utilisateur qui «
+ * couvrent » le
+ * contexte (affectation sur l'équipe active, ou affectation club-wide sur le
+ * club actif).
  *
- * <p>Cas particuliers hors RBAC : SUPER_ADMIN = toutes les permissions (bypass) ; JOUEUR = aucune
+ * <p>
+ * Cas particuliers hors RBAC : SUPER_ADMIN = toutes les permissions (bypass) ;
+ * JOUEUR = aucune
  * (son accès passe par le self-scope /api/moi/**).
  */
 @Service
@@ -36,26 +44,34 @@ public class PermissionResolver {
     private final ClubModulesService clubModulesService;
 
     public PermissionResolver(AffectationRoleRepository affectations,
-                              RolePermissionRepository rolePermissions,
-                              EquipeRepository equipeRepository,
-                              ClubModulesService clubModulesService) {
+            RolePermissionRepository rolePermissions,
+            EquipeRepository equipeRepository,
+            ClubModulesService clubModulesService) {
         this.affectations = affectations;
         this.rolePermissions = rolePermissions;
         this.equipeRepository = equipeRepository;
         this.clubModulesService = clubModulesService;
     }
 
-    /** Codes de permission (ex. {@code seances:write}) EFFECTIFS de l'utilisateur (RBAC ∩ modules actifs). */
+    /**
+     * Codes de permission (ex. {@code seances:write}) EFFECTIFS de l'utilisateur
+     * (RBAC ∩ modules actifs).
+     */
     public Set<String> permissionsPour(Utilisateur u) {
         return permissionsPour(u, true);
     }
 
     /**
-     * @param filtrerParModules {@code true} = permissions EFFECTIVES (RBAC ∩ modules actifs du club),
-     *   pour AUTORISER une requête ; {@code false} = permissions RBAC BRUTES (avant filtre
-     *   pack/abonnement), pour la DÉLÉGATION (anti-escalade). Un module désactivé ne doit pas
-     *   empêcher un président d'attribuer un rôle : la permission reste seulement dormante à l'usage
-     *   (et filtrée pareil chez le destinataire → aucune escalade réelle).
+     * @param filtrerParModules {@code true} = permissions EFFECTIVES (RBAC ∩
+     *                          modules actifs du club),
+     *                          pour AUTORISER une requête ; {@code false} =
+     *                          permissions RBAC BRUTES (avant filtre
+     *                          pack/abonnement), pour la DÉLÉGATION
+     *                          (anti-escalade). Un module désactivé ne doit pas
+     *                          empêcher un président d'attribuer un rôle : la
+     *                          permission reste seulement dormante à l'usage
+     *                          (et filtrée pareil chez le destinataire → aucune
+     *                          escalade réelle).
      */
     public Set<String> permissionsPour(Utilisateur u, boolean filtrerParModules) {
         if (u.getRole() == Role.SUPER_ADMIN) {
@@ -80,30 +96,39 @@ public class PermissionResolver {
                 .collect(Collectors.toSet());
 
         if (!filtrerParModules) {
-            return perms;   // droits RBAC bruts (délégation) : indépendants de l'abonnement
+            return perms; // droits RBAC bruts (délégation) : indépendants de l'abonnement
         }
 
-        // Filtrage par MODULES actifs du club : un module désactivé (pack/abonnement) retire
-        // toutes ses permissions → les endpoints correspondants renvoient 403 sans toucher aux
+        // Filtrage par MODULES actifs du club : un module désactivé (pack/abonnement)
+        // retire
+        // toutes ses permissions → les endpoints correspondants renvoient 403 sans
+        // toucher aux
         // contrôleurs, et le front masque les écrans. Aucune donnée n'est supprimée.
         Set<String> modulesActifs = clubModulesService.modulesActifs(clubActif);
         return perms.stream()
                 .filter(code -> {
                     Permission p = Permission.parCode(code);
-                    // Permission conservée si un module qui la déverrouille est actif (une permission
-                    // partagée comme predictions:read est gardée si GPS OU Prépa physique est actif).
+                    // Permission conservée si un module qui la déverrouille est actif (une
+                    // permission
+                    // partagée comme predictions:read est gardée si GPS OU Prépa physique est
+                    // actif).
                     return p == null || FeatureModule.modulesDe(p).stream()
                             .anyMatch(m -> modulesActifs.contains(m.getCode()));
                 })
                 .collect(Collectors.toSet());
     }
 
-    /** Club actif de l'utilisateur pour le contexte courant (en-têtes X-Contexte-*). */
+    /**
+     * Club actif de l'utilisateur pour le contexte courant (en-têtes X-Contexte-*).
+     */
     public UUID clubActif(Utilisateur u) {
         return clubActif(u, ContexteActifHolder.get());
     }
 
-    /** Une affectation couvre-t-elle le contexte actif ? (équipe précise, ou club entier) */
+    /**
+     * Une affectation couvre-t-elle le contexte actif ? (équipe précise, ou club
+     * entier)
+     */
     private boolean couvre(AffectationRole a, UUID clubActif, Set<UUID> equipesActives) {
         if (a.getEquipeId() == null) {
             // affectation club-wide : couvre toute équipe du club de l'affectation
@@ -112,8 +137,14 @@ public class PermissionResolver {
         return equipesActives.contains(a.getEquipeId());
     }
 
-    /** Club actif : contexte de navigation, sinon club de l'utilisateur, sinon club de son équipe. */
+    /**
+     * Club actif : contexte de navigation, sinon club de l'utilisateur, sinon club
+     * de son équipe.
+     */
     private UUID clubActif(Utilisateur u, ContexteActif ctx) {
+        if (u.getRole() == Role.SUPER_ADMIN) {
+            return ctx != null ? ctx.clubId() : null;
+        }
         if (ctx != null && ctx.clubId() != null) {
             return ctx.clubId();
         }
@@ -127,19 +158,24 @@ public class PermissionResolver {
     }
 
     /**
-     * Équipes en jeu : contexte explicite, sinon l'union {équipe de rattachement + équipes des
-     * affectations} (staff multi-équipes : chaque rôle « couvre » son équipe), sinon toutes
-     * celles du club (président/administratif, dont les affectations sont club-wide).
+     * Équipes en jeu : contexte explicite, sinon l'union {équipe de rattachement +
+     * équipes des
+     * affectations} (staff multi-équipes : chaque rôle « couvre » son équipe),
+     * sinon toutes
+     * celles du club (président/administratif, dont les affectations sont
+     * club-wide).
      */
     private Set<UUID> equipesActives(Utilisateur u, ContexteActif ctx, UUID clubActif,
-                                     List<AffectationRole> affs) {
+            List<AffectationRole> affs) {
         if (ctx != null && !ctx.equipeIds().isEmpty()) {
             return new HashSet<>(ctx.equipeIds());
         }
         Set<UUID> equipes = new HashSet<>();
-        if (u.getEquipeId() != null) equipes.add(u.getEquipeId());
+        if (u.getEquipeId() != null)
+            equipes.add(u.getEquipeId());
         for (AffectationRole a : affs) {
-            if (a.getEquipeId() != null) equipes.add(a.getEquipeId());
+            if (a.getEquipeId() != null)
+                equipes.add(a.getEquipeId());
         }
         if (!equipes.isEmpty()) {
             return equipes;

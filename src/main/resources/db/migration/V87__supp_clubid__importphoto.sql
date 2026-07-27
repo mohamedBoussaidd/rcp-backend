@@ -1,0 +1,1 @@
+ALTER TABLE import_photo_journal ALTER COLUMN club_id DROP NOT NULL;

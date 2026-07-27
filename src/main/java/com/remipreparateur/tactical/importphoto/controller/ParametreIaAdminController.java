@@ -15,10 +15,14 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 /**
- * Paramètres IA (super-admin) — PROMPTS uniquement : édition des prompts et des toggles LLM des
- * cartes, avec historique/restauration. Les clés autorisées sont DÉRIVÉES du catalogue
- * {@link IaFeature} (prompt + toggle de chaque feature) → une nouvelle carte est éditable sans
- * toucher ce contrôleur. Les quotas ont migré vers {@code /api/admin/ia/quotas} (source unique).
+ * Paramètres IA (super-admin) — PROMPTS uniquement : édition des prompts et des
+ * toggles LLM des
+ * cartes, avec historique/restauration. Les clés autorisées sont DÉRIVÉES du
+ * catalogue
+ * {@link IaFeature} (prompt + toggle de chaque feature) → une nouvelle carte
+ * est éditable sans
+ * toucher ce contrôleur. Les quotas ont migré vers {@code /api/admin/ia/quotas}
+ * (source unique).
  */
 @RestController
 @RequestMapping("/api/admin/parametres-ia")
@@ -27,9 +31,18 @@ public class ParametreIaAdminController {
 
     /** Clés éditables (fermé) = prompts + toggles de toutes les features IA. */
     private static final List<String> CLES_AUTORISEES =
-            Arrays.stream(IaFeature.values())
-                    .flatMap(f -> Stream.of(f.clePrompt(), f.cleToggle()))
-                    .filter(Objects::nonNull)
+            // Arrays.stream(IaFeature.values())
+            // .flatMap(f -> Stream.of(f.clePrompt(), f.cleToggle()))
+            // .filter(Objects::nonNull)
+            // .toList();
+            Stream.concat(
+                    Arrays.stream(IaFeature.values())
+                            .flatMap(f -> Stream.of(f.clePrompt(), f.cleToggle()))
+                            .filter(Objects::nonNull),
+                    Stream.of( // Stream.of() au lieu de Arrays.asList()
+                            ParametreIaService.CLE_FOURNISSEUR_GLOBAL,
+                            ParametreIaService.CLE_API_KEY_GLOBAL,
+                            ParametreIaService.CLE_MODELE_GLOBAL))
                     .toList();
 
     private final ParametreIaService parametres;
@@ -40,9 +53,14 @@ public class ParametreIaAdminController {
         this.currentUser = currentUser;
     }
 
-    public record VersionDto(UUID id, String valeur, LocalDateTime createdAt) {}
-    public record ParametreDto(String cle, String valeur, String defaut, List<VersionDto> historique) {}
-    public record ValeurRequest(@NotBlank String valeur) {}
+    public record VersionDto(UUID id, String valeur, LocalDateTime createdAt) {
+    }
+
+    public record ParametreDto(String cle, String valeur, String defaut, List<VersionDto> historique) {
+    }
+
+    public record ValeurRequest(@NotBlank String valeur) {
+    }
 
     @GetMapping("/{cle}")
     public ParametreDto parametre(@PathVariable String cle) {
