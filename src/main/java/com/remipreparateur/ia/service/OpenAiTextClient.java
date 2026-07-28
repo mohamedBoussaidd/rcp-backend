@@ -87,7 +87,7 @@ public class OpenAiTextClient implements LlmTextClient {
                                     Map.of("type", "text", "text", consigne),
                                     Map.of("type", "image_url", "image_url", Map.of("url", dataUri))))));
             HttpRequest req = HttpRequest.newBuilder(URI.create(URL))
-                    .timeout(Duration.ofSeconds(90))
+                    .timeout(Duration.ofSeconds(150))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + cfg.cleApi())
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
