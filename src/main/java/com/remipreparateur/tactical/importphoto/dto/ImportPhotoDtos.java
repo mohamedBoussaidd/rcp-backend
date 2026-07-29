@@ -42,5 +42,6 @@ public final class ImportPhotoDtos {
             TexteExtrait texte,
             String schemaJson,
             int nbElements,
-            int nbTraces) {}
+            int nbTraces,
+            Long dureeAnalyseMs) {}   // durée de l'appel vision (ms), pour l'affichage/diagnostic
 }

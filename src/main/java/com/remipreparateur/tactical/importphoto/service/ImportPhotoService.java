@@ -78,9 +78,20 @@ public class ImportPhotoService {
     /** Budget de sortie de l'analyse vision (JSON séance/exercice + schéma). */
     private static final int MAX_TOKENS_VISION = 8192;
 
-    // Dimensions du terrain de l'éditeur Konva (schema-editor) pour convertir les
-    // 0..1.
-    private static final int W_COMPLET = 1040, W_DEMI = 600, H_TERRAIN = 680;
+    // Dimensions des 6 espaces de l'éditeur Konva pour convertir les 0..1 — À GARDER
+    // SYNCHRONISÉ avec ESPACES de schema-espaces.ts (largeur ET hauteur : le quart n'a
+    // pas la même hauteur que les autres, d'où la table plutôt qu'un H unique en dur).
+    private record Espace(int w, int h) {
+    }
+
+    private static final Map<String, Espace> ESPACES = Map.of(
+            "complet", new Espace(1040, 680),
+            "demi", new Espace(600, 680),
+            "demi_large", new Espace(520, 680),
+            "tiers", new Espace(360, 680),
+            "quart", new Espace(520, 340),
+            "zone", new Espace(600, 600));
+    private static final String TERRAIN_DEFAUT = "complet";
 
     /**
      * Les 5 palettes de jetons de l'éditeur : l'IA répond avec ces libellés, jamais
@@ -172,17 +183,17 @@ public class ImportPhotoService {
         journal.setClubId(null); // <-- **NULL = exercice global**
         journal.setUtilisateurId(u.getId());
         journal.setPhotoPath(photoPath);
-        journal = journalRepository.save(journal);
-
         // Sauvé AVANT l'analyse : l'id généré part dans la réponse (pièce jointe), et
-        // l'appel compte dans le quota même si l'analyse échoue ensuite (statut mis à
-        // jour).
+        // l'appel compte dans le quota même si l'analyse échoue ensuite (statut mis à jour).
         journal = journalRepository.save(journal);
 
         try {
+            long t0 = System.currentTimeMillis();
             String brut = mock ? reponseMock()
                     : llmService.genererAvecImage(null, IaFeature.IMPORT_PHOTO.code(), promptVision(), jpeg,
                             MAX_TOKENS_VISION);
+            long dureeMs = System.currentTimeMillis() - t0;
+            log.info("Import photo global {} : analyse vision en {} ms", journal.getId(), dureeMs);
             // Seule trace de ce que le modèle a réellement répondu : sans ce log, un
             // élément
             // absent du rendu est indiscernable entre « le modèle ne l'a pas vu » et
@@ -190,7 +201,7 @@ public class ImportPhotoService {
             // silencieusement ».
             log.info("Import photo {} : réponse brute ({} car.) : {}", journal.getId(), brut.length(),
                     brut.length() > 8000 ? brut.substring(0, 8000) + "…" : brut);
-            ImportPhotoResponse reponse = parser(brut, journal);
+            ImportPhotoResponse reponse = parser(brut, journal, dureeMs);
             journalRepository.save(journal);
             return reponse;
         } catch (ResponseStatusException e) {
@@ -227,9 +238,12 @@ public class ImportPhotoService {
         journal = journalRepository.save(journal);
 
         try {
+            long t0 = System.currentTimeMillis();
             String brut = mock ? reponseMock()
                     : llmService.genererAvecImage(
                             clubId, IaFeature.IMPORT_PHOTO.code(), promptVision(), jpeg, MAX_TOKENS_VISION);
+            long dureeMs = System.currentTimeMillis() - t0;
+            log.info("Import photo {} : analyse vision en {} ms", journal.getId(), dureeMs);
             // Seule trace de ce que le modèle a réellement répondu : sans ce log, un
             // élément
             // absent du rendu est indiscernable entre « le modèle ne l'a pas vu » et
@@ -237,7 +251,7 @@ public class ImportPhotoService {
             // silencieusement ».
             log.info("Import photo {} : réponse brute ({} car.) : {}", journal.getId(), brut.length(),
                     brut.length() > 8000 ? brut.substring(0, 8000) + "…" : brut);
-            ImportPhotoResponse reponse = parser(brut, journal);
+            ImportPhotoResponse reponse = parser(brut, journal, dureeMs);
             journalRepository.save(journal);
             return reponse;
         } catch (ResponseStatusException e) {
@@ -355,7 +369,7 @@ public class ImportPhotoService {
 
     // ══════════ Parsing strict + conversion schéma ══════════
 
-    private ImportPhotoResponse parser(String brut, ImportPhotoJournal journal) throws IOException {
+    private ImportPhotoResponse parser(String brut, ImportPhotoJournal journal, long dureeAnalyseMs) throws IOException {
         String json = extraireJson(brut);
         JsonNode racine = mapper.readTree(json);
 
@@ -398,7 +412,7 @@ public class ImportPhotoService {
         int[] compteurs = new int[2];
         String schemaJson = convertirSchema(racine.path("schema"), compteurs);
 
-        return new ImportPhotoResponse(journal.getId(), extrait, schemaJson, compteurs[0], compteurs[1]);
+        return new ImportPhotoResponse(journal.getId(), extrait, schemaJson, compteurs[0], compteurs[1], dureeAnalyseMs);
     }
 
     /**
@@ -408,8 +422,10 @@ public class ImportPhotoService {
     private String convertirSchema(JsonNode schema, int[] compteurs) {
         if (schema.isMissingNode() || schema.isNull())
             return null;
-        String terrain = "demi".equals(schema.path("terrain").asText()) ? "demi" : "complet";
-        int W = "demi".equals(terrain) ? W_DEMI : W_COMPLET;
+        String demande = schema.path("terrain").asText("");
+        String terrain = ESPACES.containsKey(demande) ? demande : TERRAIN_DEFAUT;
+        Espace esp = ESPACES.get(terrain);
+        int W = esp.w(), H = esp.h();
 
         ObjectNode out = mapper.createObjectNode();
         out.put("terrain", terrain);
@@ -419,7 +435,7 @@ public class ImportPhotoService {
 
         Compteur n = new Compteur();
         for (JsonNode e : schema.path("elements")) {
-            ajouterElement(elements, e.path("type").asText(), e, e, W, n);
+            ajouterElement(elements, e.path("type").asText(), e, e, W, H, n);
         }
         // Séries : l'IA décrit « 8 plots de A à B » plutôt que d'énumérer 8 paires de
         // coordonnées
@@ -439,7 +455,7 @@ public class ImportPhotoService {
                 ObjectNode point = mapper.createObjectNode();
                 point.put("x", x1 + (x2 - x1) * t);
                 point.put("y", y1 + (y2 - y1) * t);
-                ajouterElement(elements, type, point, s, W, n);
+                ajouterElement(elements, type, point, s, W, H, n);
             }
         }
         for (JsonNode tr : schema.path("traces")) {
@@ -453,7 +469,7 @@ public class ImportPhotoService {
             ArrayNode points = trace.putArray("points");
             for (int k = 0; k < pts.size(); k += 2) {
                 points.add(Math.round(borne(pts.get(k).asDouble()) * W));
-                points.add(Math.round(borne(pts.get(k + 1).asDouble()) * H_TERRAIN));
+                points.add(Math.round(borne(pts.get(k + 1).asDouble()) * H));
             }
         }
         // Formes d'annotation : zones de jeu (carré de conservation, couloirs…) que
@@ -474,9 +490,9 @@ public class ImportPhotoService {
             forme.put("id", "imp-f-" + (++n.formes));
             forme.put("type", type);
             forme.put("x", Math.round(x * W));
-            forme.put("y", Math.round(y * H_TERRAIN));
+            forme.put("y", Math.round(y * H));
             forme.put("w", Math.max(12, Math.round(w * W)));
-            forme.put("h", Math.max(12, Math.round(h * H_TERRAIN)));
+            forme.put("h", Math.max(12, Math.round(h * H)));
             forme.put("couleur", COULEURS_FORME.getOrDefault(f.path("couleur").asText("jaune"), "#eab308"));
             String texte = texte(f, "texte");
             if (texte != null)
@@ -507,14 +523,14 @@ public class ImportPhotoService {
      * ses points.
      */
     private void ajouterElement(ArrayNode cible, String type, JsonNode position, JsonNode attributs,
-            int W, Compteur n) {
+            int W, int H, Compteur n) {
         if (!TYPES_ELEMENTS.contains(type))
             return;
         ObjectNode el = cible.addObject();
         el.put("id", "imp-" + (++n.elements));
         el.put("type", type);
         el.put("x", Math.round(borne(position.path("x").asDouble(0.5)) * W));
-        el.put("y", Math.round(borne(position.path("y").asDouble(0.5)) * H_TERRAIN));
+        el.put("y", Math.round(borne(position.path("y").asDouble(0.5)) * H));
         if ("joueur".equals(type)) {
             el.put("couleur", COULEURS_EQUIPE.getOrDefault(
                     attributs.path("couleur").asText(""), COULEUR_EQUIPE_DEFAUT));
