@@ -123,6 +123,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/assistant-ia/debrief/**").hasAuthority("prepa_ia:debrief")
                         .requestMatchers("/api/assistant-ia/derives/**").hasAuthority("prepa_ia:derives")
                         .requestMatchers("/api/assistant-ia/derives").hasAuthority("prepa_ia:derives")
+                        .requestMatchers("/api/assistant-ia/simulation/**").hasAuthority("prepa_ia:simulation")
+                        .requestMatchers("/api/assistant-ia/simulation").hasAuthority("prepa_ia:simulation")
+                        // Chat : LLM obligatoire. /chat/etat est volontairement sous la même permission —
+                        // sans le droit d'accès, le widget ne doit même pas savoir si l'IA est configurée.
+                        .requestMatchers("/api/assistant-ia/chat/**").hasAuthority("assistant_ia:chat")
+                        .requestMatchers("/api/assistant-ia/chat").hasAuthority("assistant_ia:chat")
 
                         // Joueurs (effectif) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/joueurs/**").hasAuthority("joueurs:read")

@@ -102,6 +102,20 @@ public class PredictionService {
     }
 
     /**
+     * Simulation « et si… » d'une séance hypothétique : distance attendue par joueur (baseline du
+     * même type de séance) et recalcul de l'ACWR. POST parce qu'on envoie un corps, mais l'appel est
+     * en LECTURE SEULE côté Python — aucune séance n'est créée. Portée forwardée comme ailleurs.
+     */
+    public Object postSimulationSeance(UUID typeSeanceId, int dureeMinutes) {
+        Scope scope = scopeResolver.resolve();
+        if (scope.none()) return Map.of("joueurs", List.of(), "synthese", Map.of("nb_evalues", 0));
+        Map<String, Object> corps = new java.util.HashMap<>();
+        corps.put("type_seance_id", typeSeanceId == null ? null : typeSeanceId.toString());
+        corps.put("duree_minutes", dureeMinutes);
+        return postPythonScope(pythonApiUrl + "/api/predictions/equipe/simulation", corps, scope);
+    }
+
+    /**
      * Dérives d'UNE équipe donnée, hors contexte HTTP (appelé par le scheduler de surveillance) :
      * la portée n'est pas résolue via {@link ScopeResolver} mais imposée explicitement.
      */
@@ -129,6 +143,17 @@ public class PredictionService {
                     scope.equipeIds().stream().map(UUID::toString).collect(Collectors.joining(",")));
         }
         return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Object.class).getBody();
+    }
+
+    /** Idem {@link #appelPythonScope} mais en POST avec un corps JSON (endpoints paramétrés). */
+    private Object postPythonScope(String url, Object corps, Scope scope) {
+        HttpHeaders headers = headersBase();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        if (!scope.all()) {
+            headers.set("X-Contexte-Equipes",
+                    scope.equipeIds().stream().map(UUID::toString).collect(Collectors.joining(",")));
+        }
+        return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(corps, headers), Object.class).getBody();
     }
 
     /**

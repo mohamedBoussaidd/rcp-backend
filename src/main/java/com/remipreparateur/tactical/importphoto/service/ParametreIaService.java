@@ -24,11 +24,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class ParametreIaService {
 
-  // teste de mise en place changement clef api global
+  /**
+   * Fournisseur et modèle utilisés par défaut par les clubs sans clé propre. Le fournisseur
+   * référence un code du catalogue {@code ia_fournisseur} (V89) — c'est LUI qui porte la clé, l'URL
+   * de base et le dialecte. Il n'y a volontairement pas de clé API ici : un secret n'a rien à faire
+   * dans une table clé/valeur dont chaque enregistrement est historisé en clair.
+   */
   public static final String CLE_FOURNISSEUR_GLOBAL = "ia_fournisseur_global";
-  public static final String CLE_API_KEY_GLOBAL = "ia_api_key_global";
   public static final String CLE_MODELE_GLOBAL = "ia_modele_global";
-  //
   public static final String CLE_PROMPT_IMPORT_PHOTO = "prompt_import_photo";
   public static final String CLE_PROMPT_GENERATEUR_SEANCE = "prompt_generateur_seance";
   public static final String CLE_QUOTA_DEFAUT = "quota_import_photo_defaut";
@@ -45,6 +48,22 @@ public class ParametreIaService {
   /** Carte « dérives & surveillance ». Feature = {@code derives_prepa}. */
   public static final String CLE_PROMPT_DERIVES_PREPA = "prompt_derives_prepa";
   public static final String CLE_CARTE_DERIVES_ACTIVE = "ia_carte_derives_prepa_active";
+  /** Carte « simulation et si… ». Feature = {@code simulation_prepa}. */
+  public static final String CLE_PROMPT_SIMULATION_PREPA = "prompt_simulation_prepa";
+  public static final String CLE_CARTE_SIMULATION_ACTIVE = "ia_carte_simulation_prepa_active";
+  /** Carte « chat ». Feature = {@code chat_prepa}. Pas de toggle : LLM obligatoire. */
+  public static final String CLE_PROMPT_CHAT_PREPA = "prompt_chat_prepa";
+
+  /**
+   * Nom affiché de l'assistant conversationnel — « Tempo » par défaut.
+   *
+   * <p>Deux niveaux : cette clé globale (super-admin, s'applique à toute l'application) et une
+   * surcharge par club portée par la même clé dans {@code club_parametre}, saisie par le super-admin
+   * (offre « nommez votre assistant »). La résolution club → global → défaut vit dans
+   * {@code NomAssistantService} ; le nom est injecté dans le prompt via le marqueur {@code {nom}}.
+   */
+  public static final String CLE_NOM_ASSISTANT = "nom_assistant";
+  public static final String NOM_ASSISTANT_DEFAUT = "Tempo";
 
   private static final long CACHE_MS = 60_000;
 
@@ -139,11 +158,13 @@ public class ParametreIaService {
       case CLE_CARTE_DEBRIEF_ACTIVE -> "true";
       case CLE_PROMPT_DERIVES_PREPA -> PROMPT_DERIVES_PREPA_DEFAUT;
       case CLE_CARTE_DERIVES_ACTIVE -> "true";
+      case CLE_PROMPT_SIMULATION_PREPA -> PROMPT_SIMULATION_PREPA_DEFAUT;
+      case CLE_CARTE_SIMULATION_ACTIVE -> "true";
+      case CLE_PROMPT_CHAT_PREPA -> PROMPT_CHAT_PREPA_DEFAUT;
+      case CLE_NOM_ASSISTANT -> NOM_ASSISTANT_DEFAUT;
       //
       case CLE_FOURNISSEUR_GLOBAL -> "ANTHROPIC";
-      case CLE_API_KEY_GLOBAL -> ""; // Vide = utilise ANTHROPIC_API_KEY du .env en fallback
       case CLE_MODELE_GLOBAL -> "claude-opus-4-8";
-      //
       default -> "";
     };
   }
@@ -255,6 +276,58 @@ public class ParametreIaService {
       - Attention au sens : sur le ressenti, une hausse = fatigue qui monte (défavorable) ; sur la charge,
         une hausse forte peut signaler une surcharge, une baisse forte un désentraînement.
       - Si un axe n'a aucune dérive, dis-le sobrement. Aucun préambule ni signature.
+      """;
+
+  /**
+   * Prompt par défaut de la carte « simulation et si… », éditable par le
+   * super-admin. Reçoit en
+   * message utilisateur le résultat DÉJÀ CALCULÉ d'une séance hypothétique
+   * (distance attendue par
+   * joueur, ACWR avant/après, joueurs qui basculent au-dessus du plafond). Le LLM
+   * met en mots une
+   * recommandation, sans rien recalculer ni inventer.
+   */
+  public static final String PROMPT_SIMULATION_PREPA_DEFAUT = """
+      Tu es l'assistant d'un préparateur physique de football. À partir de la SIMULATION déjà calculée
+      ci-dessous (et d'elle SEULE), dis au préparateur ce que donnerait cette séance si elle avait lieu.
+
+      Consignes :
+      - 3 à 5 phrases, en français, ton professionnel et direct, sans liste à puces ni titres.
+      - N'utilise QUE les chiffres fournis : n'invente jamais une valeur, un nom ou un joueur absent.
+      - Commence par le verdict global (combien de joueurs basculeraient au-dessus du plafond), puis
+        nomme les joueurs concernés, puis termine par une reco concrète (alléger, décaler, individualiser).
+      - Rappelle que c'est une PROJECTION fondée sur l'historique de chaque joueur sur ce type de séance :
+        parle au conditionnel, jamais comme d'un fait acquis.
+      - Si la simulation est marquée peu fiable (historique court), dis-le sobrement.
+      - Aucun préambule ni signature : uniquement l'analyse.
+      """;
+
+  /**
+   * Prompt système par défaut du CHAT (carte 3), éditable par le super-admin. Le
+   * marqueur
+   * {@code {nom}} est remplacé à l'exécution par le nom de l'assistant (global ou
+   * surchargé par
+   * club). Le contexte métier est ajouté ensuite par {@code ChatService} à partir
+   * des seules
+   * permissions de l'utilisateur — ce prompt ne doit donc décrire aucune donnée en
+   * particulier.
+   */
+  public static final String PROMPT_CHAT_PREPA_DEFAUT = """
+      Tu es {nom}, l'assistant de l'application. Tu réponds aux questions du staff d'un club de football
+      à partir des INDICATEURS déjà calculés qui te sont fournis ci-dessous, et d'eux SEULS.
+
+      Consignes :
+      - Réponds en français, ton professionnel et direct, en 1 à 4 phrases. Va droit au but.
+      - N'utilise QUE les chiffres et les noms présents dans le contexte : n'invente jamais une valeur,
+        un joueur, une séance ou une tendance. Si l'information n'y est pas, dis simplement que tu ne
+        l'as pas sous les yeux et indique où la personne peut la trouver dans l'application.
+      - Le contexte fourni correspond exactement à ce que cette personne a le droit de consulter.
+        Ne spécule jamais sur des données absentes (médical, contrats, autres équipes…).
+      - Tu ne modifies rien dans l'application : tu informes, tu expliques, tu recommandes.
+      - Pas de liste à puces sauf si la question appelle vraiment une énumération. Pas de préambule
+        (« Voici… »), pas de signature, pas de rappel de ton propre rôle.
+      - Si la question sort du cadre sportif ou des données fournies, dis-le en une phrase et propose
+        la question la plus proche à laquelle tu peux répondre.
       """;
 
   /**

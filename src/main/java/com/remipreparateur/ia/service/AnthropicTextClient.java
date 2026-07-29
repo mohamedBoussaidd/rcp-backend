@@ -21,8 +21,15 @@ import java.util.stream.Collectors;
 public class AnthropicTextClient implements LlmTextClient {
 
     @Override
-    public String provider() {
+    public String dialecte() {
         return "ANTHROPIC";
+    }
+
+    /** Client SDK pour cette config : l'URL de base n'est posée que si le catalogue en fournit une. */
+    private static AnthropicClient clientPour(IaResolved cfg) {
+        AnthropicOkHttpClient.Builder b = AnthropicOkHttpClient.builder().apiKey(cfg.cleApi());
+        if (cfg.baseUrl() != null && !cfg.baseUrl().isBlank()) b.baseUrl(cfg.baseUrl());
+        return b.build();
     }
 
     @Override
@@ -32,7 +39,7 @@ public class AnthropicTextClient implements LlmTextClient {
         }
         String contenu = (systeme == null || systeme.isBlank()) ? utilisateur : systeme + "\n\n" + utilisateur;
         try {
-            AnthropicClient client = AnthropicOkHttpClient.builder().apiKey(cfg.cleApi()).build();
+            AnthropicClient client = clientPour(cfg);
             MessageCreateParams params = MessageCreateParams.builder()
                     .model(cfg.modele())
                     .maxTokens((long) maxTokens)
@@ -57,7 +64,7 @@ public class AnthropicTextClient implements LlmTextClient {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Clé API Anthropic absente");
         }
         try {
-            AnthropicClient client = AnthropicOkHttpClient.builder().apiKey(cfg.cleApi()).build();
+            AnthropicClient client = clientPour(cfg);
             MessageCreateParams params = MessageCreateParams.builder()
                     .model(cfg.modele())
                     .maxTokens((long) maxTokens)

@@ -21,12 +21,13 @@ public class LlmService {
 
     private final IaConfigResolver resolver;
     private final IaQuotaService quota;
+    /** Indexé par DIALECTE, pas par fournisseur : c'est ce qui rend le catalogue extensible sans code. */
     private final Map<String, LlmTextClient> clients = new HashMap<>();
 
     public LlmService(IaConfigResolver resolver, IaQuotaService quota, List<LlmTextClient> clientList) {
         this.resolver = resolver;
         this.quota = quota;
-        for (LlmTextClient c : clientList) clients.put(c.provider().toUpperCase(), c);
+        for (LlmTextClient c : clientList) clients.put(c.dialecte().toUpperCase(), c);
     }
 
     /** Génère du texte pour une feature d'un club (résolution config + quota + journal). */
@@ -39,9 +40,10 @@ public class LlmService {
                     "IA non configurée (aucune clé pour ce club ni clé globale sur le serveur).");
         }
         quota.verifierAvant(clubId, feature, cfg);
-        LlmTextClient client = clients.get(cfg.provider() == null ? "" : cfg.provider().toUpperCase());
+        LlmTextClient client = clients.get(cfg.dialecte() == null ? "" : cfg.dialecte().toUpperCase());
         if (client == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provider IA non supporté : " + cfg.provider());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Dialecte IA non supporté : " + cfg.dialecte() + " (fournisseur " + cfg.provider() + ")");
         }
         String out = client.generer(cfg, systeme, utilisateur, maxTokens);
         quota.enregistrer(clubId, feature, cfg);
@@ -61,9 +63,10 @@ public class LlmService {
                     "IA non configurée (aucune clé pour ce club ni clé globale sur le serveur).");
         }
         quota.verifierAvant(clubId, feature, cfg);
-        LlmTextClient client = clients.get(cfg.provider() == null ? "" : cfg.provider().toUpperCase());
+        LlmTextClient client = clients.get(cfg.dialecte() == null ? "" : cfg.dialecte().toUpperCase());
         if (client == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provider IA non supporté : " + cfg.provider());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Dialecte IA non supporté : " + cfg.dialecte() + " (fournisseur " + cfg.provider() + ")");
         }
         String out = client.genererAvecImage(cfg, consigne, imageJpeg, maxTokens);
         quota.enregistrer(clubId, feature, cfg);

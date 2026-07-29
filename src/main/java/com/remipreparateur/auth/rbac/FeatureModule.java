@@ -76,7 +76,11 @@ public enum FeatureModule {
     ASSISTANT_DEBRIEF("assistant_debrief", "Assistant IA — Debrief séance",
             "Debrief automatique d'une séance réalisée : prévu vs réalisé, objectif de charge atteint, joueurs au-dessus / en-dessous, rédigé par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 31),
     ASSISTANT_DERIVES("assistant_derives", "Assistant IA — Dérives & surveillance",
-            "Surveillance des dérives lentes de charge de l'effectif (volume, haute intensité, ressenti) sur 4 semaines, avec synthèse rédigée par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 32);
+            "Surveillance des dérives lentes de charge de l'effectif (volume, haute intensité, ressenti) sur 4 semaines, avec synthèse rédigée par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 32),
+    ASSISTANT_SIMULATION("assistant_simulation", "Assistant IA — Simulation « et si… »",
+            "Simulation d'une séance à venir : distance attendue par joueur, recalcul de l'ACWR et joueurs qui basculeraient au-dessus du plafond, avec synthèse rédigée par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 33),
+    ASSISTANT_CHAT("assistant_chat", "Assistant IA — Chat",
+            "Assistant conversationnel ancré sur les indicateurs déjà calculés, avec raccourcis vers les autres cartes IA. Nécessite obligatoirement une clé LLM (aucun repli gabarit possible)", false, 34);
 
     private final String code;
     private final String libelle;
@@ -142,6 +146,8 @@ public enum FeatureModule {
             case PREPA_IA_BRIEFING -> ASSISTANT_BRIEFING;
             case PREPA_IA_DEBRIEF -> ASSISTANT_DEBRIEF;
             case PREPA_IA_DERIVES -> ASSISTANT_DERIVES;
+            case PREPA_IA_SIMULATION -> ASSISTANT_SIMULATION;
+            case ASSISTANT_IA_CHAT -> ASSISTANT_CHAT;
             case JOUEURS_READ, JOUEURS_WRITE -> EFFECTIF;
             case CONFIGURATION_READ, CONFIGURATION_WRITE, MEMBRES_MANAGE, CLUB_MANAGE -> ADMINISTRATION;
             case PRESENCE_WRITE -> PRESENCE;

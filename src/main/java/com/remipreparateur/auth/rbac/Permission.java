@@ -36,6 +36,8 @@ public enum Permission {
     PREPA_IA_BRIEFING("prepa_ia:briefing", "Analyse / GPS", "Voir le briefing IA du préparateur (note de l'équipe)"),
     PREPA_IA_DEBRIEF("prepa_ia:debrief", "Analyse / GPS", "Générer le debrief IA d'une séance"),
     PREPA_IA_DERIVES("prepa_ia:derives", "Analyse / GPS", "Voir les dérives de charge et l'alerte de surveillance"),
+    PREPA_IA_SIMULATION("prepa_ia:simulation", "Analyse / GPS",
+            "Simuler une séance à venir et son impact sur la charge (« et si… »)"),
     GPS_IMPORT("gps:import", "Analyse / GPS", "Importer les données GPS"),
     RPE_IMPORT("rpe:import", "Analyse / GPS", "Importer le RPE / ressenti des joueurs (fichier)"),
 
@@ -105,7 +107,15 @@ public enum Permission {
     CLUB_MANAGE("club:manage", "Gestion du club", "Gérer le club (équipes, rôles, tous les membres)"),
 
     // ── Espace staff (application mobile) ───────────────────────────
-    ESPACE_STAFF_ACCESS("espace_staff:access", "Espace staff", "Accéder à l'application mobile staff");
+    ESPACE_STAFF_ACCESS("espace_staff:access", "Espace staff", "Accéder à l'application mobile staff"),
+
+    // ── Assistant IA ────────────────────────────────────────────────
+    // Volontairement HORS du groupe « Analyse / GPS » (contrairement aux cartes prepa_ia:*) : le chat
+    // est transverse. Le contexte qu'il reçoit est assemblé à partir des permissions de l'utilisateur
+    // (voir ContexteChat) — un médecin n'aura jamais les données de charge dans son prompt, et
+    // réciproquement. Ouvrir le chat à un nouveau métier = ajouter un ContexteChat, pas une permission.
+    ASSISTANT_IA_CHAT("assistant_ia:chat", "Assistant IA",
+            "Discuter avec l'assistant IA (contexte limité aux données déjà autorisées)");
 
     private final String code;
     private final String module;

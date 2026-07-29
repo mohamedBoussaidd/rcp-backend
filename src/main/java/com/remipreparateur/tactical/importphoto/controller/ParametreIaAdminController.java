@@ -39,10 +39,14 @@ public class ParametreIaAdminController {
                     Arrays.stream(IaFeature.values())
                             .flatMap(f -> Stream.of(f.clePrompt(), f.cleToggle()))
                             .filter(Objects::nonNull),
-                    Stream.of( // Stream.of() au lieu de Arrays.asList()
+                    Stream.of(
+                            // Fournisseur + modèle globaux. La CLÉ, elle, vit dans le catalogue
+                            // `ia_fournisseur` (chiffrée, non historisée) : voir IaFournisseurService.
                             ParametreIaService.CLE_FOURNISSEUR_GLOBAL,
-                            ParametreIaService.CLE_API_KEY_GLOBAL,
-                            ParametreIaService.CLE_MODELE_GLOBAL))
+                            ParametreIaService.CLE_MODELE_GLOBAL,
+                            // Nom global de l'assistant (défaut « Tempo »), propagé à toute
+                            // l'application ; la surcharge par club passe par /api/admin/ia.
+                            ParametreIaService.CLE_NOM_ASSISTANT))
                     .toList();
 
     private final ParametreIaService parametres;

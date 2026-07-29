@@ -22,9 +22,14 @@ public enum IaFeature {
     IMPORT_PHOTO("import_photo", "Import photo (IA)", true, false, 20),
     BRIEFING_PREPA("briefing_prepa", "Briefing du préparateur", true, true, 30),
     DEBRIEF_SEANCE("debrief_seance", "Debrief de séance", true, true, 30),
-    DERIVES_PREPA("derives_prepa", "Dérives & surveillance", true, true, 20);
+    DERIVES_PREPA("derives_prepa", "Dérives & surveillance", true, true, 20),
+    SIMULATION_PREPA("simulation_prepa", "Simulation « et si… »", true, true, 20),
+    CHAT_PREPA("chat_prepa", "Assistant conversationnel", true, false, 50);
     // ↑ Une entrée = son onglet Prompts + sa ligne Quotas. Les cartes ont un module add-on dédié
     //   (module + permission + migration), ajouté dans leur propre phase.
+    //   Le chat n'a PAS de toggle : il est LLM-obligatoire (aucun gabarit de repli n'est possible
+    //   pour une réponse conversationnelle), donc un interrupteur « désactiver le LLM » n'aurait
+    //   aucun comportement de repli à offrir — il se contenterait de casser la carte.
 
     private final String code;
     private final String libelle;

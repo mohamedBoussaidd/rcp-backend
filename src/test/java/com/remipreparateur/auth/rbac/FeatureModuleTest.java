@@ -69,4 +69,24 @@ class FeatureModuleTest {
         assertThat(FeatureModule.modulesDe(Permission.PREPA_IA_DERIVES))
                 .containsExactly(FeatureModule.ASSISTANT_DERIVES);
     }
+
+    @Test
+    void assistantSimulationEstUnAddonGouvernantSaPermission() {
+        FeatureModule m = FeatureModule.ASSISTANT_SIMULATION;
+        assertThat(m.isSocle()).isFalse();
+        assertThat(FeatureModule.activableCodes()).contains("assistant_simulation");
+        assertThat(FeatureModule.of(Permission.PREPA_IA_SIMULATION)).isEqualTo(m);
+        assertThat(FeatureModule.modulesDe(Permission.PREPA_IA_SIMULATION))
+                .containsExactly(FeatureModule.ASSISTANT_SIMULATION);
+    }
+
+    @Test
+    void assistantChatEstUnAddonGouvernantSaPermission() {
+        FeatureModule m = FeatureModule.ASSISTANT_CHAT;
+        assertThat(m.isSocle()).isFalse();
+        assertThat(FeatureModule.activableCodes()).contains("assistant_chat");
+        assertThat(FeatureModule.of(Permission.ASSISTANT_IA_CHAT)).isEqualTo(m);
+        assertThat(FeatureModule.modulesDe(Permission.ASSISTANT_IA_CHAT))
+                .containsExactly(FeatureModule.ASSISTANT_CHAT);
+    }
 }
