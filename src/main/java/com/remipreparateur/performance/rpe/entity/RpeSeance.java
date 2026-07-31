@@ -54,6 +54,35 @@ public class RpeSeance {
     @Column(name = "commentaire")
     private String commentaire;
 
+    // ── Gêne déclarée APRÈS la séance (V91) ────────────────────────────────
+    // Même vocabulaire que WellnessQuotidien, mais rattachée à SA séance : une gêne
+    // du matin et une gêne d'entraînement peuvent coexister le même jour.
+
+    /** Signalement de gêne localisée sur cette séance (null = aucune gêne). */
+    @Column(name = "gene_zone")
+    private String geneZone;
+
+    @Column(name = "gene_intensite")
+    private Short geneIntensite;
+
+    /** Moment de la gêne : EFFORT | APRES | REPOS. */
+    @Column(name = "gene_moment")
+    private String geneMoment;
+
+    /** Gêne marquée traitée par le staff (quitte les alertes, reste en historique). */
+    @Column(name = "gene_traitee", nullable = false)
+    private boolean geneTraitee = false;
+
+    @Column(name = "gene_traitee_par")
+    private UUID geneTraiteePar;
+
+    @Column(name = "gene_traitee_le")
+    private LocalDateTime geneTraiteeLe;
+
+    /** Type de résolution une fois traitée : ARCHIVEE | CONVERTIE (null si non traitée). */
+    @Column(name = "gene_resolution")
+    private String geneResolution;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

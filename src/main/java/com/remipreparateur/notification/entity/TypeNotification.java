@@ -18,6 +18,7 @@ public enum TypeNotification {
 
     // ── Infos joueur (événementiel) ──
     SEANCE_MODIFIEE(Categorie.INFO, false),
+    EVENEMENT_EXTRASPORTIF(Categorie.INFO, false),   // événement du club qui concerne le joueur
     DOC_MEDICAL(Categorie.INFO, false),
     GENE_SUIVI(Categorie.INFO, false),
     MATCH_PARTAGE(Categorie.INFO, false),

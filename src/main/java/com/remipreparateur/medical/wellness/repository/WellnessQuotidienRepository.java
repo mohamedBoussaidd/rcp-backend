@@ -15,4 +15,11 @@ public interface WellnessQuotidienRepository extends JpaRepository<WellnessQuoti
     Optional<WellnessQuotidien> findByJoueurIdAndDate(UUID joueurId, LocalDate date);
     List<WellnessQuotidien> findAllByOrderByDateDesc();
     List<WellnessQuotidien> findByEquipeIdInOrderByDateDesc(Collection<UUID> equipeIds);
+
+    // ── Fenêtre de dates (couche ressenti du calendrier) ──
+    // Les lectures existantes renvoient TOUT l'historique : les appeler pour afficher un mois
+    // de calendrier serait un sur-téléchargement massif sur une table qui grossit chaque jour.
+    List<WellnessQuotidien> findByDateBetween(LocalDate debut, LocalDate fin);
+    List<WellnessQuotidien> findByEquipeIdInAndDateBetween(Collection<UUID> equipeIds, LocalDate debut, LocalDate fin);
+    List<WellnessQuotidien> findByJoueurIdAndDateBetween(UUID joueurId, LocalDate debut, LocalDate fin);
 }

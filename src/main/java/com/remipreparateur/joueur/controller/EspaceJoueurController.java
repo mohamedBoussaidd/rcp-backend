@@ -3,6 +3,10 @@ package com.remipreparateur.joueur.controller;
 import com.remipreparateur.medical.blessure.dto.BlessureDtos.BlessureResponse;
 import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.EtapeResponse;
 import com.remipreparateur.joueur.dto.EspaceJoueurDtos.MaPeseeResponse;
+import com.remipreparateur.performance.calendrier.dto.CalendrierDtos.ContexteCalendrier;
+import com.remipreparateur.performance.calendrier.service.CalendrierContexteService;
+import com.remipreparateur.performance.evenement.dto.EvenementDtos.EvenementResponse;
+import com.remipreparateur.performance.evenement.service.EvenementService;
 import com.remipreparateur.performance.gps.dto.GpsHistoriqueDto;
 import com.remipreparateur.medical.conseil.dto.ConseilDtos.ConseilResponse;
 import com.remipreparateur.medical.conseil.service.ConseilService;
@@ -32,7 +36,9 @@ import com.remipreparateur.joueur.service.JoueurService;
 import com.remipreparateur.performance.rpe.service.RpeService;
 import com.remipreparateur.performance.seance.dto.SeanceDtos.FicheSeanceJoueur;
 import com.remipreparateur.performance.seance.service.SeanceFicheService;
+import com.remipreparateur.performance.seance.dto.TypeSeanceDtos.TypeSeanceResponse;
 import com.remipreparateur.performance.seance.service.SeanceService;
+import com.remipreparateur.performance.seance.service.TypeSeanceCatalogueService;
 import com.remipreparateur.medical.wellness.service.WellnessService;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -75,6 +81,9 @@ public class EspaceJoueurController {
     private final ClubModulesService clubModulesService;
     private final PermissionResolver permissionResolver;
     private final SeanceFicheService seanceFicheService;
+    private final CalendrierContexteService calendrierContexteService;
+    private final EvenementService evenementService;
+    private final TypeSeanceCatalogueService typeSeanceCatalogueService;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
@@ -90,7 +99,13 @@ public class EspaceJoueurController {
                                   ScopeResolver scopeResolver,
                                   ClubModulesService clubModulesService,
                                   PermissionResolver permissionResolver,
-                                  SeanceFicheService seanceFicheService) {
+                                  SeanceFicheService seanceFicheService,
+                                  CalendrierContexteService calendrierContexteService,
+                                  EvenementService evenementService,
+                                  TypeSeanceCatalogueService typeSeanceCatalogueService) {
+        this.calendrierContexteService = calendrierContexteService;
+        this.evenementService = evenementService;
+        this.typeSeanceCatalogueService = typeSeanceCatalogueService;
         this.currentUser = currentUser;
         this.joueurService = joueurService;
         this.historiquePoidsRepository = historiquePoidsRepository;
@@ -166,6 +181,41 @@ public class EspaceJoueurController {
         return (debut != null && fin != null)
                 ? seanceService.findByPeriode(debut, fin)
                 : seanceService.findAll();
+    }
+
+    /**
+     * Catalogue des types de séance avec les COULEURS DE SON CLUB. Le joueur n'a pas
+     * {@code seances:read}, donc pas d'accès à {@code /api/type-seances} : sans cet endpoint,
+     * son calendrier retomberait sur la palette par défaut et n'afficherait pas les couleurs
+     * choisies par le club.
+     */
+    @GetMapping("/type-seances")
+    public List<TypeSeanceResponse> mesTypeSeances() {
+        return typeSeanceCatalogueService.catalogue();
+    }
+
+    /**
+     * Contexte calendrier du joueur : les jours où SON ressenti est attendu (et s'il l'a rempli),
+     * les séances qu'il a notées, et les anniversaires du club. Pendant de
+     * {@code /api/calendrier/contexte}, mais du point de vue du joueur — les agrégats d'équipe
+     * ne le concernent pas et ne doivent pas lui être exposés.
+     */
+    @GetMapping("/calendrier/contexte")
+    public ContexteCalendrier monContexteCalendrier(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        return calendrierContexteService.pourJoueur(monJoueurId(), debut, fin);
+    }
+
+    /**
+     * Événements extrasportifs qui LE concernent : ceux de ses équipes ouverts aux joueurs, et,
+     * s'ils ciblent des personnes précises, uniquement ceux où il figure.
+     */
+    @GetMapping("/evenements")
+    public List<EvenementResponse> mesEvenements(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
+        return evenementService.listerPourJoueur(monJoueurId(), debut, fin);
     }
 
     /** Contenu (exercices + schémas) d'une séance de l'équipe du joueur, lecture seule. */

@@ -144,6 +144,28 @@ public class Seance {
     @Column(name = "obj_athletique")
     private String objAthletique;
 
+    // ── Musculation (V93) : renseignés seulement pour un type de profil MUSCULATION ──
+    // Volontairement sans tonnage ni %1RM : ils supposeraient de relever les charges soulevées
+    // joueur par joueur, ce qui relève du carnet individuel (backlog).
+
+    /** FORCE_MAX | HYPERTROPHIE | PUISSANCE | ENDURANCE_FORCE | PREVENTION | REATHLETISATION. */
+    @Column(name = "muscu_qualite")
+    private String muscuQualite;
+
+    /**
+     * CONCENTRIQUE | EXCENTRIQUE | PLIOMETRIE | ISOMETRIE | MIXTE. Le régime excentrique
+     * déclenche des courbatures à J+2 : sans ce champ, le moteur de fatigue lit le pic de
+     * douleur du surlendemain comme une dégradation anormale du ressenti.
+     */
+    @Column(name = "muscu_regime")
+    private String muscuRegime;
+
+    @Column(name = "muscu_nb_series")
+    private Short muscuNbSeries;
+
+    @Column(name = "muscu_nb_repetitions")
+    private Integer muscuNbRepetitions;
+
     @Column(name = "cree_par")
     private UUID creePar;
 

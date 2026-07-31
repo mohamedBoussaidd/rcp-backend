@@ -34,4 +34,12 @@ public class TypeSeanceCible {
 
     @Column(name = "objectif_intensite")
     private Short objectifIntensite;
+
+    /**
+     * Couleur du type POUR CE CLUB (V94). {@code null} = on retombe sur la couleur par défaut
+     * du catalogue. Le catalogue étant global, une couleur éditable au niveau du type aurait
+     * repeint le calendrier de tous les clubs de la plateforme.
+     */
+    @Column(name = "couleur")
+    private String couleur;
 }

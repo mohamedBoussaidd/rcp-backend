@@ -28,12 +28,34 @@ public class NotificationProducer {
 
     /** Gêne / blessure déclarée par un joueur → alerte URGENTE au staff médical. */
     public void geneDeclaree(UUID equipeId, UUID joueurId, String joueurNom, String zone, Short intensite) {
+        geneDeclaree(equipeId, joueurId, joueurNom, zone, intensite, "/wellness");
+    }
+
+    /**
+     * Gêne signalée → alerte urgente au staff médical. Depuis V91 une gêne naît de DEUX sources
+     * (ressenti du jour, questionnaire post-séance) : le {@code lien} amène le staff là où la
+     * gêne se lit et se traite réellement, et non systématiquement sur le ressenti quotidien.
+     */
+    public void geneDeclaree(UUID equipeId, UUID joueurId, String joueurNom, String zone,
+                             Short intensite, String lien) {
         if (equipeId == null) return;
         String corps = joueurNom + " signale une gêne"
                 + (zone != null ? " : " + zone : "")
                 + (intensite != null ? " (intensité " + intensite + "/10)" : "");
         safe(() -> dispatcher.versStaff(equipeId, TypeNotification.ALERTE_GENE,
-                "Gêne signalée", corps, "/suivi-subjectif", joueurId, Priorite.URGENTE));
+                "Gêne signalée", corps, lien, joueurId, Priorite.URGENTE));
+    }
+
+    /**
+     * Événement extrasportif qui concerne NOMMÉMENT une personne (examens, rendez-vous,
+     * déplacement…). On ne notifie que les personnes ciblées : un événement d'équipe vit dans
+     * le calendrier, alors qu'une convocation individuelle doit atteindre son destinataire.
+     */
+    public void evenementCible(UUID equipeId, UUID joueurId, String titre, String quand, String lieu) {
+        if (joueurId == null) return;
+        String corps = quand + (lieu != null && !lieu.isBlank() ? " · " + lieu : "");
+        safe(() -> dispatcher.versJoueurFiche(equipeId, joueurId, TypeNotification.EVENEMENT_EXTRASPORTIF,
+                titre, corps, "/joueur/seances", Priorite.NORMALE, null, null, false));
     }
 
     /** Nouveau document médical concernant un joueur → info au joueur. */

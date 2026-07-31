@@ -92,6 +92,16 @@ public class SecurityConfig {
                         .requestMatchers("/api/seances/*/presence/**").hasAuthority("presence:write")
                         .requestMatchers("/api/seances/**").hasAuthority("seances:write")
 
+                        // Couche « contexte » du calendrier (ressenti attendu/rempli, retours sRPE,
+                        // anniversaires) : lecture seule, mêmes droits que la lecture des séances
+                        // puisqu'elle ne fait que décorer le planning. Le joueur passe par /api/moi.
+                        .requestMatchers(HttpMethod.GET, "/api/calendrier/**").hasAuthority("seances:read")
+
+                        // Événements extrasportifs (V92) : même couple de droits que les séances —
+                        // c'est du planning, rangé dans le module socle « Planning ».
+                        .requestMatchers(HttpMethod.GET, "/api/evenements/**").hasAuthority("seances:read")
+                        .requestMatchers("/api/evenements/**").hasAuthority("seances:write")
+
                         // Modèles de semaine (gabarits hebdo) : réutilise les droits séances
                         .requestMatchers(HttpMethod.GET, "/api/modeles-semaine/**").hasAuthority("seances:read")
                         .requestMatchers("/api/modeles-semaine/**").hasAuthority("seances:write")
@@ -167,8 +177,11 @@ public class SecurityConfig {
                         // Wellness (ressenti) + RPE : saisie joueur via /api/moi/** ; lecture staff ;
                         // réouverture d'une gêne (révision) vs traitement d'une gêne.
                         .requestMatchers(HttpMethod.GET, "/api/wellness/**", "/api/rpe/**").hasAuthority("wellness:read")
-                        .requestMatchers("/api/wellness/*/gene-rouvrir").hasAuthority("wellness:reopen")
-                        .requestMatchers("/api/wellness/**").hasAuthority("wellness:treat")
+                        // Une gêne se déclare désormais dans DEUX sources (ressenti du jour et
+                        // questionnaire post-séance, V91) : le traitement et la réouverture sont
+                        // gouvernés par les mêmes permissions des deux côtés.
+                        .requestMatchers("/api/wellness/*/gene-rouvrir", "/api/rpe/*/gene-rouvrir").hasAuthority("wellness:reopen")
+                        .requestMatchers("/api/wellness/**", "/api/rpe/**").hasAuthority("wellness:treat")
 
                         // Conseils du staff au joueur : lecture / écriture. Le joueur lit via /api/moi/conseils.
                         .requestMatchers(HttpMethod.GET, "/api/conseils/**").hasAuthority("conseils:read")

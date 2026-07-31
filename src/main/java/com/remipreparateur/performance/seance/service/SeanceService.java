@@ -117,7 +117,28 @@ public class SeanceService {
         } else {
             bornerDosages(seance);
         }
+        normaliserSelonProfil(seance);
         return seanceRepository.save(seance);
+    }
+
+    /**
+     * Aligne les champs sur la NATURE du type (V93). Une séance de musculation ne porte pas de
+     * mètres, une séance de terrain ne porte pas de séries : sans ce nettoyage, un changement de
+     * type laisserait derrière lui des valeurs orphelines que la carte du calendrier afficherait
+     * — c'est précisément le genre de chiffre faux que le lot E supprime.
+     */
+    private void normaliserSelonProfil(Seance s) {
+        TypeSeance type = (TypeSeance) Hibernate.unproxy(s.getTypeSeance());
+        if (type == null) return;
+        if (type.attendGps()) {
+            s.setMuscuQualite(null);
+            s.setMuscuRegime(null);
+            s.setMuscuNbSeries(null);
+            s.setMuscuNbRepetitions(null);
+        } else {
+            s.setObjectifDistanceM(null);
+            s.setObjectifDistanceHauteIntensiteM(null);
+        }
     }
 
     public Seance update(UUID id, Seance patch) {
@@ -143,6 +164,18 @@ public class SeanceService {
         if (patch.getResponsableId()     != null) existing.setResponsableId(patch.getResponsableId());
         if (patch.getContexte()          != null) existing.setContexte(patch.getContexte());
         if (patch.getContexteSeanceId()  != null) existing.setContexteSeanceId(patch.getContexteSeanceId());
+        // Objectifs de volume : ils étaient posés à la création mais JAMAIS repris en
+        // modification — une correction du coach était silencieusement perdue. La carte du
+        // calendrier les affiche désormais (lot E), il fallait donc qu'ils soient éditables.
+        if (patch.getObjectif()          != null) existing.setObjectif(patch.getObjectif());
+        if (patch.getObjectifDistanceM() != null) existing.setObjectifDistanceM(patch.getObjectifDistanceM());
+        if (patch.getObjectifIntensite() != null) existing.setObjectifIntensite(patch.getObjectifIntensite());
+        if (patch.getObjectifDistanceHauteIntensiteM() != null) existing.setObjectifDistanceHauteIntensiteM(patch.getObjectifDistanceHauteIntensiteM());
+        // Musculation (V93)
+        if (patch.getMuscuQualite()        != null) existing.setMuscuQualite(patch.getMuscuQualite());
+        if (patch.getMuscuRegime()         != null) existing.setMuscuRegime(patch.getMuscuRegime());
+        if (patch.getMuscuNbSeries()       != null) existing.setMuscuNbSeries(patch.getMuscuNbSeries());
+        if (patch.getMuscuNbRepetitions()  != null) existing.setMuscuNbRepetitions(patch.getMuscuNbRepetitions());
         if (accesAvance()) {
             if (patch.getDureeEffectiveMinutes() != null) existing.setDureeEffectiveMinutes(patch.getDureeEffectiveMinutes());
             if (patch.getObjTactiqueOrg()  != null) existing.setObjTactiqueOrg(patch.getObjTactiqueOrg());
@@ -160,6 +193,7 @@ public class SeanceService {
             if (patch.getDominanteAthletiqueIntensite()   != null) existing.setDominanteAthletiqueIntensite(patch.getDominanteAthletiqueIntensite());
         }
         existing.setTypeSeance((TypeSeance) Hibernate.unproxy(existing.getTypeSeance()));
+        normaliserSelonProfil(existing);
         return seanceRepository.save(existing);
     }
 
@@ -271,6 +305,12 @@ public class SeanceService {
         s.setObjMental(src.getObjMental());
         s.setObjTechnique(src.getObjTechnique());
         s.setObjAthletique(src.getObjAthletique());
+        // Paramètres de musculation (V93) : ils décrivent le CONTENU prévu, donc ils se
+        // dupliquent comme les objectifs de volume — au contraire du vécu (score, météo…).
+        s.setMuscuQualite(src.getMuscuQualite());
+        s.setMuscuRegime(src.getMuscuRegime());
+        s.setMuscuNbSeries(src.getMuscuNbSeries());
+        s.setMuscuNbRepetitions(src.getMuscuNbRepetitions());
         s.setEquipeId(src.getEquipeId());
         s.setCreePar(currentUser.current().getId());
         // Le vécu n'est jamais recopié : score, météo, durée effective, raison d'écart.
