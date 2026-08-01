@@ -87,6 +87,12 @@ public class SecurityConfig {
                         // Générateur de séance par IA (module add-on generateur_seance_ia) : appel LLM
                         // facturé → gardé par sa propre permission, AVANT la règle générique seances:write.
                         .requestMatchers(HttpMethod.POST, "/api/seances/generer").hasAuthority("seance_ia:generate")
+                        // Déclaration d'aménagement par le médical (adapté / au soin sur une période) :
+                        // c'est un acte médical, pas un acte d'entraînement — le médical n'a ni
+                        // seances:write ni presence:write. L'URL n'a pas d'{id} de séance, elle ne
+                        // matche donc PAS "/api/seances/*/presence/**" et tomberait dans la règle
+                        // générique seances:write → 403. Règle explicite, AVANT les génériques.
+                        .requestMatchers(HttpMethod.POST, "/api/seances/presence/amenagement").hasAuthority("blessures:write")
                         // Séances unifiées (cadre + exercices) : lecture / présence / écriture
                         .requestMatchers(HttpMethod.GET, "/api/seances/**").hasAuthority("seances:read")
                         .requestMatchers("/api/seances/*/presence/**").hasAuthority("presence:write")

@@ -4,6 +4,7 @@ import com.remipreparateur.performance.seance.dto.PresenceDtos.*;
 import com.remipreparateur.performance.seance.service.PresenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +21,17 @@ public class PresenceController {
     @GetMapping("/presence/resumes")
     public ResponseEntity<List<ResumeAppel>> resumes(@RequestParam("ids") List<UUID> ids) {
         return ResponseEntity.ok(presenceService.resumes(ids));
+    }
+
+    /**
+     * Déclaration d'aménagement par le médical (adapté / au soin) sur une période, avec consigne
+     * terrain poussée au staff. Réservé aux rôles qui suivent les blessures : c'est un acte
+     * médical, alors que poser le statut depuis l'appel est un acte d'entraînement.
+     */
+    @PostMapping("/presence/amenagement")
+    @PreAuthorize("hasAuthority('blessures:write')")
+    public ResponseEntity<ResultatAmenagement> declarerAmenagement(@RequestBody DeclarationAmenagement req) {
+        return ResponseEntity.ok(presenceService.declarerAmenagement(req));
     }
 
     /** Feuille de présence complète d'une séance (effectif + statuts). */

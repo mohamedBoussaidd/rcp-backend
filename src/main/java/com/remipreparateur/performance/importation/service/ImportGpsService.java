@@ -15,7 +15,9 @@ import com.remipreparateur.performance.importation.repository.AliasJoueurImportR
 import com.remipreparateur.performance.importation.repository.ProfilImportGpsRepository;
 import com.remipreparateur.performance.importation.service.LecteurFichierTabulaire.LigneBrute;
 import com.remipreparateur.performance.importation.service.LecteurFichierTabulaire.Tableau;
+import com.remipreparateur.performance.seance.entity.Presence;
 import com.remipreparateur.performance.seance.entity.Seance;
+import com.remipreparateur.performance.seance.repository.PresenceRepository;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
 import com.remipreparateur.shared.security.ScopeResolver;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.remipreparateur.performance.importation.service.ImportNormalisation.normalise;
 
@@ -43,6 +46,7 @@ public class ImportGpsService {
 
     private final LecteurFichierTabulaire lecteur;
     private final DictionnaireMetriques dictionnaire;
+    private final PresenceRepository presenceRepository;
     private final ProfilImportGpsRepository profilRepository;
     private final AliasJoueurImportRepository aliasRepository;
     private final SeanceRepository seanceRepository;
@@ -380,6 +384,16 @@ public class ImportGpsService {
         return valeur.add(cumulSuperieur == null ? BigDecimal.ZERO : cumulSuperieur);
     }
 
+    /** Libellé lisible d'un statut d'appel, pour le message d'avertissement. */
+    private static String libelleStatutAppel(String statut) {
+        return switch (statut) {
+            case "ABSENT" -> "absent";
+            case "EXCUSE" -> "excusé";
+            case "SOIN"   -> "au soin";
+            default -> statut;
+        };
+    }
+
     /* ── Vérifications de vraisemblance (non bloquantes) ── */
 
     private void verifie(AnalyseImportResponse reponse, Seance seance, LocalDate dateFichier) {
@@ -391,6 +405,25 @@ public class ImportGpsService {
             avert.add(new AvertissementImportDto("FICHIER", null, null,
                     "Le fichier date du " + dateFichier + " mais la séance sélectionnée est le "
                             + seance.getDate() + " — vérifiez la séance choisie"));
+        }
+
+        // LIGNE : le joueur est déclaré NON PARTICIPANT à l'appel, mais le fichier lui attribue
+        // des données. La donnée GPS est une preuve physique, la feuille d'appel une saisie
+        // humaine — on n'écrase donc RIEN automatiquement, on montre la contradiction. Elle a
+        // deux lectures aussi probables l'une que l'autre : erreur d'appel, ou mauvais
+        // rattachement du nom du fichier à une fiche (l'import repose sur un appariement).
+        Map<UUID, Presence> presences = presenceRepository.findBySeanceId(seance.getId()).stream()
+                .collect(Collectors.toMap(Presence::getJoueurId, p -> p, (a, b) -> a));
+        for (LigneGpsImportDto l : lignes) {
+            if (l.getJoueurId() == null) continue;
+            Presence p = presences.get(UUID.fromString(l.getJoueurId()));
+            if (p == null) continue;
+            String st = p.getStatut() != null ? p.getStatut().name() : null;
+            if (!"ABSENT".equals(st) && !"EXCUSE".equals(st) && !"SOIN".equals(st)) continue;
+            avert.add(new AvertissementImportDto("LIGNE", l.getNumeroLigne(), null,
+                    l.getJoueurNomAffiche() + " est marqué « " + libelleStatutAppel(st)
+                            + " » sur cette séance mais le fichier lui attribue des données GPS — "
+                            + "erreur d'appel, ou ces données appartiennent-elles à un autre joueur ?"));
         }
 
         // COLONNE : moyennes hors plages plausibles → mapping probablement décalé.

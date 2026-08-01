@@ -47,6 +47,25 @@ public class NotificationProducer {
     }
 
     /**
+     * Le médical passe un joueur en séance ADAPTÉE ou au SOIN → information POUSSÉE au staff de
+     * l'équipe, qui doit adapter la séance suivante. C'est le seul sens de circulation notifié :
+     * quand l'entraîneur pose lui-même le statut depuis l'appel, il est déjà devant sa feuille et
+     * une notification ne serait que du bruit.
+     *
+     * <p>{@code consigne} est une consigne TERRAIN volontairement destinée à tout le staff
+     * (« pas de sprint », « éviter les appuis »), pas une note clinique : le détail médical reste
+     * dans le dossier, qui a ses propres droits d'accès.
+     */
+    public void seanceAmenagee(UUID equipeId, UUID joueurId, String joueurNom, String statutLibelle,
+                               String periode, String consigne, String lien) {
+        if (equipeId == null) return;
+        String corps = joueurNom + " est " + statutLibelle + " " + periode
+                + (consigne != null && !consigne.isBlank() ? " · " + consigne : "");
+        safe(() -> dispatcher.versStaff(equipeId, TypeNotification.SEANCE_AMENAGEE,
+                "Séance aménagée", corps, lien, joueurId, Priorite.NORMALE));
+    }
+
+    /**
      * Événement extrasportif qui concerne NOMMÉMENT une personne (examens, rendez-vous,
      * déplacement…). On ne notifie que les personnes ciblées : un événement d'équipe vit dans
      * le calendrier, alors qu'une convocation individuelle doit atteindre son destinataire.

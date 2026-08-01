@@ -5,6 +5,8 @@ import com.remipreparateur.club.entity.Equipe;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.joueur.repository.JoueurRepository;
+import com.remipreparateur.medical.blessure.entity.Blessure;
+import com.remipreparateur.medical.blessure.repository.BlessureRepository;
 import com.remipreparateur.notification.service.NotificationProducer;
 import com.remipreparateur.performance.seance.entity.Presence;
 import com.remipreparateur.performance.seance.entity.Presence.StatutPresence;
@@ -46,6 +48,7 @@ public class PresenceService {
     private final SaisonRepository saisonRepository;
     private final EffectifSaisonRepository effectifRepository;
     private final NotificationProducer notificationProducer;
+    private final BlessureRepository blessureRepository;
     private final ScopeResolver scopeResolver;
     private final AppartenanceService appartenance;
     private final Horloge horloge;
@@ -109,6 +112,12 @@ public class PresenceService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Séance introuvable"));
 
         StatutPresence statut = req.statut() != null ? req.statut() : StatutPresence.PRESENT;
+        // Ménager un joueur est une décision de staff, pas une auto-déclaration : la PWA ne peut
+        // pas poser ADAPTE ni SOIN, même si un client forgeait la requête.
+        if (statut == StatutPresence.ADAPTE || statut == StatutPresence.SOIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Le statut « " + libelleStatut(statut) + " » ne peut être posé que par le staff.");
+        }
         Presence p = upsert(seanceId, joueurId, statut, req.commentaire(), "JOUEUR");
         Joueur joueur = joueurRequis(joueurId);
 
@@ -119,6 +128,70 @@ public class PresenceService {
                     libelleStatut(statut), quand);
         }
         return ligne(joueur, p);
+    }
+
+    /**
+     * Déclaration d'aménagement par le MÉDICAL : passe un joueur en ADAPTE ou SOIN sur toutes les
+     * séances non annulées de son équipe dans la période, puis POUSSE l'information au staff avec
+     * la consigne terrain. C'est le seul chemin « poussé » — le prépa et l'entraîneur, eux, posent
+     * le statut directement depuis l'appel.
+     *
+     * <p>Sans bornes, la période se réduit à la PROCHAINE séance planifiée de l'équipe.
+     */
+    @Transactional
+    public ResultatAmenagement declarerAmenagement(DeclarationAmenagement req) {
+        StatutPresence statut = req.statut();
+        if (statut != StatutPresence.ADAPTE && statut != StatutPresence.SOIN) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Un aménagement vaut « adapté » ou « au soin ».");
+        }
+        Joueur joueur = joueurRequis(req.joueurId());
+        UUID equipeId = appartenance.equipePrincipale(joueur.getId());
+        if (equipeId == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ce joueur n'est rattaché à aucune équipe : impossible de cibler ses séances.");
+        }
+        scopeResolver.verifieAcces(equipeId);
+
+        LocalDate today = horloge.today();
+        LocalDate du = req.du();
+        LocalDate au = req.au();
+        if (du == null && au == null) {
+            LocalDate prochaine = prochaineSeance(equipeId, today);
+            if (prochaine == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Aucune séance à venir pour cette équipe : précisez une période.");
+            }
+            du = prochaine; au = prochaine;
+        } else {
+            if (du == null) du = today;
+            if (au == null) au = du;
+            if (au.isBefore(du)) { LocalDate t = du; du = au; au = t; }
+        }
+
+        int marquees = 0;
+        for (Seance s : seanceRepository.findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(du, au, List.of(equipeId))) {
+            if ("ANNULEE".equals(s.getStatut())) continue;
+            upsert(s.getId(), joueur.getId(), statut, req.consigne(), "MEDICAL");
+            marquees++;
+        }
+
+        if (marquees > 0) {
+            String nom = (joueur.getPrenom() != null ? joueur.getPrenom() + " " : "") + nomDe(joueur);
+            String periode = du.equals(au) ? "le " + du : "du " + du + " au " + au;
+            notificationProducer.seanceAmenagee(equipeId, joueur.getId(), nom.trim(),
+                    libelleStatut(statut), periode, req.consigne(), "/joueurs/" + joueur.getId());
+        }
+        return new ResultatAmenagement(joueur.getId(), statut, du, au, marquees);
+    }
+
+    /** Date de la prochaine séance non annulée de l'équipe, à partir de {@code depuis} incluse. */
+    private LocalDate prochaineSeance(UUID equipeId, LocalDate depuis) {
+        for (Seance s : seanceRepository.findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(
+                depuis, depuis.plusDays(30), List.of(equipeId))) {
+            if (!"ANNULEE".equals(s.getStatut())) return s.getDate();
+        }
+        return null;
     }
 
     /** Résumés d'appel pour plusieurs séances (dashboard) ; les séances hors périmètre sont ignorées. */
@@ -134,7 +207,7 @@ public class PresenceService {
 
             Map<UUID, Presence> ex = presenceRepository.findBySeanceId(id)
                     .stream().collect(Collectors.toMap(Presence::getJoueurId, Function.identity()));
-            int effectif = 0, blesses = 0, absents = 0, excuses = 0, retards = 0;
+            int effectif = 0, blesses = 0, absents = 0, excuses = 0, retards = 0, adaptes = 0, soins = 0;
             for (Joueur j : effectifDeSeance(seance)) {
                 effectif++;
                 if ("blesse".equalsIgnoreCase(j.getStatut())) { blesses++; continue; }
@@ -144,12 +217,17 @@ public class PresenceService {
                     case ABSENT -> absents++;
                     case EXCUSE -> excuses++;
                     case RETARD -> retards++;
+                    case ADAPTE -> adaptes++;
+                    case SOIN   -> soins++;
                     default -> {}
                 }
             }
-            int presents = Math.max(0, effectif - blesses - absents - excuses - retards);
-            int dispo = Math.max(0, effectif - blesses - absents - excuses);
-            out.add(new ResumeAppel(id, effectif, presents, blesses, absents, excuses, retards, dispo));
+            // ADAPTE n'est jamais retranché : le joueur a participé, en charge allégée.
+            // SOIN l'est, comme un blessé : il était là, mais pas à l'entraînement.
+            int presents = Math.max(0, effectif - blesses - absents - excuses - retards - soins);
+            int dispo = Math.max(0, effectif - blesses - absents - excuses - soins);
+            out.add(new ResumeAppel(id, effectif, presents, blesses, absents, excuses, retards,
+                    adaptes, soins, dispo));
         }
         return out;
     }
@@ -199,10 +277,13 @@ public class PresenceService {
             }
         }
         List<Presence> rows = presenceRepository.findByJoueurId(joueurId);   // comptées seulement si la séance est dans la fenêtre
+        List<Blessure> blessures = blessureRepository.findByJoueurIdOrderByDateBlessureDesc(joueurId);
 
-        int absents = 0, excuses = 0, retards = 0, recents = 0;
+        int absents = 0, excuses = 0, retards = 0, adaptes = 0, recents = 0;
         LocalDate recentDepuis = today.minusDays(14);
         List<EvenementAssiduite> hist = new ArrayList<>();
+        // Séances qui ne sont PAS opposables au joueur : il était blessé, ou au soin.
+        Set<UUID> neutralisees = new java.util.HashSet<>();
         for (Presence p : rows) {
             Seance s = parId.get(p.getSeanceId());
             if (s == null || p.getStatut() == StatutPresence.PRESENT) continue;
@@ -210,21 +291,51 @@ public class PresenceService {
                 case ABSENT -> absents++;
                 case EXCUSE -> excuses++;
                 case RETARD -> retards++;
+                case ADAPTE -> adaptes++;                          // il était là : reste une présence
+                case SOIN   -> neutralisees.add(p.getSeanceId());  // hors décompte, comme un blessé
                 default -> {}
             }
             LocalDate d = s.getDate();
-            if (d != null && !d.isBefore(recentDepuis)) recents++;
+            // Un décrochage récent, c'est une absence/excuse/retard — pas un aménagement décidé
+            // par le staff ni un passage au soin.
+            boolean decrochage = p.getStatut() == StatutPresence.ABSENT
+                    || p.getStatut() == StatutPresence.EXCUSE
+                    || p.getStatut() == StatutPresence.RETARD;
+            if (decrochage && d != null && !d.isBefore(recentDepuis)) recents++;
             hist.add(new EvenementAssiduite(p.getSeanceId(), d, titreSeance(s),
                     p.getStatut(), p.getNote(), p.getSource()));
         }
         hist.sort(Comparator.comparing(EvenementAssiduite::date, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
+        // Les séances tombant dans une période de blessure sortent du dénominateur. Sans ça, un
+        // joueur arrêté trois mois affichait 100 % d'assiduité (aucune ligne de présence n'est
+        // écrite pour lui), alors que les écrans d'équipe l'excluaient déjà de l'effectif.
+        for (Seance s : parId.values()) {
+            if (s.getDate() != null && estBlesseLe(blessures, s.getDate())) neutralisees.add(s.getId());
+        }
+
         int nbSeances = parId.size();
-        int presents = Math.max(0, nbSeances - absents - excuses - retards);
-        int taux = nbSeances > 0 ? Math.round(presents * 100f / nbSeances) : 100;
+        int denominateur = Math.max(0, nbSeances - neutralisees.size());
+        int presents = Math.max(0, denominateur - absents - excuses - retards);
+        int taux = denominateur > 0 ? Math.round(presents * 100f / denominateur) : 100;
 
         return new AssiduiteJoueur(joueurId, f.saisonId(), f.saisonLibelle(),
-                nbSeances, presents, absents, excuses, retards, taux, recents, hist);
+                denominateur, presents, absents, excuses, retards, adaptes, neutralisees.size(),
+                taux, recents, hist);
+    }
+
+    /**
+     * Le joueur était-il blessé à cette date ? Une blessure sans date de retour effectif court
+     * jusqu'à aujourd'hui (elle est toujours en cours).
+     */
+    private static boolean estBlesseLe(List<Blessure> blessures, LocalDate jour) {
+        for (Blessure b : blessures) {
+            LocalDate debut = b.getDateBlessure();
+            if (debut == null || jour.isBefore(debut)) continue;
+            LocalDate fin = b.getDateRetourEffectif();
+            if (fin == null || !jour.isAfter(fin)) return true;
+        }
+        return false;
     }
 
     /** Assiduité (résumé léger) de tous les joueurs du périmètre, regroupée par équipe pour rester efficace. */
@@ -260,8 +371,17 @@ public class PresenceService {
             }
             int nbSeances = fenetre.size();
 
+            // Blessures de toute l'équipe en UNE requête, puis regroupées : le dénominateur de
+            // chaque joueur doit exclure les séances où il était arrêté (même règle que le bilan
+            // individuel, qui divergeait de cet écran).
+            Map<UUID, List<Blessure>> blessuresParJoueur = new HashMap<>();
+            for (Blessure b : blessureRepository.findByEquipeIdInOrderByDateBlessureDesc(List.of(equipeId))) {
+                blessuresParJoueur.computeIfAbsent(b.getJoueurId(), k -> new ArrayList<>()).add(b);
+            }
+
             for (Joueur j : e.getValue()) {
                 int absents = 0, excuses = 0, retards = 0, recents = 0;
+                Set<UUID> neutralisees = new java.util.HashSet<>();
                 for (Presence p : presenceRepository.findByJoueurId(j.getId())) {
                     LocalDate d = fenetre.get(p.getSeanceId());
                     if (d == null || p.getStatut() == StatutPresence.PRESENT) continue;
@@ -269,12 +389,23 @@ public class PresenceService {
                         case ABSENT -> absents++;
                         case EXCUSE -> excuses++;
                         case RETARD -> retards++;
-                        default -> {}
+                        case SOIN   -> neutralisees.add(p.getSeanceId());
+                        default -> {}   // ADAPTE : présent, rien à retrancher
                     }
-                    if (!d.isBefore(recentDepuis)) recents++;
+                    boolean decrochage = p.getStatut() == StatutPresence.ABSENT
+                            || p.getStatut() == StatutPresence.EXCUSE
+                            || p.getStatut() == StatutPresence.RETARD;
+                    if (decrochage && !d.isBefore(recentDepuis)) recents++;
                 }
-                int presents = Math.max(0, nbSeances - absents - excuses - retards);
-                int taux = nbSeances > 0 ? Math.round(presents * 100f / nbSeances) : 100;
+                List<Blessure> bs = blessuresParJoueur.getOrDefault(j.getId(), List.of());
+                if (!bs.isEmpty()) {
+                    for (Map.Entry<UUID, LocalDate> s : fenetre.entrySet()) {
+                        if (estBlesseLe(bs, s.getValue())) neutralisees.add(s.getKey());
+                    }
+                }
+                int denominateur = Math.max(0, nbSeances - neutralisees.size());
+                int presents = Math.max(0, denominateur - absents - excuses - retards);
+                int taux = denominateur > 0 ? Math.round(presents * 100f / denominateur) : 100;
                 out.add(new AssiduiteResume(j.getId(), taux, absents, retards, excuses, recents));
             }
         }
@@ -304,7 +435,7 @@ public class PresenceService {
             if (!estEntrainementComptable(s)) continue;
             Map<UUID, Presence> ex = presenceRepository.findBySeanceId(s.getId())
                     .stream().collect(Collectors.toMap(Presence::getJoueurId, Function.identity()));
-            int effectif = 0, blesses = 0, absents = 0, excuses = 0, retards = 0;
+            int effectif = 0, blesses = 0, absents = 0, excuses = 0, retards = 0, adaptes = 0, soins = 0;
             for (Joueur j : effectifDeSeance(s)) {
                 effectif++;
                 if ("blesse".equalsIgnoreCase(j.getStatut())) { blesses++; continue; }
@@ -314,17 +445,21 @@ public class PresenceService {
                     case ABSENT -> absents++;
                     case EXCUSE -> excuses++;
                     case RETARD -> retards++;
+                    case ADAPTE -> adaptes++;
+                    case SOIN   -> soins++;
                     default -> {}
                 }
             }
-            int presents = Math.max(0, effectif - blesses - absents - excuses - retards);
-            int dispo = Math.max(0, effectif - blesses - absents - excuses);
+            int presents = Math.max(0, effectif - blesses - absents - excuses - retards - soins);
+            int dispo = Math.max(0, effectif - blesses - absents - excuses - soins);
             int declaresJoueur = (int) ex.values().stream()
                     .filter(p -> "JOUEUR".equalsIgnoreCase(p.getSource())).count();
-            int denom = effectif - blesses;
+            // Blessés ET joueurs au soin sont neutres : ni au numérateur, ni au dénominateur.
+            int denom = effectif - blesses - soins;
             int taux = denom > 0 ? Math.round(presents * 100f / denom) : 100;
             lignes.add(new LigneHistoriqueSeance(s.getId(), s.getDate(), titreSeance(s), typeLibelle(s),
-                    effectif, presents, blesses, absents, excuses, retards, dispo, declaresJoueur, taux));
+                    effectif, presents, blesses, absents, excuses, retards, adaptes, soins,
+                    dispo, declaresJoueur, taux));
         }
         lignes.sort(Comparator.comparing(LigneHistoriqueSeance::date, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
 
@@ -439,6 +574,8 @@ public class PresenceService {
             case EXCUSE  -> "excusé";
             case RETARD  -> "en retard";
             case PRESENT -> "présent";
+            case ADAPTE  -> "en séance adaptée";
+            case SOIN    -> "au soin";
         };
     }
 }

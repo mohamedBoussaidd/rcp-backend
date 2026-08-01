@@ -133,7 +133,9 @@ public class WellnessService {
         if (w.getGeneZone() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune gêne à traiter");
         }
-        String res = "CONVERTIE".equalsIgnoreCase(resolution) ? "CONVERTIE" : "ARCHIVEE";
+        // Même vocabulaire des deux côtés : une gêne du matin et une gêne d'après-séance se
+        // résolvent de la même façon (cf. RpeService, source unique de la normalisation).
+        String res = com.remipreparateur.performance.rpe.service.RpeService.normaliserResolution(resolution);
         w.setGeneTraitee(true);
         w.setGeneTraiteePar(currentUser.current().getId());
         w.setGeneTraiteeLe(LocalDateTime.now());

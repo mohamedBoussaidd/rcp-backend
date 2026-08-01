@@ -43,6 +43,9 @@ public class NotifConfigService {
         ROUTAGE_DEFAUT.put(TypeNotification.DIGEST, "PREPARATEUR,MEDICAL");
         ROUTAGE_DEFAUT.put(TypeNotification.COMPTE, "PRESIDENT");
         ROUTAGE_DEFAUT.put(TypeNotification.ECHEANCE, "MEDICAL");
+        // Le médical est l'ÉMETTEUR (il déclare l'aménagement) : il n'est pas destinataire par
+        // défaut. La consigne vise le staff qui anime la séance et doit l'adapter.
+        ROUTAGE_DEFAUT.put(TypeNotification.SEANCE_AMENAGEE, "PREPARATEUR,ENTRAINEUR");
     }
 
     private final NotifConfigEquipeRepository configRepository;
@@ -71,12 +74,22 @@ public class NotifConfigService {
         });
     }
 
-    /** Routages de l'équipe (semés depuis le mapping par défaut au premier accès). */
+    /**
+     * Routages de l'équipe, complétés depuis le mapping par défaut.
+     *
+     * <p>On sème les types MANQUANTS, pas seulement la première fois : un type ajouté au
+     * catalogue après coup (SEANCE_AMENAGEE, V95) n'atteindrait jamais les équipes déjà
+     * configurées — ni en routage réel, ni comme ligne réglable dans l'écran de config.
+     * Un type volontairement désactivé garde sa ligne (actif = false), il n'est donc pas
+     * ressuscité par ce complément.</p>
+     */
     @Transactional
     public List<NotifRoutage> getOrSeedRoutages(UUID equipeId) {
         List<NotifRoutage> existants = routageRepository.findByEquipeId(equipeId);
-        if (!existants.isEmpty()) return existants;
-        ROUTAGE_DEFAUT.forEach((type, roles) -> {
+        Map<TypeNotification, String> manquants = new EnumMap<>(ROUTAGE_DEFAUT);
+        existants.forEach(r -> manquants.remove(r.getType()));
+        if (manquants.isEmpty()) return existants;
+        manquants.forEach((type, roles) -> {
             NotifRoutage r = new NotifRoutage();
             r.setEquipeId(equipeId);
             r.setType(type);

@@ -163,13 +163,25 @@ public class RpeService {
     }
 
     /**
+     * Normalise la résolution d'une gêne. Trois issues, et une seule d'entre elles agit sur le
+     * terrain : ARCHIVEE (rien à faire), CONVERTIE (devient une blessure), MENAGEE (le joueur est
+     * aménagé sur ses prochaines séances — cf. {@code PresenceService.declarerAmenagement}).
+     * Toute autre valeur retombe sur ARCHIVEE.
+     */
+    public static String normaliserResolution(String resolution) {
+        if ("CONVERTIE".equalsIgnoreCase(resolution)) return "CONVERTIE";
+        if ("MENAGEE".equalsIgnoreCase(resolution))   return "MENAGEE";
+        return "ARCHIVEE";
+    }
+
+    /**
      * Marque la gêne d'un RPE comme traitée (staff). Scopée à l'équipe.
-     * {@code resolution} = ARCHIVEE (archivage simple) ou CONVERTIE (convertie en blessure).
+     * {@code resolution} = ARCHIVEE | CONVERTIE | MENAGEE.
      * Pendant du {@code WellnessService.traiterGene} pour la seconde source de gênes.
      */
     public RpeResponse traiterGene(UUID rpeId, String resolution) {
         RpeSeance r = chargerAvecGene(rpeId, "Aucune gêne à traiter");
-        String res = "CONVERTIE".equalsIgnoreCase(resolution) ? "CONVERTIE" : "ARCHIVEE";
+        String res = normaliserResolution(resolution);
         r.setGeneTraitee(true);
         r.setGeneTraiteePar(currentUser.current().getId());
         r.setGeneTraiteeLe(LocalDateTime.now());

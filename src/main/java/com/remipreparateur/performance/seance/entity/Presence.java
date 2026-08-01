@@ -44,7 +44,21 @@ public class Presence {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    /**
+     * Statuts d'appel. La colonne est un {@code varchar(20)} SANS contrainte CHECK depuis V25
+     * (l'enum Postgres a été supprimé) : ajouter une valeur ne demande aucune migration.
+     *
+     * <p>{@code ADAPTE} et {@code SOIN} décrivent deux réalités que le staff vit différemment et
+     * qui NE se comptent PAS pareil :
+     * <ul>
+     *   <li>{@code ADAPTE} — le joueur a participé, en charge allégée (gêne, fatigue, reprise
+     *       progressive). Il compte comme <b>présent</b> : le pénaliser en assiduité reviendrait à
+     *       sanctionner une décision du staff.</li>
+     *   <li>{@code SOIN} — présent au club mais pas à l'entraînement. Il sort du décompte comme un
+     *       blessé, sans être compté absent.</li>
+     * </ul>
+     */
     public enum StatutPresence {
-        PRESENT, ABSENT, EXCUSE, RETARD
+        PRESENT, ABSENT, EXCUSE, RETARD, ADAPTE, SOIN
     }
 }

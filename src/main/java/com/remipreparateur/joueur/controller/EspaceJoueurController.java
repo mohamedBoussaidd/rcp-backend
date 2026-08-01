@@ -3,6 +3,8 @@ package com.remipreparateur.joueur.controller;
 import com.remipreparateur.medical.blessure.dto.BlessureDtos.BlessureResponse;
 import com.remipreparateur.medical.blessure.dto.BlessureSuiviDtos.EtapeResponse;
 import com.remipreparateur.joueur.dto.EspaceJoueurDtos.MaPeseeResponse;
+import com.remipreparateur.joueur.dto.MaSeanceGpsDto;
+import com.remipreparateur.shared.time.Horloge;
 import com.remipreparateur.performance.calendrier.dto.CalendrierDtos.ContexteCalendrier;
 import com.remipreparateur.performance.calendrier.service.CalendrierContexteService;
 import com.remipreparateur.performance.evenement.dto.EvenementDtos.EvenementResponse;
@@ -54,8 +56,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Espace personnel du joueur connecte : ses donnees uniquement (scoping par joueurId du token).
@@ -84,6 +89,8 @@ public class EspaceJoueurController {
     private final CalendrierContexteService calendrierContexteService;
     private final EvenementService evenementService;
     private final TypeSeanceCatalogueService typeSeanceCatalogueService;
+    /** Date du jour de l'application (honore la date simulée du super-admin). */
+    private final Horloge horloge;
 
     public EspaceJoueurController(CurrentUserProvider currentUser,
                                   JoueurService joueurService,
@@ -102,7 +109,9 @@ public class EspaceJoueurController {
                                   SeanceFicheService seanceFicheService,
                                   CalendrierContexteService calendrierContexteService,
                                   EvenementService evenementService,
-                                  TypeSeanceCatalogueService typeSeanceCatalogueService) {
+                                  TypeSeanceCatalogueService typeSeanceCatalogueService,
+                                  Horloge horloge) {
+        this.horloge = horloge;
         this.calendrierContexteService = calendrierContexteService;
         this.evenementService = evenementService;
         this.typeSeanceCatalogueService = typeSeanceCatalogueService;
@@ -147,6 +156,45 @@ public class EspaceJoueurController {
     public List<GpsHistoriqueDto> mesSeancesGps() {
         exigeModule(FeatureModule.GPS);
         return joueurService.getHistoriqueGps(monJoueurId());
+    }
+
+    /**
+     * Mon historique de séances mesurées : les séances PASSÉES de mon équipe, avec mon GPS quand
+     * il existe et mon statut d'appel sinon.
+     *
+     * <p>Assemblage de trois vues déjà scopées, sans nouvelle requête ni nouveau scoping : les
+     * séances viennent de {@code seanceService.findAll()} (filtré sur mon équipe par le
+     * ScopeResolver, rôle JOUEUR), le GPS et les présences sont lus par {@code monJoueurId()}.
+     * Réécrire une requête maison ici, c'est se rouvrir le risque de fuite entre joueurs.</p>
+     *
+     * <p>Fenêtre : 12 mois glissants. Sans borne, un club de plusieurs saisons enverrait des
+     * centaines de séances à un téléphone pour n'en afficher que les dernières.</p>
+     */
+    @GetMapping("/historique-seances")
+    public List<MaSeanceGpsDto> monHistoriqueSeances() {
+        exigeModule(FeatureModule.GPS);
+        UUID joueurId = monJoueurId();
+        Map<UUID, GpsHistoriqueDto> gpsParSeance = joueurService.getHistoriqueGps(joueurId).stream()
+                .collect(Collectors.toMap(GpsHistoriqueDto::seanceId, g -> g, (a, b) -> a));
+        Map<UUID, String> statutParSeance = presenceService.mesDeclarations(joueurId).stream()
+                .collect(Collectors.toMap(MaDeclaration::seanceId,
+                        d -> d.statut() == null ? "PRESENT" : d.statut().name(), (a, b) -> a));
+
+        LocalDate aujourdhui = horloge.today();
+        LocalDate depuis = aujourdhui.minusMonths(12);
+        return seanceService.findAll().stream()
+                .filter(s -> s.getDate() != null
+                        && !s.getDate().isAfter(aujourdhui) && !s.getDate().isBefore(depuis)
+                        && !"ANNULEE".equals(s.getStatut()))
+                .sorted(Comparator.comparing(Seance::getDate).reversed())
+                .map(s -> new MaSeanceGpsDto(
+                        s.getId(), s.getDate(),
+                        s.getTypeSeance() != null ? s.getTypeSeance().getCode() : null,
+                        s.getTypeSeance() != null ? s.getTypeSeance().getLibelle() : null,
+                        // Présence par exception : aucune déclaration = présent.
+                        statutParSeance.getOrDefault(s.getId(), "PRESENT"),
+                        gpsParSeance.get(s.getId())))
+                .toList();
     }
 
     @GetMapping("/pesees")

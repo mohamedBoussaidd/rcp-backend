@@ -34,8 +34,9 @@ public final class PresenceDtos {
 
     /**
      * Résumé chiffré de l'appel d'une séance (pour dashboard / pastille « X/Y dispo »).
-     * {@code dispo} = attendus présents = effectif − blessés − absents − excusés (les retards
-     * restent comptés comme présents). {@code presents} = dispo − retards.
+     * {@code dispo} = attendus présents = effectif − blessés − absents − excusés − soins (les
+     * retards restent comptés comme présents). {@code presents} = dispo − retards.
+     * {@code adaptes} sont INCLUS dans {@code presents} : ils ont participé, en charge allégée.
      */
     public record ResumeAppel(
             UUID seanceId,
@@ -45,6 +46,8 @@ public final class PresenceDtos {
             int absents,
             int excuses,
             int retards,
+            int adaptes,
+            int soins,
             int dispo) {}
 
     /** Requête de sauvegarde d'une seule ligne (PUT /api/seances/{id}/presence/{joueurId}). */
@@ -57,6 +60,30 @@ public final class PresenceDtos {
             List<SaveLigne> lignes) {
         public record SaveLigne(UUID joueurId, StatutPresence statut, String note) {}
     }
+
+    /**
+     * Déclaration d'aménagement par le MÉDICAL (POST /api/seances/presence/amenagement) : le joueur
+     * est passé en ADAPTE ou SOIN sur une PÉRIODE, et le staff en est notifié. Une gêne dure
+     * rarement une seule séance — demander au kiné de ressaisir chaque jour aurait garanti que
+     * l'information ne remonte pas.
+     *
+     * <p>{@code du}/{@code au} nuls = la prochaine séance planifiée de l'équipe du joueur.
+     * {@code consigne} est une consigne terrain lisible par tout le staff notifié.
+     */
+    public record DeclarationAmenagement(
+            UUID joueurId,
+            StatutPresence statut,
+            LocalDate du,
+            LocalDate au,
+            String consigne) {}
+
+    /** Ce que l'aménagement a réellement produit : bornes retenues et séances marquées. */
+    public record ResultatAmenagement(
+            UUID joueurId,
+            StatutPresence statut,
+            LocalDate du,
+            LocalDate au,
+            int seancesMarquees) {}
 
     /** Auto-déclaration de présence par le joueur depuis la PWA (POST /api/moi/seances/{id}/presence). */
     public record DeclarationPresence(
@@ -93,6 +120,12 @@ public final class PresenceDtos {
      * Bilan d'assiduité d'un joueur sur une saison (entraînements uniquement, hors matchs).
      * {@code taux} = présences / séances comptabilisées (0–100). {@code recents} = nombre
      * d'absences+excuses+retards sur les 14 derniers jours (signal de décrochage).
+     *
+     * <p>{@code nbSeances} est le dénominateur RÉELLEMENT opposable au joueur : les séances où il
+     * était blessé ou au soin en sont retirées ({@code neutralisees} les compte). Sans ça, un joueur
+     * arrêté trois mois ressortait à 100 % d'assiduité sur sa fiche — il n'avait aucune ligne de
+     * présence — alors que les écrans d'équipe l'excluaient déjà de l'effectif.
+     * {@code adaptes} est informatif : ces séances comptent comme des présences.
      */
     public record AssiduiteJoueur(
             UUID joueurId,
@@ -103,6 +136,8 @@ public final class PresenceDtos {
             int absents,
             int excuses,
             int retards,
+            int adaptes,
+            int neutralisees,
             int taux,
             int recents,
             List<EvenementAssiduite> historique) {}
@@ -127,6 +162,8 @@ public final class PresenceDtos {
             int absents,
             int excuses,
             int retards,
+            int adaptes,
+            int soins,
             int dispo,
             int declaresJoueur,
             int taux) {}
