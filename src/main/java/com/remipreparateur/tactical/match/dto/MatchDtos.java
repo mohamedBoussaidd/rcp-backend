@@ -21,6 +21,7 @@ public final class MatchDtos {
             String adversaire,
             LocalDate dateMatch,
             String competition,
+            String typeMatch,          // AMICAL | CHAMPIONNAT | COUPE
             boolean domicile,
             String resultat,
             String score,
@@ -35,6 +36,7 @@ public final class MatchDtos {
             String adversaire,
             LocalDate dateMatch,
             String competition,
+            String typeMatch,
             boolean domicile,
             String consignes,
             // Logistique
@@ -49,6 +51,8 @@ public final class MatchDtos {
             boolean compoVisible,
             String resultat,
             String score,
+            Short butsPour,
+            Short butsContre,
             String notesDebrief,
             UUID sessionGpsId,
             UUID profilAdverseId,
@@ -63,6 +67,7 @@ public final class MatchDtos {
             @NotBlank String adversaire,
             LocalDate dateMatch,
             String competition,
+            String typeMatch,
             boolean domicile) {}
 
     /** Bloc AVANT (prépa) : infos de match + consignes + logistique. */
@@ -70,6 +75,7 @@ public final class MatchDtos {
             @NotBlank String adversaire,
             LocalDate dateMatch,
             String competition,
+            String typeMatch,
             boolean domicile,
             String consignes,
             String lieuRdv,
@@ -87,10 +93,16 @@ public final class MatchDtos {
     public record SuspendusRequest(
             List<UUID> joueurIds) {}
 
-    /** Bloc APRÈS (débrief) : résultat, score, notes. */
+    /**
+     * Bloc APRÈS (débrief) : résultat, buts pour / contre, notes.
+     *
+     * <p>Le score n'est plus saisi en texte : il est reconstruit (« 2-0 ») à partir des deux
+     * nombres, seuls capables de dire lequel est le nôtre — ce dont dépend le clean sheet.
+     */
     public record MatchDebriefRequest(
             String resultat,
-            String score,
+            Short butsPour,
+            Short butsContre,
             String notesDebrief) {}
 
     // ── Schémas adverses (copie) ──
@@ -126,6 +138,67 @@ public final class MatchDtos {
             BigDecimal y,
             String statut,
             String consigne) {}
+
+    // ── Feuille de match (V97) : ce qui se saisit APRÈS la rencontre ──
+
+    /**
+     * Une ligne de feuille de match. `null` sur les minutes = non renseigné, et non « 0 minute ».
+     *
+     * <p>Le clean sheet n'y figure pas : il se déduit du score et de l'entrée en jeu, jamais d'une
+     * case cochée. Le carton rouge reste saisissable (expulsion directe), mais deux avertissements
+     * l'imposent — la règle est ré-appliquée côté serveur, le front ne fait pas foi.
+     */
+    public record FeuilleLigneRequest(
+            @NotNull UUID joueurId,
+            boolean entreEnJeu,
+            Short minuteEntree,
+            Short minuteSortie,
+            Short buts,
+            Short passesDecisives,
+            Short cartonsJaunes,
+            boolean cartonRouge) {}
+
+    public record FeuilleUpdateRequest(
+            @NotNull List<FeuilleLigneRequest> lignes) {}
+
+    /**
+     * Une ligne de feuille de match telle qu'elle se lit : les TROIS sources de temps de jeu sont
+     * remontées séparément, plus la valeur retenue et sa provenance. Ne jamais les fusionner en
+     * amont — le coach doit pouvoir voir que le capteur dit 92 et la fédération 78.
+     */
+    public record FeuilleLigneResponse(
+            UUID joueurId,
+            String nom,
+            String prenom,
+            String postePrincipal,
+            String statut,
+            boolean entreEnJeu,
+            Short minuteEntree,
+            Short minuteSortie,
+            Integer tempsJeuSaisi,
+            Integer tempsJeuFederation,
+            Integer tempsJeuGps,
+            Integer tempsJeuRetenu,
+            String sourceTempsJeu,   // SAISIE | FEDERATION | GPS | null
+            short buts,
+            short passesDecisives,
+            short cartonsJaunes,
+            boolean cartonRouge,
+            /** Déduit : true / false / null quand les buts encaissés ne sont pas renseignés. */
+            Boolean cleanSheet) {}
+
+    /**
+     * Feuille complète d'un match, plus le contexte qui explique ce que le GPS peut alimenter et
+     * d'où vient le clean sheet — sans les buts encaissés, l'écran ne pourrait pas justifier une
+     * colonne qui n'est plus saisissable.
+     */
+    public record FeuilleResponse(
+            UUID matchId,
+            boolean modifiable,
+            boolean gpsLie,
+            Short butsPour,
+            Short butsContre,
+            List<FeuilleLigneResponse> lignes) {}
 
     // ── Joueurs à surveiller ──
     public record SurveilleRequest(

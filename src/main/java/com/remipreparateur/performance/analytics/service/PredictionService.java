@@ -43,6 +43,13 @@ public class PredictionService {
         return appelPython(url);
     }
 
+    /** Charge cible du joueur. Exposée par Python de longue date, mais jamais forwardée : la
+     *  fiche joueur appelait donc une route inexistante et prenait un 404 à chaque ouverture. */
+    public Object getChargeCible(UUID joueurId) {
+        String url = pythonApiUrl + "/api/predictions/charge-cible/" + joueurId;
+        return appelPython(url);
+    }
+
     public Object getResumeEquipe() {
         Scope scope = scopeResolver.resolve();
         if (scope.none()) return List.of();

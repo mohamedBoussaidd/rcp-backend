@@ -32,6 +32,12 @@ public class DonneeGpsController {
         return predictionService.getFatigue(joueurId);
     }
 
+    @GetMapping("/charge-cible/{joueurId}")
+    public Object getChargeCible(@PathVariable UUID joueurId) {
+        verifieAccesJoueur(joueurId);
+        return predictionService.getChargeCible(joueurId);
+    }
+
     @GetMapping("/equipe")
     public Object getEquipe() {
         return predictionService.getResumeEquipe();

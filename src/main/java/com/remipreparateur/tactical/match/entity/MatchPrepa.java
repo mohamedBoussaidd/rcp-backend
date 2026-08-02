@@ -35,8 +35,16 @@ public class MatchPrepa {
     @Column(name = "heure_match")
     private java.time.LocalTime heureMatch;
 
+    /** Intitulé libre de la compétition (« Coupe du district », « D2 groupe B ») — affichage seul. */
     @Column(name = "competition")
     private String competition;
+
+    /**
+     * AMICAL | CHAMPIONNAT | COUPE. Porte le décompte des cartons : championnat et coupe se
+     * comptent séparément, un amical ne compte jamais. C'est lui qui fait foi, pas l'intitulé.
+     */
+    @Column(name = "type_match", nullable = false)
+    private String typeMatch = "CHAMPIONNAT";
 
     @Column(name = "domicile", nullable = false)
     private boolean domicile = true;
@@ -71,8 +79,16 @@ public class MatchPrepa {
     @Column(name = "resultat")
     private String resultat;
 
+    /** Affichage seul (« 2-0 ») : reconstruit à l'enregistrement du débrief, jamais saisi tel quel. */
     @Column(name = "score")
     private String score;
+
+    @Column(name = "buts_pour")
+    private Short butsPour;
+
+    /** À 0, tous les joueurs entrés en jeu ont le clean sheet. NULL = indéterminé, pas « aucun ». */
+    @Column(name = "buts_contre")
+    private Short butsContre;
 
     @Column(name = "notes_debrief", columnDefinition = "text")
     private String notesDebrief;

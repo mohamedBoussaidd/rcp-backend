@@ -10,6 +10,8 @@ import com.remipreparateur.joueur.entity.Joueur;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.joueur.service.JoueurService;
 import com.remipreparateur.saison.service.SaisonService;
+import com.remipreparateur.tactical.match.dto.StatsCompetitionDtos;
+import com.remipreparateur.tactical.match.service.StatsCompetitionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +28,21 @@ public class JoueurController {
     private final PresenceService presenceService;
     private final ScopeResolver scopeResolver;
     private final SaisonService saisonService;
+    private final StatsCompetitionService statsCompetitionService;
+
+    /**
+     * Onglet « Compétition » de la fiche joueur (module add-on `stats_competition`).
+     * Gardé par `stats:read` dans SecurityConfig — la règle précède le catch-all `/api/joueurs/**`,
+     * sinon `joueurs:read` suffirait et le module ne gaterait plus rien.
+     *
+     * @param depuis début de période (défaut : 12 mois glissants)
+     */
+    @GetMapping("/{id}/competition")
+    public StatsCompetitionDtos.StatsJoueur competition(
+            @PathVariable UUID id,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate depuis) {
+        return statsCompetitionService.statsJoueur(id, depuis);
+    }
 
     @GetMapping
     public List<Joueur> getAll() {

@@ -31,6 +31,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -43,6 +44,12 @@ import java.util.stream.Collectors;
  */
 @Service
 public class MatchService {
+
+    /** Les seuls types acceptés ; la base porte la même liste en contrainte CHECK (V99). */
+    private static final Set<String> TYPES_MATCH = Set.of("AMICAL", "CHAMPIONNAT", "COUPE");
+
+    /** Places sur le terrain. Le football à 11 est la seule pratique gérée à ce jour. */
+    private static final int TITULAIRES_MAX = 11;
 
     private final MatchPrepaRepository matchRepository;
     private final MatchSchemaRepository schemaRepository;
@@ -124,6 +131,7 @@ public class MatchService {
         m.setAdversaire(req.adversaire());
         m.setDateMatch(req.dateMatch());
         m.setCompetition(req.competition());
+        m.setTypeMatch(typeMatchValide(req.typeMatch()));
         m.setDomicile(req.domicile());
         m.setCreePar(u.getId());
         return toResponse(matchRepository.save(m), u);
@@ -142,6 +150,7 @@ public class MatchService {
         m.setDateMatch(req.dateMatch());
         m.setHeureMatch(req.heureMatch());
         m.setCompetition(req.competition());
+        m.setTypeMatch(typeMatchValide(req.typeMatch()));
         m.setDomicile(req.domicile());
         m.setConsignes(req.consignes());
         m.setLieuRdv(req.lieuRdv());
@@ -205,9 +214,28 @@ public class MatchService {
     public MatchResponse modifierDebrief(UUID matchId, MatchDebriefRequest req) {
         MatchPrepa m = chargerMatch(matchId);
         m.setResultat(req.resultat());
-        m.setScore(req.score());
+        m.setButsPour(req.butsPour());
+        m.setButsContre(req.butsContre());
+        m.setScore(scoreAffiche(req.butsPour(), req.butsContre()));
         m.setNotesDebrief(req.notesDebrief());
         return toResponse(touch(m), currentUser.current());
+    }
+
+    /**
+     * Le score reste une chaîne partout ailleurs (cartes de match, fil de vie) : on la reconstruit
+     * ici plutôt que de la faire saisir. Un seul des deux nombres renseigné ne produit rien —
+     * afficher « 2- » serait pire que rien.
+     */
+    private String scoreAffiche(Short pour, Short contre) {
+        if (pour == null || contre == null) return null;
+        return pour + "-" + contre;
+    }
+
+    /** Un type inconnu retomberait sur la contrainte CHECK de la base : on le ramène au défaut. */
+    private String typeMatchValide(String type) {
+        if (type == null) return "CHAMPIONNAT";
+        String t = type.trim().toUpperCase();
+        return TYPES_MATCH.contains(t) ? t : "CHAMPIONNAT";
     }
 
     @Transactional
@@ -252,6 +280,13 @@ public class MatchService {
     @Transactional
     public MatchResponse enregistrerCompo(UUID matchId, CompoUpdateRequest req) {
         MatchPrepa m = chargerMatch(matchId);
+        verifierOnzeTitulaires(req);
+        // La compo est réécrite en entier à chaque enregistrement (delete + recréation). Depuis
+        // V97 ces lignes portent aussi la feuille de match : sans ce report, corriger un placement
+        // après la rencontre effacerait silencieusement minutes, buteurs et cartons déjà saisis.
+        Map<UUID, MatchCompo> feuilleExistante = compoRepository.findByMatchId(m.getId()).stream()
+                .collect(Collectors.toMap(MatchCompo::getJoueurId, Function.identity(), (a, b) -> a));
+
         compoRepository.deleteByMatchId(m.getId());
         compoRepository.flush();
         for (CompoItemRequest item : req.placements()) {
@@ -262,9 +297,193 @@ public class MatchService {
             c.setY(item.y() != null ? item.y() : BigDecimal.ZERO);
             c.setStatut(item.statut() != null ? item.statut() : "TITULAIRE");
             c.setConsigne(item.consigne());
+            reporterFeuille(feuilleExistante.get(item.joueurId()), c);
             compoRepository.save(c);
         }
         return toResponse(touch(m), currentUser.current());
+    }
+
+    /**
+     * Onze titulaires au maximum. Le terrain n'en accepte pas davantage, et un douzième maillot
+     * posé par mégarde ne se voyait jusqu'ici qu'au compteur de l'en-tête — puis faussait le
+     * décompte de titularisations de tous les joueurs concernés.
+     */
+    private void verifierOnzeTitulaires(CompoUpdateRequest req) {
+        long titulaires = req.placements().stream()
+                .filter(p -> "TITULAIRE".equals(p.statut()))
+                .count();
+        if (titulaires > TITULAIRES_MAX) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    titulaires + " titulaires pour " + TITULAIRES_MAX + " places sur le terrain.");
+        }
+    }
+
+    /** Recopie la feuille de match d'une ligne de compo vers celle qui la remplace. */
+    private void reporterFeuille(MatchCompo ancienne, MatchCompo nouvelle) {
+        if (ancienne == null) {
+            // Pas d'antécédent : un titulaire est réputé entré en jeu, un remplaçant non.
+            nouvelle.setEntreEnJeu("TITULAIRE".equals(nouvelle.getStatut()));
+            return;
+        }
+        nouvelle.setEntreEnJeu(ancienne.isEntreEnJeu() || "TITULAIRE".equals(nouvelle.getStatut()));
+        nouvelle.setMinuteEntree(ancienne.getMinuteEntree());
+        nouvelle.setMinuteSortie(ancienne.getMinuteSortie());
+        nouvelle.setTempsJeuFederation(ancienne.getTempsJeuFederation());
+        nouvelle.setButs(ancienne.getButs());
+        nouvelle.setPassesDecisives(ancienne.getPassesDecisives());
+        nouvelle.setCartonsJaunes(ancienne.getCartonsJaunes());
+        nouvelle.setCartonRouge(ancienne.isCartonRouge());
+    }
+
+    // ── Feuille de match (V97) ──────────────────────────────────────────────
+
+    /**
+     * Durée de référence quand un joueur est entré sans qu'on ait noté sa sortie : il a fini la
+     * rencontre. C'est une APPROXIMATION — temps additionnel non compté, et les catégories jeunes
+     * jouent moins de 90 minutes. Toute valeur saisie explicitement prime sur ce calcul.
+     */
+    private static final int DUREE_MATCH_REFERENCE_MIN = 90;
+
+    @Transactional(readOnly = true)
+    public FeuilleResponse feuille(UUID matchId) {
+        MatchPrepa m = chargerMatch(matchId);
+        Utilisateur u = currentUser.current();
+
+        Map<UUID, Short> gpsParJoueur = tempsGpsParJoueur(m);
+        List<MatchCompo> compo = compoRepository.findByMatchId(m.getId());
+        Map<UUID, Joueur> joueurs = joueurRepository.findAllById(
+                        compo.stream().map(MatchCompo::getJoueurId).toList()).stream()
+                .collect(Collectors.toMap(Joueur::getId, Function.identity()));
+
+        List<FeuilleLigneResponse> lignes = compo.stream()
+                .map(c -> toFeuilleLigne(c, joueurs.get(c.getJoueurId()), gpsParJoueur.get(c.getJoueurId()),
+                        m.getButsContre()))
+                .sorted((a, b) -> {
+                    // Les joueurs qui ont du temps de jeu d'abord : c'est sur eux qu'on saisit.
+                    int parJeu = Boolean.compare(b.entreEnJeu(), a.entreEnJeu());
+                    return parJeu != 0 ? parJeu : nomComplet(a).compareToIgnoreCase(nomComplet(b));
+                })
+                .toList();
+
+        return new FeuilleResponse(m.getId(), peutModifier(u), m.getSessionGpsId() != null,
+                m.getButsPour(), m.getButsContre(), lignes);
+    }
+
+    /**
+     * Clean sheet d'un joueur sur une rencontre : l'équipe n'a rien encaissé ET il était sur le
+     * terrain. Déduit, jamais saisi — {@code null} tant que les buts encaissés ne sont pas
+     * renseignés, ce qui vaut mieux qu'un « aucun clean sheet » qui passerait pour un fait.
+     */
+    static Boolean cleanSheet(boolean entreEnJeu, Short butsContre) {
+        if (butsContre == null) return null;
+        return butsContre == 0 && entreEnJeu;
+    }
+
+    @Transactional
+    public FeuilleResponse enregistrerFeuille(UUID matchId, FeuilleUpdateRequest req) {
+        MatchPrepa m = chargerMatch(matchId);
+        verifierButsCoherents(m, req);
+        Map<UUID, MatchCompo> parJoueur = compoRepository.findByMatchId(m.getId()).stream()
+                .collect(Collectors.toMap(MatchCompo::getJoueurId, Function.identity(), (a, b) -> a));
+
+        for (FeuilleLigneRequest l : req.lignes()) {
+            MatchCompo c = parJoueur.get(l.joueurId());
+            // Une ligne pour un joueur absent de la compo est ignorée : la feuille se remplit sur
+            // le groupe convoqué, elle n'est pas un moyen détourné d'ajouter quelqu'un au match.
+            if (c == null) continue;
+            c.setEntreEnJeu(l.entreEnJeu());
+            c.setMinuteEntree(l.minuteEntree());
+            c.setMinuteSortie(l.minuteSortie());
+            c.setButs(nonNegatif(l.buts()));
+            c.setPassesDecisives(nonNegatif(l.passesDecisives()));
+            short jaunes = nonNegatif(l.cartonsJaunes());
+            c.setCartonsJaunes(jaunes);
+            // Deux avertissements valent expulsion : la règle est appliquée ici et pas seulement à
+            // l'écran, sinon un appel direct à l'API produirait un joueur à 2 jaunes sans rouge —
+            // et le cumul d'avertissements, plus bas, compterait un match de trop.
+            c.setCartonRouge(l.cartonRouge() || jaunes >= 2);
+            compoRepository.save(c);
+        }
+        touch(m);
+        return feuille(matchId);
+    }
+
+    /**
+     * Les buteurs ne peuvent pas dépasser le score de l'équipe : quatre buts attribués sur un 2-0
+     * n'était refusé nulle part, et faussait durablement l'onglet Compétition du joueur. La somme
+     * peut en revanche rester INFÉRIEURE au score — un but contre son camp adverse n'a pas de
+     * buteur de notre côté. Sans buts marqués renseignés, rien à vérifier.
+     */
+    private void verifierButsCoherents(MatchPrepa m, FeuilleUpdateRequest req) {
+        if (m.getButsPour() == null) return;
+        int total = req.lignes().stream().mapToInt(l -> nonNegatif(l.buts())).sum();
+        if (total > m.getButsPour()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Buteurs incohérents : " + total + " but(s) attribué(s) pour un score de "
+                    + m.getButsPour() + ". Corrigez les buteurs ou le score du débrief.");
+        }
+    }
+
+    private static short nonNegatif(Short v) {
+        return v == null || v < 0 ? 0 : v;
+    }
+
+    private static String nomComplet(FeuilleLigneResponse l) {
+        return ((l.nom() != null ? l.nom() : "") + " " + (l.prenom() != null ? l.prenom() : "")).trim();
+    }
+
+    /**
+     * Temps de port du capteur par joueur sur la séance liée au match. Ce n'est PAS un temps de
+     * jeu : il n'est retenu plus bas que pour les joueurs déclarés entrés en jeu.
+     */
+    private Map<UUID, Short> tempsGpsParJoueur(MatchPrepa m) {
+        if (m.getSessionGpsId() == null) return Map.of();
+        return donneeGpsRepository.findBySeanceId(m.getSessionGpsId()).stream()
+                .filter(g -> g.getJoueur() != null && g.getDureeMinutes() != null)
+                .collect(Collectors.toMap(g -> g.getJoueur().getId(), g -> g.getDureeMinutes(), (a, b) -> a));
+    }
+
+    private FeuilleLigneResponse toFeuilleLigne(MatchCompo c, Joueur j, Short gpsMinutes, Short butsContre) {
+        Integer saisi = tempsJeuSaisi(c);
+        Integer federation = c.getTempsJeuFederation() != null ? c.getTempsJeuFederation().intValue() : null;
+        // Le capteur ne vaut temps de jeu que si le joueur est effectivement entré : un remplaçant
+        // qui s'échauffe 40 minutes avec son capteur en ressortirait sinon avec 40 minutes jouées.
+        Integer gps = (c.isEntreEnJeu() && gpsMinutes != null) ? gpsMinutes.intValue() : null;
+
+        Integer retenu;
+        String source;
+        if (saisi != null)            { retenu = saisi;      source = "SAISIE"; }
+        else if (federation != null)  { retenu = federation; source = "FEDERATION"; }
+        else if (gps != null)         { retenu = gps;        source = "GPS"; }
+        else                          { retenu = null;       source = null; }
+
+        return new FeuilleLigneResponse(
+                c.getJoueurId(),
+                j != null ? j.getNom() : null,
+                j != null ? j.getPrenom() : null,
+                j != null ? j.getPostePrincipal() : null,
+                c.getStatut(), c.isEntreEnJeu(),
+                c.getMinuteEntree(), c.getMinuteSortie(),
+                saisi, federation, gps, retenu, source,
+                c.getButs(), c.getPassesDecisives(), c.getCartonsJaunes(),
+                c.isCartonRouge(), cleanSheet(c.isEntreEnJeu(), butsContre));
+    }
+
+    /**
+     * Minutes déduites de la saisie. Entrée sans sortie = a fini le match ; sortie sans entrée =
+     * était sur le terrain au coup d'envoi. Aucune minute renseignée = rien à déduire (et non zéro),
+     * les autres sources prennent alors le relais.
+     */
+    private Integer tempsJeuSaisi(MatchCompo c) {
+        // Déclaré non entré = zéro minute, et c'est une certitude : aucune autre source ne doit
+        // venir lui prêter du temps de jeu.
+        if (!c.isEntreEnJeu()) return 0;
+        Integer entree = c.getMinuteEntree() != null ? c.getMinuteEntree().intValue() : null;
+        Integer sortie = c.getMinuteSortie() != null ? c.getMinuteSortie().intValue() : null;
+        if (entree == null && sortie == null) return null;
+        int debut = entree != null ? entree : 0;
+        int fin = sortie != null ? sortie : DUREE_MATCH_REFERENCE_MIN;
+        return Math.max(fin - debut, 0);
     }
 
     // ── Joueurs à surveiller ──
@@ -499,7 +718,8 @@ public class MatchService {
 
     private MatchResume toResume(MatchPrepa m) {
         return new MatchResume(m.getId(), m.getAdversaire(), m.getDateMatch(), m.getCompetition(),
-                m.isDomicile(), m.getResultat(), m.getScore(), m.getSessionGpsId() != null, m.isPublie());
+                m.getTypeMatch(), m.isDomicile(), m.getResultat(), m.getScore(),
+                m.getSessionGpsId() != null, m.isPublie());
     }
 
     private MatchResponse toResponse(MatchPrepa m, Utilisateur u) {
@@ -516,10 +736,10 @@ public class MatchService {
         List<UUID> suspendus = suspenduRepository.findByMatchId(m.getId())
                 .stream().map(MatchSuspendu::getJoueurId).toList();
         return new MatchResponse(m.getId(), m.getEquipeId(), peutModifier(u),
-                m.getAdversaire(), m.getDateMatch(), m.getCompetition(), m.isDomicile(),
+                m.getAdversaire(), m.getDateMatch(), m.getCompetition(), m.getTypeMatch(), m.isDomicile(),
                 m.getConsignes(), m.getLieuRdv(), m.getHeureRdv(), m.getHeureMatch(), m.getCouleurMaillot(), m.getInfosLogistiques(),
                 m.isPublie(), m.getPublieAt(), m.isCompoVisible(),
-                m.getResultat(), m.getScore(), m.getNotesDebrief(),
+                m.getResultat(), m.getScore(), m.getButsPour(), m.getButsContre(), m.getNotesDebrief(),
                 m.getSessionGpsId(), m.getProfilAdverseId(), schemas, compo, surveilles, suspendus, m.getUpdatedAt());
     }
 

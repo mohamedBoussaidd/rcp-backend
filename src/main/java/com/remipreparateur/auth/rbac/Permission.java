@@ -75,6 +75,10 @@ public enum Permission {
     REGLES_TACTIQUES_WRITE("regles_tactiques:write", "Tactique & Match", "Calibrer les règles de jeu (moteur tactique)"),
     MATCHS_READ("matchs:read", "Tactique & Match", "Voir les matchs"),
     MATCHS_WRITE("matchs:write", "Tactique & Match", "Gérer les matchs"),
+    STATS_READ("stats:read", "Tactique & Match",
+            "Voir les statistiques de compétition d'un joueur (temps de jeu, participation, buts, cartons)"),
+    STATS_WRITE("stats:write", "Tactique & Match",
+            "Remplir la feuille de match : minutes jouées, buteurs, passeurs, cartons"),
     DIAPORAMA_READ("diaporama:read", "Tactique & Match", "Voir les diaporamas"),
     DIAPORAMA_WRITE("diaporama:write", "Tactique & Match", "Créer / éditer ses diaporamas"),
     DIAPORAMA_MANAGE("diaporama:manage", "Tactique & Match", "Supprimer / modérer toute diapo du club"),
@@ -85,6 +89,10 @@ public enum Permission {
     ENTRETIEN_MANAGE("entretien:manage", "Suivi individuel", "Supprimer / modérer les entretiens du club"),
     AXE_READ("axe:read", "Suivi individuel", "Voir les axes de travail"),
     AXE_WRITE("axe:write", "Suivi individuel", "Créer / éditer les axes de travail"),
+    SUIVI_COACH_READ("suivi_coach:read", "Suivi individuel",
+            "Voir le fil de vie du joueur, ses objectifs individuels et les notes du staff"),
+    SUIVI_COACH_WRITE("suivi_coach:write", "Suivi individuel",
+            "Fixer les objectifs individuels et écrire les notes du staff sur un joueur"),
 
     // ── Administration du club ──────────────────────────────────────
     DOCADMIN_CONFIGURE("docadmin:configure", "Administration du club", "Gérer le référentiel des documents requis"),

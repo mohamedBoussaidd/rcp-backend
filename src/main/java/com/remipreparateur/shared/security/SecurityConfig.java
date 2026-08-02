@@ -147,6 +147,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/assistant-ia/chat").hasAuthority("assistant_ia:chat")
 
                         // Joueurs (effectif) : lecture / écriture
+                        // Suivi coach (fil de vie, objectifs, notes du staff) — préfixe DÉDIÉ, hors
+                        // /api/joueurs/** qui l'aurait absorbé sous joueurs:read / joueurs:write.
+                        .requestMatchers(HttpMethod.GET, "/api/suivi-coach/**").hasAuthority("suivi_coach:read")
+                        .requestMatchers("/api/suivi-coach/**").hasAuthority("suivi_coach:write")
+
+                        // Statistiques de compétition d'un joueur (module add-on `stats_competition`).
+                        // DOIT précéder le catch-all /api/joueurs/** ci-dessous, sinon `joueurs:read`
+                        // suffirait à lire l'onglet Compétition et le module ne gaterait plus rien.
+                        .requestMatchers(HttpMethod.GET, "/api/joueurs/*/competition").hasAuthority("stats:read")
                         .requestMatchers(HttpMethod.GET, "/api/joueurs/**").hasAuthority("joueurs:read")
                         .requestMatchers("/api/joueurs/**").hasAuthority("joueurs:write")
 
@@ -237,6 +246,14 @@ public class SecurityConfig {
                         // Règles de jeu du moteur tactique (équipe) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/regles-tactiques/**").hasAuthority("regles_tactiques:read")
                         .requestMatchers("/api/regles-tactiques/**").hasAuthority("regles_tactiques:write")
+
+                        // Feuille de match (module add-on `stats_competition`) : AVANT les catch-all
+                        // /api/matchs/** ci-dessous, qui l'absorberaient sous matchs:read / matchs:write.
+                        .requestMatchers(HttpMethod.GET, "/api/matchs/*/feuille").hasAuthority("stats:read")
+                        .requestMatchers(HttpMethod.PUT, "/api/matchs/*/feuille").hasAuthority("stats:write")
+                        // Cumul de cartons : même module, et lecture seule — il n'existe pas de
+                        // route d'écriture, la suspension se déclare par /suspendus (matchs:write).
+                        .requestMatchers(HttpMethod.GET, "/api/matchs/*/sanctions").hasAuthority("stats:read")
 
                         // Match (cycle de vie avant/après, équipe) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/matchs/**").hasAuthority("matchs:read")

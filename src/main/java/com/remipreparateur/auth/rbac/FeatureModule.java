@@ -80,7 +80,9 @@ public enum FeatureModule {
     ASSISTANT_SIMULATION("assistant_simulation", "Assistant IA — Simulation « et si… »",
             "Simulation d'une séance à venir : distance attendue par joueur, recalcul de l'ACWR et joueurs qui basculeraient au-dessus du plafond, avec synthèse rédigée par IA — repli sur un gabarit local si le LLM n'est pas disponible", false, 33),
     ASSISTANT_CHAT("assistant_chat", "Assistant IA — Chat",
-            "Assistant conversationnel ancré sur les indicateurs déjà calculés, avec raccourcis vers les autres cartes IA. Nécessite obligatoirement une clé LLM (aucun repli gabarit possible)", false, 34);
+            "Assistant conversationnel ancré sur les indicateurs déjà calculés, avec raccourcis vers les autres cartes IA. Nécessite obligatoirement une clé LLM (aucun repli gabarit possible)", false, 34),
+    STATS_COMPETITION("stats_competition", "Statistiques de compétition",
+            "Feuille de match par joueur (minutes jouées, buteurs, passeurs, cartons) et onglet Compétition de la fiche joueur : temps de jeu, participation, polyvalence et croisement avec la charge d'entraînement", false, 35);
 
     private final String code;
     private final String libelle;
@@ -152,6 +154,7 @@ public enum FeatureModule {
             case CONFIGURATION_READ, CONFIGURATION_WRITE, MEMBRES_MANAGE, CLUB_MANAGE -> ADMINISTRATION;
             case PRESENCE_WRITE -> PRESENCE;
             case MATCHS_READ, MATCHS_WRITE -> MATCH;
+            case STATS_READ, STATS_WRITE -> STATS_COMPETITION;
             case WELLNESS_READ, CONSEILS_READ, CONSEILS_WRITE, RPE_IMPORT, HOOPER_IMPORT -> WELLNESS;
             case PREDICTIONS_READ, PREDICTIONS_WRITE -> PREPA_PHYSIQUE;
             case PESEES_READ, PESEES_WRITE -> PESEES;
@@ -166,7 +169,8 @@ public enum FeatureModule {
             case BLESSURES_READ, BLESSURES_WRITE, BLESSURES_QUALIFY, DOCUMENTS_READ, DOCUMENTS_WRITE,
                  WELLNESS_TREAT, WELLNESS_REOPEN -> MEDICAL;
             case NOTIFICATIONS_CONFIG -> NOTIFICATIONS;
-            case ENTRETIEN_READ, ENTRETIEN_WRITE, ENTRETIEN_MANAGE, AXE_READ, AXE_WRITE -> SUIVI_INDIVIDUEL;
+            case ENTRETIEN_READ, ENTRETIEN_WRITE, ENTRETIEN_MANAGE, AXE_READ, AXE_WRITE,
+                 SUIVI_COACH_READ, SUIVI_COACH_WRITE -> SUIVI_INDIVIDUEL;
             case DOCADMIN_CONFIGURE, DOCADMIN_READ, DOCADMIN_VALIDATE, DOCADMIN_UPLOAD -> DOCUMENTS_ADMIN;
         };
     }

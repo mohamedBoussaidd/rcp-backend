@@ -9,5 +9,9 @@ import java.util.UUID;
 @Repository
 public interface MatchSuspenduRepository extends JpaRepository<MatchSuspendu, UUID> {
     List<MatchSuspendu> findByMatchId(UUID matchId);
+
+    /** Suspensions déjà déclarées sur une série de matchs : elles remettent le cumul à zéro. */
+    List<MatchSuspendu> findByMatchIdIn(java.util.Collection<UUID> matchIds);
+
     void deleteByMatchId(UUID matchId);
 }

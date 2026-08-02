@@ -1,7 +1,9 @@
 package com.remipreparateur.tactical.match.controller;
 
 import com.remipreparateur.tactical.match.dto.MatchDtos.*;
+import com.remipreparateur.tactical.match.dto.SanctionDtos.SanctionsMatch;
 import com.remipreparateur.tactical.match.service.MatchService;
+import com.remipreparateur.tactical.match.service.SanctionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +22,11 @@ import java.util.UUID;
 public class MatchController {
 
     private final MatchService matchService;
+    private final SanctionService sanctionService;
 
-    public MatchController(MatchService matchService) {
+    public MatchController(MatchService matchService, SanctionService sanctionService) {
         this.matchService = matchService;
+        this.sanctionService = sanctionService;
     }
 
     // ── Liste / création / détail ──
@@ -58,6 +62,20 @@ public class MatchController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── Feuille de match (module add-on `stats_competition`) ──
+    // Les deux routes sont gardées par stats:read / stats:write dans SecurityConfig, AVANT les
+    // catch-all /api/matchs/** qui les rangeraient sinon sous matchs:read / matchs:write.
+
+    @GetMapping("/{id}/feuille")
+    public FeuilleResponse feuille(@PathVariable UUID id) {
+        return matchService.feuille(id);
+    }
+
+    @PutMapping("/{id}/feuille")
+    public FeuilleResponse enregistrerFeuille(@PathVariable UUID id, @Valid @RequestBody FeuilleUpdateRequest req) {
+        return matchService.enregistrerFeuille(id, req);
+    }
+
     // ── Schémas adverses ──
 
     @PostMapping("/{id}/schemas")
@@ -88,6 +106,15 @@ public class MatchController {
     @PutMapping("/{id}/compo")
     public MatchResponse enregistrerCompo(@PathVariable UUID id, @Valid @RequestBody CompoUpdateRequest req) {
         return matchService.enregistrerCompo(id, req);
+    }
+
+    /**
+     * Cumul de cartons du groupe à l'approche de ce match. Purement consultatif : rien n'est
+     * suspendu ici, l'écran s'en sert pour poser un badge et proposer la déclaration.
+     */
+    @GetMapping("/{id}/sanctions")
+    public SanctionsMatch sanctions(@PathVariable UUID id) {
+        return sanctionService.pourMatch(id);
     }
 
     /** Joueurs suspendus pour ce match (remplace la liste). */
