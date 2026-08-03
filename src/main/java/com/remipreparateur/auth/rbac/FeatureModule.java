@@ -82,7 +82,9 @@ public enum FeatureModule {
     ASSISTANT_CHAT("assistant_chat", "Assistant IA — Chat",
             "Assistant conversationnel ancré sur les indicateurs déjà calculés, avec raccourcis vers les autres cartes IA. Nécessite obligatoirement une clé LLM (aucun repli gabarit possible)", false, 34),
     STATS_COMPETITION("stats_competition", "Statistiques de compétition",
-            "Feuille de match par joueur (minutes jouées, buteurs, passeurs, cartons) et onglet Compétition de la fiche joueur : temps de jeu, participation, polyvalence et croisement avec la charge d'entraînement", false, 35);
+            "Feuille de match par joueur (minutes jouées, buteurs, passeurs, cartons) et onglet Compétition de la fiche joueur : temps de jeu, participation, polyvalence et croisement avec la charge d'entraînement", false, 35),
+    SCHEMAS_JOUEUR("schemas_joueur", "Schémas partagés aux joueurs",
+            "Diffusion de schémas tactiques aux joueurs dans leur application : le staff partage à l'équipe ou à des joueurs choisis, le joueur les rejoue (animation comprise) depuis son espace", false, 36);
 
     private final String code;
     private final String libelle;
@@ -161,6 +163,7 @@ public enum FeatureModule {
             case GPS_IMPORT -> GPS;
             case COACHING_ACCESS, EXERCICES_READ, EXERCICES_WRITE, FORMATIONS_READ, FORMATIONS_WRITE,
                  SCHEMAS_READ, SCHEMAS_WRITE, PLANDEJEU_READ, PLANDEJEU_WRITE -> TACTIQUE;
+            case SCHEMAS_PARTAGER -> SCHEMAS_JOUEUR;
             case REGLES_TACTIQUES_READ, REGLES_TACTIQUES_WRITE -> MOTEUR_TACTIQUE;
             case SEANCES_MODELES_ACCESS -> SEANCES_MODELES;
             case ESPACE_STAFF_ACCESS -> ESPACE_STAFF;

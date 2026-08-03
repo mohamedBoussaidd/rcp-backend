@@ -235,6 +235,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/formations/**").hasAuthority("formations:read")
                         .requestMatchers("/api/formations/**").hasAuthority("formations:write")
 
+                        // Partage d'un schéma aux joueurs (V100) : geste distinct de l'édition — il
+                        // engage la parole du staff auprès du groupe. DOIT rester AVANT les règles
+                        // génériques /api/schemas/** (le premier matcher qui matche gagne).
+                        .requestMatchers("/api/schemas/partages/**").hasAuthority("schemas:partager")
+
                         // Schémas tactiques (bibliothèque, club) : lecture / écriture
                         .requestMatchers(HttpMethod.GET, "/api/schemas/**").hasAuthority("schemas:read")
                         .requestMatchers("/api/schemas/**").hasAuthority("schemas:write")

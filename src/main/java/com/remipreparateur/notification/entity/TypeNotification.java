@@ -23,6 +23,7 @@ public enum TypeNotification {
     DOC_MEDICAL(Categorie.INFO, false),
     GENE_SUIVI(Categorie.INFO, false),
     MATCH_PARTAGE(Categorie.INFO, false),
+    SCHEMA_PARTAGE(Categorie.INFO, false),           // le staff partage un schéma tactique au joueur
     ENTRETIEN_PARTAGE(Categorie.INFO, false),
     ENTRETIEN_PLANIFIE(Categorie.INFO, false),  // RDV d'entretien planifié/déplacé → info joueur
     DOCUMENT_ADMIN_STATUT(Categorie.INFO, false),   // document validé/refusé → info joueur
