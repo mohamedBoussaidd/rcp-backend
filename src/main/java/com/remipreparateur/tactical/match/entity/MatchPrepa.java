@@ -10,8 +10,13 @@ import java.util.UUID;
 /**
  * Match (cycle de vie avant/après), niveau ÉQUIPE.
  * AVANT : adversaire, consignes, schémas adverses ({@link MatchSchema}) et
- * compo ({@link MatchCompo}). APRÈS : résultat, score, notes de débrief et
- * lien manuel vers une session GPS ({@code sessionGpsId} → id d'une {@code seance}).
+ * compo ({@link MatchCompo}). APRÈS : résultat, score et notes de débrief.
+ *
+ * <p>Ce dossier est l'EXTENSION tactique d'une séance du calendrier, pas un événement autonome :
+ * {@code seanceId} porte le même événement côté socle (V104). La séance détient le GPS, le RPE,
+ * l'appel et la charge et survit sans le module Match ; l'inverse est faux, d'où le CASCADE côté
+ * base. Avant V104 la colonne s'appelait {@code session_gps_id} et n'était renseignée qu'à la
+ * main — d'où deux sources de vérité sur « quand joue-t-on ».</p>
  */
 @Entity
 @Table(name = "match_prepa")
@@ -93,8 +98,9 @@ public class MatchPrepa {
     @Column(name = "notes_debrief", columnDefinition = "text")
     private String notesDebrief;
 
-    @Column(name = "session_gps_id")
-    private UUID sessionGpsId;
+    /** Séance du calendrier décrivant le même événement — source du GPS, du RPE et de l'appel. */
+    @Column(name = "seance_id")
+    private UUID seanceId;
 
     /** Profil de règles adverses préparé pour ce match (référence vers regle_tactique, nullable). */
     @Column(name = "profil_adverse_id")

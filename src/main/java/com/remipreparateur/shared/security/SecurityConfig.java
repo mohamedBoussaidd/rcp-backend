@@ -223,6 +223,18 @@ public class SecurityConfig {
                         // authentifié (staff ET joueur) — chacun ne voit que ses données.
                         .requestMatchers("/api/notifications/**").authenticated()
 
+                        // Référentiels de charge et objectifs de période (module objectifs_performance).
+                        // Le catalogue PLATEFORME vit sous /api/admin/referentiels et reste gardé par
+                        // @PreAuthorize(SUPER_ADMIN) : un club porteur d'objectifs:write ne doit jamais
+                        // pouvoir publier une norme pour les autres clubs.
+                        .requestMatchers(HttpMethod.GET, "/api/referentiels/**").hasAuthority("objectifs:read")
+                        .requestMatchers("/api/referentiels/**").hasAuthority("objectifs:write")
+                        // L'aperçu d'instanciation est un POST qui n'écrit RIEN, mais il reste sous
+                        // objectifs:write : il révèle la trajectoire complète, donc autant exiger le
+                        // droit de celui qui la posera.
+                        .requestMatchers(HttpMethod.GET, "/api/objectifs/**").hasAuthority("objectifs:read")
+                        .requestMatchers("/api/objectifs/**").hasAuthority("objectifs:write")
+
                         // Bibliothèque d'exercices (club) : lecture / écriture
                         // (édition/suppression restreinte au créateur/président dans le service)
                         .requestMatchers(HttpMethod.GET, "/api/exercices/**").hasAuthority("exercices:read")

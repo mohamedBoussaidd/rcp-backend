@@ -72,6 +72,8 @@ public class SeanceFicheService {
     private final ScopeResolver scopeResolver;
     private final PermissionResolver permissionResolver;
     private final UtilisateurRepository utilisateurRepository;
+    private final com.remipreparateur.club.pack.ClubModulesService clubModulesService;
+    private final com.remipreparateur.tactical.match.repository.MatchPrepaRepository matchPrepaRepository;
 
     // ══════════ Périodisation J±X ══════════
 
@@ -249,7 +251,30 @@ public class SeanceFicheService {
                 s.getObjectifDistanceM(), s.getObjectifDistanceHauteIntensiteM(), s.getObjectifIntensite(),
                 blocs, sansBloc, contenu.groupes(),
                 s.getEquipeId() != null ? groupesAuto(s.getEquipeId()) : new GroupesAutoDto(List.of(), List.of(), List.of()),
-                absents);
+                absents,
+                matchLie(s));
+    }
+
+    /**
+     * Dossier de match attaché à cette séance, pour proposer le saut vers le module Match.
+     *
+     * <p>Gaté sur le module : depuis V104 le dossier est créé même quand le club n'a pas l'add-on
+     * (la table existe, seul l'affichage est gouverné), donc sa présence en base ne suffit pas à
+     * décider d'afficher un lien — il mènerait à un écran auquel le club n'a pas droit.</p>
+     */
+    private UUID matchLie(Seance s) {
+        if (s.getId() == null) return null;
+        try {
+            UUID clubId = permissionResolver.clubActif(currentUser.current());
+            boolean actif = clubId == null
+                    || clubModulesService.modulesActifs(clubId)
+                            .contains(com.remipreparateur.auth.rbac.FeatureModule.MATCH.getCode());
+            if (!actif) return null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+        return matchPrepaRepository.findBySeanceId(s.getId())
+                .map(com.remipreparateur.tactical.match.entity.MatchPrepa::getId).orElse(null);
     }
 
     /** Nom du compte staff responsable (V65 : la séance pointe un compte, plus un texte libre). */

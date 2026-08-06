@@ -19,6 +19,7 @@ import java.util.UUID;
  * <ul>
  *   <li>{@code X-Contexte-Club}     : UUID du club actif</li>
  *   <li>{@code X-Contexte-Equipes}  : CSV d'UUID d'équipes (vide = toutes les équipes du club)</li>
+ *   <li>{@code X-Contexte-Saison}   : UUID de la saison consultée (absent = aucun bornage)</li>
  * </ul>
  * Les valeurs invalides sont ignorées silencieusement (contexte = vide → scope identité).
  */
@@ -27,6 +28,7 @@ public class ContexteFilter extends OncePerRequestFilter {
 
     private static final String HEADER_CLUB = "X-Contexte-Club";
     private static final String HEADER_EQUIPES = "X-Contexte-Equipes";
+    private static final String HEADER_SAISON = "X-Contexte-Saison";
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -35,8 +37,9 @@ public class ContexteFilter extends OncePerRequestFilter {
         try {
             UUID clubId = parseUuid(request.getHeader(HEADER_CLUB));
             List<UUID> equipeIds = parseUuidCsv(request.getHeader(HEADER_EQUIPES));
-            if (clubId != null || !equipeIds.isEmpty()) {
-                ContexteActifHolder.set(new ContexteActif(clubId, equipeIds));
+            UUID saisonId = parseUuid(request.getHeader(HEADER_SAISON));
+            if (clubId != null || !equipeIds.isEmpty() || saisonId != null) {
+                ContexteActifHolder.set(new ContexteActif(clubId, equipeIds, saisonId));
             }
             filterChain.doFilter(request, response);
         } finally {

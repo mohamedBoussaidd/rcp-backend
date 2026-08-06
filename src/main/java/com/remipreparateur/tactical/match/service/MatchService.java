@@ -9,7 +9,9 @@ import com.remipreparateur.club.entity.Equipe;
 import com.remipreparateur.club.repository.EquipeRepository;
 import com.remipreparateur.club.repository.ClubRepository;
 import com.remipreparateur.performance.seance.entity.Seance;
+import com.remipreparateur.performance.seance.entity.TypeSeance;
 import com.remipreparateur.performance.seance.repository.SeanceRepository;
+import org.hibernate.Hibernate;
 import com.remipreparateur.performance.gps.repository.DonneeGpsRepository;
 import com.remipreparateur.auth.entity.Role;
 import com.remipreparateur.auth.entity.Utilisateur;
@@ -69,6 +71,8 @@ public class MatchService {
     private final Horloge horloge;
     private final AppartenanceService appartenance;
     private final RegleTactiqueRepository regleTactiqueRepository;
+    /** Résout MATCH / MATCH_AMICAL quand un match du module doit se poser au calendrier (V104). */
+    private final com.remipreparateur.performance.seance.repository.TypeSeanceRepository typeSeanceRepository;
 
     public MatchService(MatchPrepaRepository matchRepository,
                         MatchSchemaRepository schemaRepository,
@@ -87,7 +91,8 @@ public class MatchService {
                         PermissionResolver permissionResolver,
                         Horloge horloge,
                         AppartenanceService appartenance,
-                        RegleTactiqueRepository regleTactiqueRepository) {
+                        RegleTactiqueRepository regleTactiqueRepository,
+                        com.remipreparateur.performance.seance.repository.TypeSeanceRepository typeSeanceRepository) {
         this.matchRepository = matchRepository;
         this.schemaRepository = schemaRepository;
         this.compoRepository = compoRepository;
@@ -106,6 +111,7 @@ public class MatchService {
         this.horloge = horloge;
         this.appartenance = appartenance;
         this.regleTactiqueRepository = regleTactiqueRepository;
+        this.typeSeanceRepository = typeSeanceRepository;
     }
 
     // ── Liste / création ──
@@ -113,12 +119,17 @@ public class MatchService {
     @Transactional(readOnly = true)
     public List<MatchResume> lister() {
         UUID equipeId = scopeResolver.equipeActiveUnique();
+        var scope = scopeResolver.resolve();
         // Hybride « voyage » : en date simulée (super-admin), on masque les matchs postérieurs à la
         // date simulée. Hors simulation, tout est listé (comportement inchangé).
         return matchRepository.findByEquipeIdOrderByDateMatchDescCreatedAtDesc(equipeId)
                 .stream()
                 .filter(m -> !horloge.estSimulee() || m.getDateMatch() == null
                         || !m.getDateMatch().isAfter(horloge.today()))
+                // Bornage à la saison consultée : la liste des matchs cumulait sinon toutes les
+                // saisons du club, sans qu'une clôture n'y change quoi que ce soit.
+                .filter(m -> !scope.borne() || m.getDateMatch() == null
+                        || (!m.getDateMatch().isBefore(scope.debut()) && !m.getDateMatch().isAfter(scope.fin())))
                 .map(this::toResume).toList();
     }
 
@@ -134,7 +145,82 @@ public class MatchService {
         m.setTypeMatch(typeMatchValide(req.typeMatch()));
         m.setDomicile(req.domicile());
         m.setCreePar(u.getId());
-        return toResponse(matchRepository.save(m), u);
+        MatchPrepa enregistre = matchRepository.save(m);
+        assurerSeance(enregistre);
+        return toResponse(enregistre, u);
+    }
+
+    // ── Lien dossier de match ↔ séance du calendrier (V104) ──────────────────────────────────
+
+    /**
+     * Garantit qu'un match du module a sa séance au calendrier, et la garde alignée.
+     *
+     * <p>Sans elle, un match créé ici n'existait nulle part pour le planning : ni GPS, ni RPE, ni
+     * appel, ni badge MD-x — alors même que c'est la séance qui porte toute la charge. On réutilise
+     * une séance de match déjà posée à la même date pour cette équipe plutôt que d'en créer une
+     * seconde : le cas nominal est le coach qui a déjà mis le match au calendrier.</p>
+     */
+    private void assurerSeance(MatchPrepa m) {
+        if (m.getEquipeId() == null || m.getDateMatch() == null) return;
+        if (m.getSeanceId() != null) { alignerSeance(m); return; }
+
+        String code = "AMICAL".equals(m.getTypeMatch()) ? "MATCH_AMICAL" : "MATCH";
+        Seance libre = seanceRepository
+                .findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(
+                        m.getDateMatch(), m.getDateMatch(), List.of(m.getEquipeId()))
+                .stream()
+                .filter(s -> {
+                    TypeSeance t = (TypeSeance) Hibernate.unproxy(s.getTypeSeance());
+                    return t != null && ("MATCH".equals(t.getCode()) || "MATCH_AMICAL".equals(t.getCode()));
+                })
+                .filter(s -> matchRepository.findBySeanceId(s.getId()).isEmpty())
+                .findFirst().orElse(null);
+
+        if (libre != null) {
+            m.setSeanceId(libre.getId());
+            matchRepository.save(m);
+            return;
+        }
+
+        TypeSeance type = typeSeanceRepository.findByCode(code)
+                .or(() -> typeSeanceRepository.findByCode("MATCH"))
+                .orElse(null);
+        if (type == null) return;   // référentiel incomplet : on ne bloque pas la création du match
+
+        Seance s = new Seance();
+        s.setTypeSeance(type);
+        s.setDate(m.getDateMatch());
+        s.setEquipeId(m.getEquipeId());
+        s.setStatut("PLANIFIEE");
+        s.setAdversaire(m.getAdversaire());
+        s.setCompetition(m.getCompetition());
+        s.setDomicileExterieur(m.isDomicile() ? "DOMICILE" : "EXTERIEUR");
+        s.setHeureDebut(m.getHeureMatch());
+        m.setSeanceId(seanceRepository.save(s).getId());
+        matchRepository.save(m);
+    }
+
+    /** Reporte sur la séance ce qui la concerne : date, heure, adversaire, compétition, lieu. */
+    private void alignerSeance(MatchPrepa m) {
+        if (m.getSeanceId() == null) return;
+        seanceRepository.findById(m.getSeanceId()).ifPresent(s -> {
+            boolean modifie = false;
+            if (m.getDateMatch() != null && !m.getDateMatch().equals(s.getDate())) {
+                s.setDate(m.getDateMatch()); modifie = true;
+            }
+            if (m.getHeureMatch() != null && !m.getHeureMatch().equals(s.getHeureDebut())) {
+                s.setHeureDebut(m.getHeureMatch()); modifie = true;
+            }
+            if (m.getAdversaire() != null && !m.getAdversaire().equals(s.getAdversaire())) {
+                s.setAdversaire(m.getAdversaire()); modifie = true;
+            }
+            if (m.getCompetition() != null && !m.getCompetition().equals(s.getCompetition())) {
+                s.setCompetition(m.getCompetition()); modifie = true;
+            }
+            String lieu = m.isDomicile() ? "DOMICILE" : "EXTERIEUR";
+            if (!lieu.equals(s.getDomicileExterieur())) { s.setDomicileExterieur(lieu); modifie = true; }
+            if (modifie) seanceRepository.save(s);
+        });
     }
 
     @Transactional(readOnly = true)
@@ -157,6 +243,9 @@ public class MatchService {
         m.setHeureRdv(req.heureRdv());
         m.setCouleurMaillot(req.couleurMaillot());
         m.setInfosLogistiques(req.infosLogistiques());
+        // Un match reporté doit entraîner sa séance : deux dates divergentes rouvriraient la
+        // double source de vérité que V104 supprime.
+        assurerSeance(m);
         return toResponse(touch(m), currentUser.current());
     }
 
@@ -365,7 +454,7 @@ public class MatchService {
                 })
                 .toList();
 
-        return new FeuilleResponse(m.getId(), peutModifier(u), m.getSessionGpsId() != null,
+        return new FeuilleResponse(m.getId(), peutModifier(u), m.getSeanceId() != null,
                 m.getButsPour(), m.getButsContre(), lignes);
     }
 
@@ -437,8 +526,8 @@ public class MatchService {
      * jeu : il n'est retenu plus bas que pour les joueurs déclarés entrés en jeu.
      */
     private Map<UUID, Short> tempsGpsParJoueur(MatchPrepa m) {
-        if (m.getSessionGpsId() == null) return Map.of();
-        return donneeGpsRepository.findBySeanceId(m.getSessionGpsId()).stream()
+        if (m.getSeanceId() == null) return Map.of();
+        return donneeGpsRepository.findBySeanceId(m.getSeanceId()).stream()
                 .filter(g -> g.getJoueur() != null && g.getDureeMinutes() != null)
                 .collect(Collectors.toMap(g -> g.getJoueur().getId(), g -> g.getDureeMinutes(), (a, b) -> a));
     }
@@ -520,7 +609,7 @@ public class MatchService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Session introuvable"));
             scopeResolver.verifieAcces(s.getEquipeId());
         }
-        m.setSessionGpsId(req.sessionGpsId());
+        m.setSeanceId(req.sessionGpsId());
         return toResponse(touch(m), currentUser.current());
     }
 
@@ -542,11 +631,22 @@ public class MatchService {
         return toResponse(touch(m), currentUser.current());
     }
 
-    /** Séances de l'équipe active, proposées comme sessions GPS à lier. */
+    /**
+     * Séances de l'équipe active, proposées comme sessions GPS à lier.
+     *
+     * <p>Depuis V104 le rattachement est automatique : ce sélecteur ne sert plus qu'au rattrapage
+     * manuel (import posé sur une autre séance, match saisi hors calendrier). Il est borné à la
+     * saison consultée — il listait auparavant l'intégralité de l'historique de l'équipe.</p>
+     */
     @Transactional(readOnly = true)
     public List<SessionGpsOption> sessionsDisponibles() {
         UUID equipeId = scopeResolver.equipeActiveUnique();
-        return seanceRepository.findByEquipeIdIn(List.of(equipeId)).stream()
+        var scope = scopeResolver.resolve();
+        List<Seance> seances = scope.borne()
+                ? seanceRepository.findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(
+                        scope.debut(), scope.fin(), List.of(equipeId))
+                : seanceRepository.findByEquipeIdIn(List.of(equipeId));
+        return seances.stream()
                 .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
                 .map(s -> new SessionGpsOption(s.getId(), s.getDate(), libelleSeance(s)))
                 .toList();
@@ -556,10 +656,10 @@ public class MatchService {
     @Transactional(readOnly = true)
     public List<ChargeJoueur> chargeGps(UUID matchId) {
         MatchPrepa m = chargerMatch(matchId);
-        if (m.getSessionGpsId() == null) {
+        if (m.getSeanceId() == null) {
             return List.of();
         }
-        return donneeGpsRepository.findBySeanceId(m.getSessionGpsId()).stream()
+        return donneeGpsRepository.findBySeanceId(m.getSeanceId()).stream()
                 .map(g -> {
                     Joueur j = g.getJoueur();
                     return new ChargeJoueur(j.getId(), j.getNom(), j.getPrenom(),
@@ -719,7 +819,7 @@ public class MatchService {
     private MatchResume toResume(MatchPrepa m) {
         return new MatchResume(m.getId(), m.getAdversaire(), m.getDateMatch(), m.getCompetition(),
                 m.getTypeMatch(), m.isDomicile(), m.getResultat(), m.getScore(),
-                m.getSessionGpsId() != null, m.isPublie());
+                m.getSeanceId() != null, m.isPublie());
     }
 
     private MatchResponse toResponse(MatchPrepa m, Utilisateur u) {
@@ -740,7 +840,7 @@ public class MatchService {
                 m.getConsignes(), m.getLieuRdv(), m.getHeureRdv(), m.getHeureMatch(), m.getCouleurMaillot(), m.getInfosLogistiques(),
                 m.isPublie(), m.getPublieAt(), m.isCompoVisible(),
                 m.getResultat(), m.getScore(), m.getButsPour(), m.getButsContre(), m.getNotesDebrief(),
-                m.getSessionGpsId(), m.getProfilAdverseId(), schemas, compo, surveilles, suspendus, m.getUpdatedAt());
+                m.getSeanceId(), m.getProfilAdverseId(), schemas, compo, surveilles, suspendus, m.getUpdatedAt());
     }
 
     /** Mappe un placement de compo. Si {@code positions} est faux, masque x/y (compo non visible au joueur). */

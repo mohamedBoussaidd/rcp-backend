@@ -228,7 +228,13 @@ public final class SeanceDtos {
             List<ExerciceLigne> exercicesSansBloc,
             List<GroupeDto> groupes,
             GroupesAutoDto groupesAuto,
-            List<JoueurRef> absents) {}    // depuis l'appel (vide si pas d'appel)
+            List<JoueurRef> absents,       // depuis l'appel (vide si pas d'appel)
+            /**
+             * Dossier de match attaché à cette séance (V104), pour offrir le saut vers le module
+             * Match. {@code null} si la séance n'est pas un match — ou si le club n'a pas le
+             * module, auquel cas proposer le lien mènerait à un écran inaccessible.
+             */
+            UUID matchId) {}
 
     // ══════════ Vue joueur (PWA) : version filtrée côté serveur ══════════
 

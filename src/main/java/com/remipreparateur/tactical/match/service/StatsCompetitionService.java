@@ -140,8 +140,8 @@ public class StatsCompetitionService {
      * des « minutes jouées » qu'il n'a pas jouées.
      */
     private Integer tempsGps(MatchPrepa m, UUID joueurId, MatchCompo c) {
-        if (m.getSessionGpsId() == null || !c.isEntreEnJeu()) return null;
-        return donneeGpsRepository.findByJoueurIdAndSeanceId(joueurId, m.getSessionGpsId())
+        if (m.getSeanceId() == null || !c.isEntreEnJeu()) return null;
+        return donneeGpsRepository.findByJoueurIdAndSeanceId(joueurId, m.getSeanceId())
                 .map(g -> g.getDureeMinutes() != null ? g.getDureeMinutes().intValue() : null)
                 .orElse(null);
     }

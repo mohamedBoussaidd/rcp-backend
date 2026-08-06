@@ -1,5 +1,9 @@
 package com.remipreparateur.performance.analytics.service;
 
+import com.remipreparateur.auth.rbac.FeatureModule;
+import com.remipreparateur.auth.rbac.PermissionResolver;
+import com.remipreparateur.club.pack.ClubModulesService;
+import com.remipreparateur.shared.security.CurrentUserProvider;
 import com.remipreparateur.shared.security.Scope;
 import com.remipreparateur.shared.security.ScopeResolver;
 import com.remipreparateur.shared.time.Horloge;
@@ -29,6 +33,9 @@ public class PredictionService {
     private final RestTemplate restTemplate;
     private final ScopeResolver scopeResolver;
     private final Horloge horloge;
+    private final ClubModulesService clubModulesService;
+    private final PermissionResolver permissionResolver;
+    private final CurrentUserProvider currentUser;
 
     @Value("${python.api.url}")
     private String pythonApiUrl;
@@ -84,7 +91,52 @@ public class PredictionService {
     public Object getObjectifHebdo() {
         Scope scope = scopeResolver.resolve();
         if (scope.none()) return Map.of("joueurs", List.of());
-        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/objectif-hebdo", scope);
+        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/objectif-hebdo", scope, moduleObjectifs());
+    }
+
+    /**
+     * Trajectoire d'un joueur sur une période : Habituel / Attendu / Retenu semaine par semaine,
+     * plus le réalisé. Portée transmise pour que Python refuse un joueur hors périmètre même si le
+     * contrôle amont sautait, et en-tête d'add-on parce que la trajectoire n'existe pas sans lui.
+     */
+    public Object getObjectifTrajectoireJoueur(UUID joueurId, UUID periodeId) {
+        Scope scope = scopeResolver.resolve();
+        if (scope.none()) return Map.of("semaines", List.of());
+        String url = pythonApiUrl + "/api/predictions/joueur/" + joueurId + "/objectif-trajectoire"
+                + (periodeId == null ? "" : "?periode_id=" + periodeId);
+        return appelPythonScope(url, scope, moduleObjectifs());
+    }
+
+    /**
+     * Bilan d'une période : prescrit contre réalisé, par métrique et par semaine. Recalculé à
+     * chaque appel — aucun bilan figé en base, donc un import GPS arrivé en retard corrige le
+     * bilan au lieu de le laisser faux pour toujours.
+     */
+    public Object getBilanPeriode(UUID periodeId) {
+        Scope scope = scopeResolver.resolve();
+        if (scope.none()) return Map.of("metriques", List.of(), "semaines", List.of());
+        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/bilan-periode?periode_id=" + periodeId,
+                scope, moduleObjectifs());
+    }
+
+    /**
+     * En-tête d'add-on « Objectifs de performance » : Python ne connaît ni l'utilisateur ni
+     * l'abonnement, c'est donc ici qu'on décide si le référentiel (niveau attendu du poste), les
+     * objectifs prescrits de la période et le plafonnement ACWR entrent dans le calcul.
+     * L'ADOPTION d'un référentiel survit à la désactivation du module : sans ce signal, Python
+     * retomberait sur l'add-on alors que le club ne l'a plus. Absent = inactif, jamais l'inverse.
+     */
+    private Map<String, String> moduleObjectifs() {
+        boolean actif;
+        try {
+            UUID clubId = permissionResolver.clubActif(currentUser.current());
+            // Club nul = super-admin hors contexte : il voit tout, comme dans exigeModule().
+            actif = clubId == null
+                    || clubModulesService.modulesActifs(clubId).contains(FeatureModule.OBJECTIFS_PERFORMANCE.getCode());
+        } catch (RuntimeException e) {
+            actif = false;   // hors contexte HTTP (scheduler) : on n'active pas un add-on par défaut
+        }
+        return actif ? Map.of("X-Module-Objectifs", "1") : Map.of();
     }
 
     /**
@@ -95,7 +147,7 @@ public class PredictionService {
     public Object getBriefingIndicateurs() {
         Scope scope = scopeResolver.resolve();
         if (scope.none()) return Map.of("effectif", Map.of("nb_joueurs", 0));
-        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/briefing", scope);
+        return appelPythonScope(pythonApiUrl + "/api/predictions/equipe/briefing", scope, moduleObjectifs());
     }
 
     /**
@@ -144,11 +196,17 @@ public class PredictionService {
      * Sinon → {@code X-Contexte-Equipes} = équipes autorisées → Python filtre séances + joueurs.
      */
     private Object appelPythonScope(String url, Scope scope) {
+        return appelPythonScope(url, scope, Map.of());
+    }
+
+    /** Idem, avec des en-têtes supplémentaires résolus par le back (ex. add-on actif ou non). */
+    private Object appelPythonScope(String url, Scope scope, Map<String, String> extra) {
         HttpHeaders headers = headersBase();
         if (!scope.all()) {
             headers.set("X-Contexte-Equipes",
                     scope.equipeIds().stream().map(UUID::toString).collect(Collectors.joining(",")));
         }
+        extra.forEach(headers::set);
         return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), Object.class).getBody();
     }
 

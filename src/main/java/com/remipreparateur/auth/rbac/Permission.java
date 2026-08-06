@@ -38,6 +38,10 @@ public enum Permission {
     PREPA_IA_DERIVES("prepa_ia:derives", "Analyse / GPS", "Voir les dérives de charge et l'alerte de surveillance"),
     PREPA_IA_SIMULATION("prepa_ia:simulation", "Analyse / GPS",
             "Simuler une séance à venir et son impact sur la charge (« et si… »)"),
+    OBJECTIFS_READ("objectifs:read", "Analyse / GPS",
+            "Voir les référentiels de charge et les objectifs de période"),
+    OBJECTIFS_WRITE("objectifs:write", "Analyse / GPS",
+            "Adopter un référentiel et fixer les objectifs de performance des périodes"),
     GPS_IMPORT("gps:import", "Analyse / GPS", "Importer les données GPS"),
     RPE_IMPORT("rpe:import", "Analyse / GPS", "Importer le RPE / ressenti des joueurs (fichier)"),
 

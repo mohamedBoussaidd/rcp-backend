@@ -27,13 +27,16 @@ public class ScopeResolver {
     private final EquipeRepository equipeRepository;
     private final AppartenanceService appartenance;
     private final AffectationRoleRepository affectationRepository;
+    private final com.remipreparateur.saison.repository.SaisonRepository saisonRepository;
 
     public ScopeResolver(CurrentUserProvider currentUser, EquipeRepository equipeRepository,
-                         AppartenanceService appartenance, AffectationRoleRepository affectationRepository) {
+                         AppartenanceService appartenance, AffectationRoleRepository affectationRepository,
+                         com.remipreparateur.saison.repository.SaisonRepository saisonRepository) {
         this.currentUser = currentUser;
         this.equipeRepository = equipeRepository;
         this.appartenance = appartenance;
         this.affectationRepository = affectationRepository;
+        this.saisonRepository = saisonRepository;
     }
 
     /**
@@ -45,7 +48,7 @@ public class ScopeResolver {
         Scope autorise = scopeIdentite();
         ContexteActif ctx = ContexteActifHolder.get();
         if (ctx == null || ctx.estVide()) {
-            return autorise; // pas de contexte → comportement historique
+            return fenetreSaison(autorise, ctx); // pas de contexte d'équipe → comportement historique
         }
 
         // Équipes demandées : liste explicite, sinon toutes les équipes du club actif.
@@ -59,7 +62,7 @@ public class ScopeResolver {
 
         if (autorise.all()) {
             // Super-admin : aucune restriction d'identité, le contexte fixe le périmètre.
-            return Scope.equipes(demande);
+            return fenetreSaison(Scope.equipes(demande), ctx);
         }
         // Non super-admin : le contexte doit rester INCLUS dans la portée autorisée.
         for (UUID id : demande) {
@@ -67,7 +70,25 @@ public class ScopeResolver {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Contexte hors de votre périmètre");
             }
         }
-        return demande.isEmpty() ? autorise : Scope.equipes(demande);
+        return fenetreSaison(demande.isEmpty() ? autorise : Scope.equipes(demande), ctx);
+    }
+
+    /**
+     * Ajoute à la portée la fenêtre de dates de la saison consultée, s'il y en a une.
+     *
+     * <p>Une saison inconnue, ou d'un club auquel l'utilisateur n'a pas accès, est ignorée
+     * silencieusement plutôt que refusée : l'en-tête est un confort de navigation, un identifiant
+     * périmé traînant dans le {@code localStorage} ne doit pas rendre l'application inutilisable.
+     * Aucune donnée n'est exposée pour autant — le bornage ne peut que RESTREINDRE ce que la
+     * portée d'équipes autorise déjà.</p>
+     */
+    private Scope fenetreSaison(Scope scope, ContexteActif ctx) {
+        if (ctx == null || ctx.saisonId() == null || scope.none()) return scope;
+        return saisonRepository.findById(ctx.saisonId())
+                .filter(s -> s.getDateDebut() != null && s.getDateFin() != null)
+                .filter(s -> peutAccederClub(s.getClubId()))
+                .map(s -> scope.dans(s.getDateDebut(), s.getDateFin()))
+                .orElse(scope);
     }
 
     /**

@@ -116,9 +116,17 @@ public class SaisonService {
         if ("EN_COURS".equals(statut)) {
             saisonRepository.findFirstByClubIdAndStatut(club, "EN_COURS").ifPresent(prev -> {
                 prev.setStatut("CLOTUREE");
+                // Et on la BORNE si elle déborde sur la nouvelle. Clôturer sans raccourcir laissait
+                // deux saisons se recouvrir — une séance de la zone commune appartenait aux deux, ce
+                // qui rend tout filtrage par fenêtre indécidable. Ouvrir une saison termine la
+                // précédente : la veille est la seule fin qui ait un sens.
+                if (prev.getDateFin() != null && !prev.getDateFin().isBefore(req.dateDebut())) {
+                    prev.setDateFin(req.dateDebut().minusDays(1));
+                }
                 saisonRepository.saveAndFlush(prev);
             });
         }
+        verifierNonChevauchement(club, req.dateDebut(), req.dateFin(), null);
 
         Saison s = new Saison();
         s.setClubId(club);
@@ -141,6 +149,7 @@ public class SaisonService {
     public SaisonDto update(UUID id, SaisonRequest req) {
         Saison s = charge(id);
         valider(req);
+        verifierNonChevauchement(s.getClubId(), req.dateDebut(), req.dateFin(), id);
         s.setLibelle(req.libelle().trim());
         s.setDateDebut(req.dateDebut());
         s.setDateFin(req.dateFin());
@@ -237,6 +246,11 @@ public class SaisonService {
                 : req.joueurIds().stream().filter(j -> j != null).collect(Collectors.toCollection(HashSet::new));
 
         effectifRepository.deleteBySaisonIdAndEquipeId(s.getId(), equipeId);
+        // Flush IMPÉRATIF entre le delete et les insert : Hibernate ordonne ses opérations par type
+        // et exécute les INSERT AVANT les DELETE. Redéfinir un effectif qui contenait déjà l'un des
+        // joueurs violait donc `uq_effectif_saison` et remontait en 500 — alors que l'ordre voulu
+        // (on remplace l'effectif) est parfaitement valide.
+        effectifRepository.flush();
         for (UUID jid : apres) ajouterMembre(s, equipeId, jid);
 
         if ("EN_COURS".equals(s.getStatut())) {
@@ -458,6 +472,27 @@ public class SaisonService {
         }
         if (req.dateDebut() == null || req.dateFin() == null || req.dateFin().isBefore(req.dateDebut())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dates de saison invalides");
+        }
+    }
+
+    /**
+     * Deux saisons d'un même club ne peuvent pas se recouvrir.
+     *
+     * <p>Les données datées (séances, matchs, blessures…) ne portent pas de {@code saison_id} :
+     * leur rattachement se déduit de la date. Un recouvrement rendrait ce rattachement ambigu et
+     * tout filtrage par fenêtre indécidable — c'est le prérequis du scoping par saison.</p>
+     *
+     * @param exclu saison en cours de modification, à ne pas confronter à elle-même
+     */
+    private void verifierNonChevauchement(UUID clubId, LocalDate debut, LocalDate fin, UUID exclu) {
+        for (Saison autre : saisonRepository.findByClubIdOrderByDateDebutDesc(clubId)) {
+            if (exclu != null && exclu.equals(autre.getId())) continue;
+            if (autre.getDateDebut() == null || autre.getDateFin() == null) continue;
+            if (!debut.isAfter(autre.getDateFin()) && !fin.isBefore(autre.getDateDebut())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Ces dates chevauchent la saison « " + autre.getLibelle() + " » ("
+                        + autre.getDateDebut() + " → " + autre.getDateFin() + ")");
+            }
         }
     }
 

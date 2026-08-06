@@ -84,7 +84,9 @@ public enum FeatureModule {
     STATS_COMPETITION("stats_competition", "Statistiques de compétition",
             "Feuille de match par joueur (minutes jouées, buteurs, passeurs, cartons) et onglet Compétition de la fiche joueur : temps de jeu, participation, polyvalence et croisement avec la charge d'entraînement", false, 35),
     SCHEMAS_JOUEUR("schemas_joueur", "Schémas partagés aux joueurs",
-            "Diffusion de schémas tactiques aux joueurs dans leur application : le staff partage à l'équipe ou à des joueurs choisis, le joueur les rejoue (animation comprise) depuis son espace", false, 36);
+            "Diffusion de schémas tactiques aux joueurs dans leur application : le staff partage à l'équipe ou à des joueurs choisis, le joueur les rejoue (animation comprise) depuis son espace", false, 36),
+    OBJECTIFS_PERFORMANCE("objectifs_performance", "Objectifs de performance",
+            "Référentiels de charge par niveau et par poste (préconisations N1, régional…) et objectifs athlétiques accrochés aux périodes de la saison : trajectoire de préparation, cibles de championnat, écart au niveau attendu et trajectoire de rattrapage", false, 37);
 
     private final String code;
     private final String libelle;
@@ -159,6 +161,7 @@ public enum FeatureModule {
             case STATS_READ, STATS_WRITE -> STATS_COMPETITION;
             case WELLNESS_READ, CONSEILS_READ, CONSEILS_WRITE, RPE_IMPORT, HOOPER_IMPORT -> WELLNESS;
             case PREDICTIONS_READ, PREDICTIONS_WRITE -> PREPA_PHYSIQUE;
+            case OBJECTIFS_READ, OBJECTIFS_WRITE -> OBJECTIFS_PERFORMANCE;
             case PESEES_READ, PESEES_WRITE -> PESEES;
             case GPS_IMPORT -> GPS;
             case COACHING_ACCESS, EXERCICES_READ, EXERCICES_WRITE, FORMATIONS_READ, FORMATIONS_WRITE,

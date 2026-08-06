@@ -64,11 +64,29 @@ public class SeanceService {
     private final ScopeResolver scopeResolver;
     private final Horloge horloge;
     private final CurrentUserProvider currentUser;
+    /** Repository et non service : le sens inverse (MatchService → SeanceRepository) existe déjà,
+     *  passer par les services créerait un cycle de dépendances Spring. */
+    private final com.remipreparateur.tactical.match.repository.MatchPrepaRepository matchPrepaRepository;
+    private final com.remipreparateur.performance.seance.repository.TypeSeanceRepository typeSeanceRepository;
 
+    /**
+     * Toutes les séances visibles — bornées à la saison consultée quand le client en désigne une.
+     *
+     * <p>Sans ce bornage, l'appel renvoyait TOUTES les séances de l'équipe depuis toujours : à
+     * quatre saisons d'historique, un club de trois équipes en compte plusieurs milliers, que six
+     * écrans rechargeaient intégralement. Clôturer une saison ne masquait rien, ce qui est d'abord
+     * un problème de justesse — on lisait l'an passé en croyant lire l'année en cours.</p>
+     */
     public List<Seance> findAll() {
         Scope s = scopeResolver.resolve();
-        if (s.all()) return seanceRepository.findAll();
         if (s.none()) return List.of();
+        if (s.borne()) {
+            return s.all()
+                    ? seanceRepository.findByDateBetweenOrderByDateAscHeureDebutAsc(s.debut(), s.fin())
+                    : seanceRepository.findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(
+                            s.debut(), s.fin(), s.equipeIds());
+        }
+        if (s.all()) return seanceRepository.findAll();
         return seanceRepository.findByEquipeIdIn(s.equipeIds());
     }
 
@@ -77,8 +95,12 @@ public class SeanceService {
         // capant la borne haute à la date simulée. Hors simulation, comportement inchangé — le
         // calendrier continue d'afficher les séances futures planifiées.
         if (horloge.estSimulee() && fin != null && fin.isAfter(horloge.today())) fin = horloge.today();
-        if (debut != null && fin != null && fin.isBefore(debut)) return List.of();
         Scope s = scopeResolver.resolve();
+        // La saison ne fait que RESSERRER la fenêtre demandée : un calendrier qui affiche une
+        // semaine garde sa semaine, il ne récupère jamais des dates hors de la saison consultée.
+        debut = s.debutEffectif(debut);
+        fin = s.finEffective(fin);
+        if (debut != null && fin != null && fin.isBefore(debut)) return List.of();
         if (s.all()) return seanceRepository.findByDateBetweenOrderByDateAscHeureDebutAsc(debut, fin);
         if (s.none()) return List.of();
         return seanceRepository.findByDateBetweenAndEquipeIdInOrderByDateAscHeureDebutAsc(debut, fin, s.equipeIds());
@@ -117,8 +139,92 @@ public class SeanceService {
         } else {
             bornerDosages(seance);
         }
+        resoudreTypeSeance(seance);
         normaliserSelonProfil(seance);
-        return seanceRepository.save(seance);
+        Seance enregistree = seanceRepository.save(seance);
+        synchroniserDossierMatch(enregistree);
+        return enregistree;
+    }
+
+    // ── Lien séance ↔ dossier de match (V104) ────────────────────────────────────────────────
+
+    /** Codes de type qui font d'une séance un match — même liste que le badge MD-x et Python. */
+    private static final Set<String> CODES_MATCH = Set.of("MATCH", "MATCH_AMICAL");
+
+    /**
+     * Remplace le type reçu du client par celui de la base.
+     *
+     * <p>Le front n'envoie que {@code typeSeance: { id }} : l'entité désérialisée porte un
+     * identifiant et RIEN d'autre — ni {@code code}, ni {@code profil}. Tout ce qui interroge le
+     * type se trompait donc en silence sur une séance fraîchement créée : le dossier de match
+     * n'était jamais créé ({@code code} null), et {@link #normaliserSelonProfil} effaçait les
+     * objectifs de distance de toute séance de terrain ({@code profil} null ≠ {@code TERRAIN}).</p>
+     */
+    private void resoudreTypeSeance(Seance s) {
+        TypeSeance t = (TypeSeance) Hibernate.unproxy(s.getTypeSeance());
+        if (t == null || t.getId() == null) return;
+        if (t.getCode() != null && t.getProfil() != null) return;   // déjà complet (entité managée)
+        typeSeanceRepository.findById(t.getId()).ifPresent(s::setTypeSeance);
+    }
+
+    private static String codeType(Seance s) {
+        TypeSeance t = (TypeSeance) Hibernate.unproxy(s.getTypeSeance());
+        return t != null ? t.getCode() : null;
+    }
+
+    /**
+     * Maintient le dossier de match en phase avec la séance : le crée si la séance est un match et
+     * n'en a pas, aligne date / adversaire / compétition / lieu sinon.
+     *
+     * <p>Le dossier est créé <b>même si le club n'a pas le module Match</b> : la table existe
+     * toujours, seul l'affichage est gaté. Ne pas le créer laisserait un trou le jour où le club
+     * active le module — exactement la divergence que V104 vient de réparer. À l'inverse, une
+     * séance qui cesse d'être un match ne supprime pas son dossier : il porte peut-être déjà une
+     * compo et une feuille de match, qu'un changement de type ne doit pas détruire en silence.</p>
+     */
+    private void synchroniserDossierMatch(Seance s) {
+        if (s == null || s.getId() == null || s.getEquipeId() == null) return;
+        String code = codeType(s);
+        var existant = matchPrepaRepository.findBySeanceId(s.getId());
+
+        if (existant.isEmpty()) {
+            if (code == null || !CODES_MATCH.contains(code)) return;
+            var m = new com.remipreparateur.tactical.match.entity.MatchPrepa();
+            m.setEquipeId(s.getEquipeId());
+            m.setSeanceId(s.getId());
+            m.setDateMatch(s.getDate());
+            m.setAdversaire(adversaireOuDefaut(s.getAdversaire()));
+            m.setCompetition(s.getCompetition());
+            m.setTypeMatch("MATCH_AMICAL".equals(code) ? "AMICAL" : "CHAMPIONNAT");
+            m.setDomicile(!"EXTERIEUR".equals(s.getDomicileExterieur()));
+            matchPrepaRepository.save(m);
+            return;
+        }
+
+        var m = existant.get();
+        boolean modifie = false;
+        if (s.getDate() != null && !s.getDate().equals(m.getDateMatch())) {
+            m.setDateMatch(s.getDate()); modifie = true;
+        }
+        // L'adversaire ne redescend que s'il est renseigné : le module est l'écran de référence
+        // pour cette information, on n'y réécrit jamais « À renseigner » par-dessus une saisie.
+        String adv = s.getAdversaire() != null ? s.getAdversaire().trim() : null;
+        if (adv != null && !adv.isEmpty() && !adv.equals(m.getAdversaire())) {
+            m.setAdversaire(adv); modifie = true;
+        }
+        if (s.getCompetition() != null && !s.getCompetition().equals(m.getCompetition())) {
+            m.setCompetition(s.getCompetition()); modifie = true;
+        }
+        if (s.getDomicileExterieur() != null) {
+            boolean domicile = !"EXTERIEUR".equals(s.getDomicileExterieur());
+            if (domicile != m.isDomicile()) { m.setDomicile(domicile); modifie = true; }
+        }
+        if (modifie) matchPrepaRepository.save(m);
+    }
+
+    private static String adversaireOuDefaut(String adversaire) {
+        String a = adversaire != null ? adversaire.trim() : "";
+        return a.isEmpty() ? "À renseigner" : a;
     }
 
     /**
@@ -193,8 +299,13 @@ public class SeanceService {
             if (patch.getDominanteAthletiqueIntensite()   != null) existing.setDominanteAthletiqueIntensite(patch.getDominanteAthletiqueIntensite());
         }
         existing.setTypeSeance((TypeSeance) Hibernate.unproxy(existing.getTypeSeance()));
+        resoudreTypeSeance(existing);   // un changement de type arrive lui aussi en { id } seul
         normaliserSelonProfil(existing);
-        return seanceRepository.save(existing);
+        Seance enregistree = seanceRepository.save(existing);
+        // Déplacer un match dans le calendrier doit déplacer son dossier : sinon le badge MD-x et
+        // l'arbitrage double match repartiraient sur deux dates différentes.
+        synchroniserDossierMatch(enregistree);
+        return enregistree;
     }
 
     /**
